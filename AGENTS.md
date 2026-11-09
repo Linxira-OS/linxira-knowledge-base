@@ -5,7 +5,7 @@
 ## 1. Project Overview
 
 - **项目**：`lkb`（Layered Knowledge Base），版本 `0.2.0`，Rust 2021，MSRV `1.82`，MIT。一句话定位：同一检索内核，通过 solo / team / enterprise 三档 profile 提供从个人单机到企业多租户的知识库能力（`Cargo.toml`、`README.md`）。
-- **仓库身份**：仓库名 `lkb`（与 crate / 二进制同名）；许可 MIT（`LICENSE` 与 `Cargo.toml` 一致）；默认分支 `main`；首次提交 2026-11-09（`chore: initial import (lkb, MIT)`）。
+- **仓库身份**：GitHub 仓库 `Linxira-OS/linxira-knowledge-base`（private）；crate / 二进制 / CLI 名仍为 `lkb`；许可 MIT（`LICENSE` 与 `Cargo.toml` 一致）；默认分支 `main`；首次提交 2026-11-09（`chore: initial import (lkb, MIT)`）。
 - **三档 profile**：
   - `solo`：SQLite 单文件，单进程，默认 `auth.mode = none` 且只绑 loopback，零外部服务依赖。
   - `team`：PostgreSQL 后端，会话/Bearer 认证，共享空间。
