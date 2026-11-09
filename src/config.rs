@@ -658,6 +658,10 @@ pub struct RetrievalConfig {
     pub rrf_bm25_weight: f64,
     pub rrf_dense_weight: f64,
     pub rrf_event_weight: f64,
+    /// Let the judge rerank the fused `hybrid` list. Judge absence is not a
+    /// degradation because `hybrid` does not require it; a configured judge
+    /// that fails reports `decision_unavailable`.
+    pub judge_after_hybrid: bool,
 }
 
 impl Default for RetrievalConfig {
@@ -673,6 +677,7 @@ impl Default for RetrievalConfig {
             rrf_bm25_weight: 1.0,
             rrf_dense_weight: 1.0,
             rrf_event_weight: 1.0,
+            judge_after_hybrid: true,
         }
     }
 }
@@ -909,14 +914,11 @@ impl Config {
 
     pub fn validate(&self) -> anyhow::Result<()> {
         let profile = self.profile_name();
-        match (profile, self.storage.backend) {
-            (ProfileName::Solo, Backend::Postgres) => {
-                bail!("profile solo requires storage.backend = \"sqlite\"")
-            }
-            (ProfileName::Team | ProfileName::Enterprise, Backend::Sqlite) => {
-                bail!("profile team/enterprise requires storage.backend = \"postgres\"")
-            }
-            _ => {}
+        // solo may run on either backend (same binary); team/enterprise are PG-only.
+        if matches!(profile, ProfileName::Team | ProfileName::Enterprise)
+            && self.storage.backend == Backend::Sqlite
+        {
+            bail!("profile team/enterprise requires storage.backend = \"postgres\"")
         }
 
         let mode = self.deployment_mode();
@@ -1202,7 +1204,7 @@ impl Config {
             self.limits.qps_token, self.limits.qps_tenant, self.limits.qps_space, self.limits.max_queue
         ));
         out.push_str(&format!(
-            "retrieval.event_depth = {}\nretrieval.event_max_seeds = {}\nretrieval.event_max_events = {}\nretrieval.event_timeout_ms = {}\nretrieval.event_text_weight = {}\nretrieval.rrf_bm25_weight = {}\nretrieval.rrf_dense_weight = {}\nretrieval.rrf_event_weight = {}\n",
+            "retrieval.event_depth = {}\nretrieval.event_max_seeds = {}\nretrieval.event_max_events = {}\nretrieval.event_timeout_ms = {}\nretrieval.event_text_weight = {}\nretrieval.rrf_bm25_weight = {}\nretrieval.rrf_dense_weight = {}\nretrieval.rrf_event_weight = {}\nretrieval.judge_after_hybrid = {}\n",
             self.retrieval.event_depth,
             self.retrieval.event_max_seeds,
             self.retrieval.event_max_events,
@@ -1210,7 +1212,8 @@ impl Config {
             self.retrieval.event_text_weight,
             self.retrieval.rrf_bm25_weight,
             self.retrieval.rrf_dense_weight,
-            self.retrieval.rrf_event_weight
+            self.retrieval.rrf_event_weight,
+            self.retrieval.judge_after_hybrid
         ));
         out.push_str(&format!(
             "summary.enabled = {}\nsummary.auto = {}\nsummary.model_alias = {}\nsummary.prompt_version = {}\nsummary.max_chars = {}\nsummary.batch = {}\n",
@@ -1338,5 +1341,33 @@ mod tests {
         config.normalize();
         assert_eq!(config.storage.tenant_id, crate::governance::SOLO_TENANT);
         assert_eq!(config.storage.default_space, crate::governance::SOLO_SPACE);
+    }
+
+    #[test]
+    fn solo_postgres_validate_ok() {
+        // validate() only checks that the configured URL variable is non-empty;
+        // it never opens a PostgreSQL connection.
+        let key = "LKB_TEST_SOLO_POSTGRES_URL";
+        std::env::set_var(key, "postgres://localhost/lkb_validate_only");
+        let mut config = Config {
+            profile: Some(ProfileName::Solo),
+            ..Default::default()
+        };
+        config.storage.backend = Backend::Postgres;
+        config.storage.url_env = key.to_string();
+        config.normalize();
+        assert_eq!(config.storage.tenant_id, crate::governance::SOLO_TENANT);
+        assert_eq!(config.storage.default_space, crate::governance::SOLO_SPACE);
+        let result = config.validate();
+        assert!(result.is_ok(), "{result:?}");
+    }
+
+    #[test]
+    fn team_sqlite_still_rejected() {
+        let config = Config {
+            profile: Some(ProfileName::Team),
+            ..Default::default()
+        };
+        config.validate().unwrap_err();
     }
 }

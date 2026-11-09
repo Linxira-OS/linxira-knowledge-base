@@ -60,6 +60,8 @@ pub struct SearchTuning {
     pub rrf_bm25_weight: f64,
     pub rrf_dense_weight: f64,
     pub rrf_event_weight: f64,
+    /// Rerank the fused hybrid list with the judge when one is configured.
+    pub judge_after_hybrid: bool,
 }
 
 impl Default for SearchTuning {
@@ -82,6 +84,7 @@ impl SearchTuning {
             rrf_bm25_weight: config.rrf_bm25_weight.max(0.0),
             rrf_dense_weight: config.rrf_dense_weight.max(0.0),
             rrf_event_weight: config.rrf_event_weight.max(0.0),
+            judge_after_hybrid: config.judge_after_hybrid,
         }
     }
 }
@@ -202,11 +205,26 @@ pub async fn search_with_tuning(
                     rankings.push((tuning.rrf_event_weight.max(0.0), event_hits));
                 }
             }
-            if rankings.is_empty() {
+            let mut fused = if rankings.is_empty() {
                 Vec::new()
             } else {
                 rrf_fuse(rankings, 60.0)
+            };
+            // Hybrid does not require a judge: absence is silent. A configured
+            // judge that fails reports decision_unavailable inside apply_judge.
+            if should_judge_hybrid(tuning, providers) {
+                apply_judge(
+                    store,
+                    policy,
+                    tuning,
+                    providers,
+                    query,
+                    &mut fused,
+                    &mut degraded,
+                )
+                .await;
             }
+            fused
         }
         SearchMode::Auto => unreachable!("auto is resolved before execution"),
     };
@@ -254,6 +272,49 @@ pub async fn search_with_tuning(
     })
 }
 
+/// Signals that decide `auto` on SQLite. A probe is `None` when its provider is
+/// not configured or the decision no longer needs it.
+struct AutoSignals {
+    embedding_configured: bool,
+    embeddings: Option<Result<bool, String>>,
+    extractor_configured: bool,
+    events: Option<Result<bool, String>>,
+}
+
+/// Deterministic `auto` decision for SQLite plus the degradations it implies.
+fn auto_mode_from_signals(signals: AutoSignals) -> (SearchMode, Vec<Degraded>) {
+    let mut degraded = Vec::new();
+    let mut hybrid = false;
+    let mut vectors_missing = false;
+    if signals.embedding_configured {
+        match signals.embeddings {
+            Some(Ok(true)) => hybrid = true,
+            Some(Ok(false)) => vectors_missing = true,
+            Some(Err(detail)) => degraded.push(Degraded::embedding_unavailable(&detail)),
+            None => {}
+        }
+    }
+    if !hybrid && signals.extractor_configured {
+        match signals.events {
+            Some(Ok(true)) => hybrid = true,
+            Some(Ok(false)) => {}
+            Some(Err(detail)) => degraded.push(Degraded::event_extraction_unavailable(&detail)),
+            None => {}
+        }
+    }
+    // When hybrid runs, its dense channel reports the empty vector index itself;
+    // only the plain-BM25 outcome needs the degradation recorded here.
+    if !hybrid && vectors_missing {
+        degraded.push(Degraded::index_missing());
+    }
+    let mode = if hybrid {
+        SearchMode::Hybrid
+    } else {
+        SearchMode::Bm25
+    };
+    (mode, degraded)
+}
+
 async fn resolve_mode(
     store: &Arc<dyn Store>,
     providers: &ProviderSet,
@@ -264,22 +325,43 @@ async fn resolve_mode(
     match requested {
         SearchMode::Auto => {
             if store.backend() == "postgres" {
-                Ok(SearchMode::Hybrid)
-            } else if providers.extractor.is_some() {
-                match store.has_events(policy).await {
-                    Ok(true) => Ok(SearchMode::Hybrid),
-                    Ok(false) => Ok(SearchMode::Bm25),
-                    Err(err) => {
-                        degraded.push(Degraded::event_extraction_unavailable(&err.to_string()));
-                        Ok(SearchMode::Bm25)
-                    }
-                }
-            } else {
-                Ok(SearchMode::Bm25)
+                return Ok(SearchMode::Hybrid);
             }
+            let embeddings = if providers.embedding.is_some() {
+                Some(
+                    store
+                        .has_embeddings(policy)
+                        .await
+                        .map_err(|err| err.to_string()),
+                )
+            } else {
+                None
+            };
+            let events = if !matches!(embeddings, Some(Ok(true))) && providers.extractor.is_some() {
+                Some(
+                    store
+                        .has_events(policy)
+                        .await
+                        .map_err(|err| err.to_string()),
+                )
+            } else {
+                None
+            };
+            let (mode, auto_degraded) = auto_mode_from_signals(AutoSignals {
+                embedding_configured: providers.embedding.is_some(),
+                embeddings,
+                extractor_configured: providers.extractor.is_some(),
+                events,
+            });
+            degraded.extend(auto_degraded);
+            Ok(mode)
         }
         other => Ok(other),
     }
+}
+
+fn should_judge_hybrid(tuning: &SearchTuning, providers: &ProviderSet) -> bool {
+    tuning.judge_after_hybrid && providers.judge.is_some()
 }
 
 async fn keyword_candidates(
@@ -428,18 +510,7 @@ async fn apply_judge(
                     .filter_map(serde_json::Value::as_f64)
                     .collect();
                 if values.len() == top {
-                    for (hit, score) in hits.iter_mut().zip(values) {
-                        hit.rerank_score = Some(score);
-                    }
-                    let mut head: Vec<SearchHit> = hits.drain(..top).collect();
-                    head.sort_by(|a, b| {
-                        b.rerank_score
-                            .partial_cmp(&a.rerank_score)
-                            .unwrap_or(std::cmp::Ordering::Equal)
-                            .then_with(|| a.chunk_id.cmp(&b.chunk_id))
-                    });
-                    head.append(hits);
-                    *hits = head;
+                    apply_judge_scores(hits, &values);
                     return;
                 }
             }
@@ -453,18 +524,8 @@ async fn apply_judge(
     if let Some(judge) = &providers.judge {
         match judge.rerank(query, &candidates).await {
             Ok(scores) if scores.len() == top => {
-                for (hit, score) in hits.iter_mut().zip(scores) {
-                    hit.rerank_score = Some(score as f64);
-                }
-                let mut head: Vec<SearchHit> = hits.drain(..top).collect();
-                head.sort_by(|a, b| {
-                    b.rerank_score
-                        .partial_cmp(&a.rerank_score)
-                        .unwrap_or(std::cmp::Ordering::Equal)
-                        .then_with(|| a.chunk_id.cmp(&b.chunk_id))
-                });
-                head.append(hits);
-                *hits = head;
+                let values: Vec<f64> = scores.into_iter().map(f64::from).collect();
+                apply_judge_scores(hits, &values);
             }
             Ok(_) => degraded.push(Degraded::decision_unavailable(
                 "judge returned wrong score count",
@@ -479,6 +540,27 @@ async fn apply_judge(
                 .unwrap_or("judge is not configured"),
         ));
     }
+}
+
+/// Reorder the judge window (Top 30) only: membership and the tail keep their
+/// positions. A score count that does not match the window is a no-op.
+fn apply_judge_scores(hits: &mut Vec<SearchHit>, values: &[f64]) {
+    let top = hits.len().min(30);
+    if values.len() != top {
+        return;
+    }
+    for (hit, score) in hits.iter_mut().take(top).zip(values.iter().copied()) {
+        hit.rerank_score = Some(score);
+    }
+    let mut head: Vec<SearchHit> = hits.drain(..top).collect();
+    head.sort_by(|a, b| {
+        b.rerank_score
+            .partial_cmp(&a.rerank_score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| a.chunk_id.cmp(&b.chunk_id))
+    });
+    head.append(hits);
+    *hits = head;
 }
 
 enum DenseBuildError {
@@ -599,6 +681,25 @@ pub fn rrf_fuse(rankings: Vec<(f64, Vec<SearchHit>)>, k: f64) -> Vec<SearchHit> 
 mod tests {
     use super::*;
     use crate::governance::{Acl, GovernanceFields};
+    use crate::providers::{JudgeProvider, ProviderError, ProviderSet};
+    use async_trait::async_trait;
+
+    struct FakeJudge;
+
+    #[async_trait]
+    impl JudgeProvider for FakeJudge {
+        async fn rerank(
+            &self,
+            _query: &str,
+            candidates: &[String],
+        ) -> Result<Vec<f32>, ProviderError> {
+            Ok(vec![0.5; candidates.len()])
+        }
+
+        fn id(&self) -> String {
+            "fake-judge".to_string()
+        }
+    }
 
     fn hit(id: &str) -> SearchHit {
         SearchHit {
@@ -653,5 +754,137 @@ mod tests {
             SearchMode::Bm25Judge
         );
         assert!(SearchMode::parse("unknown").is_err());
+    }
+
+    // `resolve_mode` needs a live Store; these tests pin its SQLite decision
+    // table through `auto_mode_from_signals`. PostgreSQL short-circuits to
+    // Hybrid before any probe and is covered by `pg_sql_guard`/integration runs.
+
+    #[test]
+    fn auto_embedding_with_vectors_uses_hybrid() {
+        let (mode, degraded) = auto_mode_from_signals(AutoSignals {
+            embedding_configured: true,
+            embeddings: Some(Ok(true)),
+            extractor_configured: false,
+            events: None,
+        });
+        assert_eq!(mode, SearchMode::Hybrid);
+        assert!(degraded.is_empty());
+    }
+
+    #[test]
+    fn auto_embedding_without_vectors_degrades_to_bm25() {
+        let (mode, degraded) = auto_mode_from_signals(AutoSignals {
+            embedding_configured: true,
+            embeddings: Some(Ok(false)),
+            extractor_configured: false,
+            events: None,
+        });
+        assert_eq!(mode, SearchMode::Bm25);
+        assert_eq!(degraded.len(), 1);
+        assert_eq!(degraded[0].code, "index_missing");
+    }
+
+    #[test]
+    fn auto_extractor_events_uses_hybrid_without_embeddings() {
+        let (mode, degraded) = auto_mode_from_signals(AutoSignals {
+            embedding_configured: false,
+            embeddings: None,
+            extractor_configured: true,
+            events: Some(Ok(true)),
+        });
+        assert_eq!(mode, SearchMode::Hybrid);
+        assert!(degraded.is_empty());
+    }
+
+    #[test]
+    fn auto_without_capabilities_stays_bm25() {
+        let (mode, degraded) = auto_mode_from_signals(AutoSignals {
+            embedding_configured: false,
+            embeddings: None,
+            extractor_configured: false,
+            events: None,
+        });
+        assert_eq!(mode, SearchMode::Bm25);
+        assert!(degraded.is_empty());
+    }
+
+    #[test]
+    fn judge_after_hybrid_defaults_on_and_passes_through() {
+        assert!(SearchTuning::default().judge_after_hybrid);
+        let mut retrieval = RetrievalConfig::default();
+        assert!(retrieval.judge_after_hybrid);
+        retrieval.judge_after_hybrid = false;
+        assert!(!SearchTuning::from_retrieval(&retrieval).judge_after_hybrid);
+    }
+
+    #[test]
+    fn hybrid_judge_runs_only_when_configured() {
+        let mut providers = ProviderSet::with_none();
+        assert!(!should_judge_hybrid(&SearchTuning::default(), &providers));
+        providers.judge = Some(Arc::new(FakeJudge));
+        assert!(should_judge_hybrid(&SearchTuning::default(), &providers));
+        let tuning = SearchTuning {
+            judge_after_hybrid: false,
+            ..Default::default()
+        };
+        assert!(!should_judge_hybrid(&tuning, &providers));
+    }
+
+    #[test]
+    fn hybrid_judge_runs_after_rrf() {
+        let ordered: Vec<SearchHit> = (0..35).map(|index| hit(&format!("h{index:02}"))).collect();
+        let mut fused = rrf_fuse(vec![(1.0, ordered)], 60.0);
+        let before: Vec<String> = fused.iter().map(|hit| hit.chunk_id.clone()).collect();
+        let tail_before: Vec<String> = fused[30..].iter().map(|hit| hit.chunk_id.clone()).collect();
+        let values: Vec<f64> = (0..30).map(|index| index as f64).collect();
+        apply_judge_scores(&mut fused, &values);
+        assert_eq!(fused.len(), before.len());
+        let after: Vec<String> = fused.iter().map(|hit| hit.chunk_id.clone()).collect();
+        let mut sorted_before = before.clone();
+        let mut sorted_after = after.clone();
+        sorted_before.sort();
+        sorted_after.sort();
+        assert_eq!(
+            sorted_after, sorted_before,
+            "judge must not change membership"
+        );
+        assert_eq!(fused[0].chunk_id, "h29");
+        assert_eq!(fused[29].chunk_id, "h00");
+        assert_eq!(
+            fused[30..]
+                .iter()
+                .map(|hit| hit.chunk_id.clone())
+                .collect::<Vec<_>>(),
+            tail_before,
+            "judge window is Top 30"
+        );
+        assert!(fused[..30].iter().all(|hit| hit.rerank_score.is_some()));
+        assert!(fused[30..].iter().all(|hit| hit.rerank_score.is_none()));
+    }
+
+    #[test]
+    fn hybrid_without_judge_keeps_order() {
+        let providers = ProviderSet::with_none();
+        let tuning = SearchTuning::default();
+        let fused = rrf_fuse(
+            vec![
+                (1.0, vec![hit("a"), hit("b"), hit("c")]),
+                (1.0, vec![hit("b")]),
+            ],
+            60.0,
+        );
+        let before: Vec<String> = fused.iter().map(|hit| hit.chunk_id.clone()).collect();
+        if should_judge_hybrid(&tuning, &providers) {
+            unreachable!("no judge is configured");
+        }
+        assert_eq!(
+            fused
+                .iter()
+                .map(|hit| hit.chunk_id.clone())
+                .collect::<Vec<_>>(),
+            before
+        );
+        assert!(fused.iter().all(|hit| hit.rerank_score.is_none()));
     }
 }

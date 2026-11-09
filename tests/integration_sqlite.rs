@@ -1,13 +1,58 @@
 use lkb::answer::{build_answer, AnswerOptions};
 use lkb::config::{Backend, Config, ProfileName};
 use lkb::contract::AnswerMode;
-use lkb::governance::{Policy, SOLO_SPACE, SOLO_TENANT};
+use lkb::governance::{Policy, Principal, SOLO_SPACE, SOLO_TENANT};
 use lkb::ingest::{export_jsonl, import_path, ImportOptions};
-use lkb::providers::ProviderSet;
-use lkb::search::{search, SearchMode};
+use lkb::providers::{EmbeddingProvider, JudgeProvider, ProviderError, ProviderSet};
+use lkb::search::{search, search_with_tuning, SearchMode, SearchTuning};
 use lkb::store;
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
+
+struct FixedEmbedding;
+
+#[async_trait::async_trait]
+impl EmbeddingProvider for FixedEmbedding {
+    async fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, ProviderError> {
+        Ok(texts.iter().map(|_| vec![1.0, 0.0]).collect())
+    }
+
+    fn id(&self) -> String {
+        "fixed-embedding".to_string()
+    }
+}
+
+struct CountingJudge {
+    calls: Arc<AtomicUsize>,
+}
+
+#[async_trait::async_trait]
+impl JudgeProvider for CountingJudge {
+    async fn rerank(&self, _query: &str, candidates: &[String]) -> Result<Vec<f32>, ProviderError> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        Ok((0..candidates.len())
+            .map(|index| (candidates.len() - index) as f32)
+            .collect())
+    }
+
+    fn id(&self) -> String {
+        "counting-judge".to_string()
+    }
+}
+
+async fn set_all_chunk_embeddings(path: &Path, vector: &[f32]) {
+    let sqlite = lkb::store::sqlite::SqliteStore::open(path)
+        .await
+        .expect("open sqlite for embedding seed");
+    let json = serde_json::to_string(vector).unwrap();
+    sqlx::query("UPDATE chunks SET embedding_json = ?")
+        .bind(json)
+        .execute(sqlite.pool())
+        .await
+        .expect("seed chunk embeddings");
+}
 
 fn test_config(path: &Path) -> Config {
     let mut config = Config {
@@ -185,4 +230,163 @@ async fn doc_id_changes_when_content_changes_and_old_record_links_forward() {
         Some(active[0].doc_id.as_str())
     );
     assert!(superseded[0].valid_to.is_some());
+}
+
+async fn import_examples(store: &Arc<dyn store::Store>) {
+    let examples = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("examples");
+    let report = import_path(store, &examples, &ImportOptions::default(), None, None)
+        .await
+        .expect("import examples");
+    assert!(report.imported >= 7, "report: {}", report.human());
+    assert!(report.failed.is_empty(), "report: {}", report.human());
+}
+
+#[tokio::test]
+async fn auto_uses_hybrid_when_embedding_vectors_exist() {
+    let temp = tempfile::tempdir().unwrap();
+    let db_path = temp.path().join("lkb.sqlite");
+    let config = test_config(&db_path);
+    let store = open_test_store(&config).await;
+    import_examples(&store).await;
+    set_all_chunk_embeddings(&db_path, &[1.0, 0.0]).await;
+
+    let mut providers = ProviderSet::with_none();
+    providers.embedding = Some(Arc::new(FixedEmbedding));
+    let policy = Policy::solo();
+    let response = search(
+        &store,
+        &providers,
+        &policy,
+        "doc_id 如何派生",
+        SearchMode::Auto,
+        5,
+    )
+    .await
+    .expect("auto search");
+    assert_eq!(response.mode_requested, SearchMode::Auto);
+    assert_eq!(response.mode_used, SearchMode::Hybrid);
+    assert!(
+        !response.hits.is_empty(),
+        "degraded: {:?}",
+        response.degraded
+    );
+    assert!(
+        !response
+            .degraded
+            .iter()
+            .any(|item| item.code == "index_missing"),
+        "degraded: {:?}",
+        response.degraded
+    );
+    assert!(
+        !response
+            .degraded
+            .iter()
+            .any(|item| item.code == "decision_unavailable"),
+        "hybrid does not require a judge: {:?}",
+        response.degraded
+    );
+
+    // The probe is scoped by Policy visibility: another tenant sees nothing.
+    let other_tenant = Policy::new(
+        Principal::local_user("bob", "t_other", vec!["s_default".into()], vec![]),
+        None,
+    )
+    .unwrap();
+    assert!(!store.has_embeddings(&other_tenant).await.unwrap());
+}
+
+#[tokio::test]
+async fn auto_without_vectors_falls_back_to_bm25_and_reports_index_missing() {
+    let temp = tempfile::tempdir().unwrap();
+    let config = test_config(&temp.path().join("lkb.sqlite"));
+    let store = open_test_store(&config).await;
+    import_examples(&store).await;
+
+    let mut providers = ProviderSet::with_none();
+    providers.embedding = Some(Arc::new(FixedEmbedding));
+    let policy = Policy::solo();
+    let response = search(
+        &store,
+        &providers,
+        &policy,
+        "doc_id 如何派生",
+        SearchMode::Auto,
+        5,
+    )
+    .await
+    .expect("auto search");
+    assert_eq!(response.mode_used, SearchMode::Bm25);
+    assert!(!response.hits.is_empty());
+    assert!(
+        response
+            .degraded
+            .iter()
+            .any(|item| item.code == "index_missing"),
+        "degraded: {:?}",
+        response.degraded
+    );
+}
+
+#[tokio::test]
+async fn hybrid_judge_runs_after_rrf_and_can_be_disabled() {
+    let temp = tempfile::tempdir().unwrap();
+    let db_path = temp.path().join("lkb.sqlite");
+    let config = test_config(&db_path);
+    let store = open_test_store(&config).await;
+    import_examples(&store).await;
+    set_all_chunk_embeddings(&db_path, &[1.0, 0.0]).await;
+
+    let calls = Arc::new(AtomicUsize::new(0));
+    let mut providers = ProviderSet::with_none();
+    providers.embedding = Some(Arc::new(FixedEmbedding));
+    providers.judge = Some(Arc::new(CountingJudge {
+        calls: calls.clone(),
+    }));
+    let policy = Policy::solo();
+
+    let response = search_with_tuning(
+        &store,
+        &providers,
+        &policy,
+        "doc_id 如何派生",
+        SearchMode::Hybrid,
+        5,
+        &SearchTuning::default(),
+    )
+    .await
+    .expect("hybrid search");
+    assert!(!response.hits.is_empty());
+    assert_eq!(calls.load(Ordering::SeqCst), 1, "judge runs after RRF");
+    assert!(response.hits.iter().any(|hit| hit.rerank_score.is_some()));
+    assert!(
+        !response
+            .degraded
+            .iter()
+            .any(|item| item.code == "decision_unavailable"),
+        "degraded: {:?}",
+        response.degraded
+    );
+
+    let disabled = SearchTuning {
+        judge_after_hybrid: false,
+        ..Default::default()
+    };
+    let response = search_with_tuning(
+        &store,
+        &providers,
+        &policy,
+        "doc_id 如何派生",
+        SearchMode::Hybrid,
+        5,
+        &disabled,
+    )
+    .await
+    .expect("hybrid search without judge");
+    assert_eq!(
+        calls.load(Ordering::SeqCst),
+        1,
+        "judge_after_hybrid = false must skip the judge"
+    );
+    assert!(response.hits.iter().all(|hit| hit.rerank_score.is_none()));
 }

@@ -1612,6 +1612,19 @@ impl Store for PostgresStore {
         Ok(query.fetch_optional(&self.pool).await?.is_some())
     }
 
+    async fn has_embeddings(&self, policy: &Policy) -> Result<bool, StoreError> {
+        let visibility = policy.visibility_from("c", self.dialect(), 1)?;
+        let sql = format!(
+            "SELECT 1::bigint FROM chunks c WHERE c.embedding_json IS NOT NULL AND {} LIMIT 1",
+            visibility.sql
+        );
+        let mut query = sqlx::query_scalar::<_, i64>(&sql);
+        for value in &visibility.binds {
+            query = query.bind(value.as_str());
+        }
+        Ok(query.fetch_optional(&self.pool).await?.is_some())
+    }
+
     async fn has_current_event(
         &self,
         tenant_id: &str,

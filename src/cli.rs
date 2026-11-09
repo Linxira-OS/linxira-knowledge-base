@@ -1846,7 +1846,7 @@ mod tests {
             "alice"
         )));
         assert!(is_user_input_error(&anyhow::Error::new(UserInput(
-            anyhow::anyhow!("profile solo requires storage.backend = \"sqlite\"")
+            anyhow::anyhow!("profile team/enterprise requires storage.backend = \"postgres\"")
         ))));
         // Typed runtime failures: pointer shown.
         assert!(!is_user_input_error(&anyhow::Error::new(

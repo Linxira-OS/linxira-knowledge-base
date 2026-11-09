@@ -1225,6 +1225,10 @@ pub trait Store: Send + Sync {
     ) -> Result<Vec<Candidate>, StoreError>;
 
     async fn has_events(&self, policy: &Policy) -> Result<bool, StoreError>;
+    /// True when at least one visible chunk carries a stored dense vector.
+    /// Used by `auto` to decide whether the dense channel can contribute; the
+    /// visibility predicate keeps the probe inside the caller's tenant/spaces.
+    async fn has_embeddings(&self, policy: &Policy) -> Result<bool, StoreError>;
     async fn has_current_event(
         &self,
         tenant_id: &str,
