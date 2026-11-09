@@ -8,7 +8,7 @@ use crate::error::StoreError;
 use crate::governance::Acl;
 use crate::ingest::{chunker, doc_id};
 use crate::store::{
-    ChunkRecord, DocumentRecord, PageRecord, RevisionRecord, SpaceRecord, SeedMeta, Store,
+    ChunkRecord, DocumentRecord, PageRecord, RevisionRecord, SeedMeta, SpaceRecord, Store,
 };
 use crate::util::{now_rfc3339, sha256_hex};
 use serde::{Deserialize, Serialize};
@@ -24,30 +24,102 @@ struct SeedFile {
 }
 
 const SEED_FILES: &[SeedFile] = &[
-    SeedFile { path: "docs/zh/00-index.md", content: include_str!("../docs/zh/00-index.md") },
-    SeedFile { path: "docs/zh/01-overview.md", content: include_str!("../docs/zh/01-overview.md") },
-    SeedFile { path: "docs/zh/02-concepts.md", content: include_str!("../docs/zh/02-concepts.md") },
-    SeedFile { path: "docs/zh/03-quickstart.md", content: include_str!("../docs/zh/03-quickstart.md") },
-    SeedFile { path: "docs/zh/04-wiki.md", content: include_str!("../docs/zh/04-wiki.md") },
-    SeedFile { path: "docs/zh/05-search-ai.md", content: include_str!("../docs/zh/05-search-ai.md") },
-    SeedFile { path: "docs/zh/06-auth-security.md", content: include_str!("../docs/zh/06-auth-security.md") },
-    SeedFile { path: "docs/zh/07-configuration.md", content: include_str!("../docs/zh/07-configuration.md") },
-    SeedFile { path: "docs/zh/08-deployment.md", content: include_str!("../docs/zh/08-deployment.md") },
-    SeedFile { path: "docs/zh/09-connectors.md", content: include_str!("../docs/zh/09-connectors.md") },
-    SeedFile { path: "docs/zh/10-architecture.md", content: include_str!("../docs/zh/10-architecture.md") },
-    SeedFile { path: "docs/zh/11-faq.md", content: include_str!("../docs/zh/11-faq.md") },
-    SeedFile { path: "docs/en/00-index.md", content: include_str!("../docs/en/00-index.md") },
-    SeedFile { path: "docs/en/01-overview.md", content: include_str!("../docs/en/01-overview.md") },
-    SeedFile { path: "docs/en/02-concepts.md", content: include_str!("../docs/en/02-concepts.md") },
-    SeedFile { path: "docs/en/03-quickstart.md", content: include_str!("../docs/en/03-quickstart.md") },
-    SeedFile { path: "docs/en/04-wiki.md", content: include_str!("../docs/en/04-wiki.md") },
-    SeedFile { path: "docs/en/05-search-ai.md", content: include_str!("../docs/en/05-search-ai.md") },
-    SeedFile { path: "docs/en/06-auth-security.md", content: include_str!("../docs/en/06-auth-security.md") },
-    SeedFile { path: "docs/en/07-configuration.md", content: include_str!("../docs/en/07-configuration.md") },
-    SeedFile { path: "docs/en/08-deployment.md", content: include_str!("../docs/en/08-deployment.md") },
-    SeedFile { path: "docs/en/09-connectors.md", content: include_str!("../docs/en/09-connectors.md") },
-    SeedFile { path: "docs/en/10-architecture.md", content: include_str!("../docs/en/10-architecture.md") },
-    SeedFile { path: "docs/en/11-faq.md", content: include_str!("../docs/en/11-faq.md") },
+    SeedFile {
+        path: "docs/zh/00-index.md",
+        content: include_str!("../docs/zh/00-index.md"),
+    },
+    SeedFile {
+        path: "docs/zh/01-overview.md",
+        content: include_str!("../docs/zh/01-overview.md"),
+    },
+    SeedFile {
+        path: "docs/zh/02-concepts.md",
+        content: include_str!("../docs/zh/02-concepts.md"),
+    },
+    SeedFile {
+        path: "docs/zh/03-quickstart.md",
+        content: include_str!("../docs/zh/03-quickstart.md"),
+    },
+    SeedFile {
+        path: "docs/zh/04-wiki.md",
+        content: include_str!("../docs/zh/04-wiki.md"),
+    },
+    SeedFile {
+        path: "docs/zh/05-search-ai.md",
+        content: include_str!("../docs/zh/05-search-ai.md"),
+    },
+    SeedFile {
+        path: "docs/zh/06-auth-security.md",
+        content: include_str!("../docs/zh/06-auth-security.md"),
+    },
+    SeedFile {
+        path: "docs/zh/07-configuration.md",
+        content: include_str!("../docs/zh/07-configuration.md"),
+    },
+    SeedFile {
+        path: "docs/zh/08-deployment.md",
+        content: include_str!("../docs/zh/08-deployment.md"),
+    },
+    SeedFile {
+        path: "docs/zh/09-connectors.md",
+        content: include_str!("../docs/zh/09-connectors.md"),
+    },
+    SeedFile {
+        path: "docs/zh/10-architecture.md",
+        content: include_str!("../docs/zh/10-architecture.md"),
+    },
+    SeedFile {
+        path: "docs/zh/11-faq.md",
+        content: include_str!("../docs/zh/11-faq.md"),
+    },
+    SeedFile {
+        path: "docs/en/00-index.md",
+        content: include_str!("../docs/en/00-index.md"),
+    },
+    SeedFile {
+        path: "docs/en/01-overview.md",
+        content: include_str!("../docs/en/01-overview.md"),
+    },
+    SeedFile {
+        path: "docs/en/02-concepts.md",
+        content: include_str!("../docs/en/02-concepts.md"),
+    },
+    SeedFile {
+        path: "docs/en/03-quickstart.md",
+        content: include_str!("../docs/en/03-quickstart.md"),
+    },
+    SeedFile {
+        path: "docs/en/04-wiki.md",
+        content: include_str!("../docs/en/04-wiki.md"),
+    },
+    SeedFile {
+        path: "docs/en/05-search-ai.md",
+        content: include_str!("../docs/en/05-search-ai.md"),
+    },
+    SeedFile {
+        path: "docs/en/06-auth-security.md",
+        content: include_str!("../docs/en/06-auth-security.md"),
+    },
+    SeedFile {
+        path: "docs/en/07-configuration.md",
+        content: include_str!("../docs/en/07-configuration.md"),
+    },
+    SeedFile {
+        path: "docs/en/08-deployment.md",
+        content: include_str!("../docs/en/08-deployment.md"),
+    },
+    SeedFile {
+        path: "docs/en/09-connectors.md",
+        content: include_str!("../docs/en/09-connectors.md"),
+    },
+    SeedFile {
+        path: "docs/en/10-architecture.md",
+        content: include_str!("../docs/en/10-architecture.md"),
+    },
+    SeedFile {
+        path: "docs/en/11-faq.md",
+        content: include_str!("../docs/en/11-faq.md"),
+    },
 ];
 
 #[derive(Debug, Clone)]
@@ -165,9 +237,9 @@ pub async fn run_seed(
         }
         None => {
             report.failed += 1;
-            report
-                .warnings
-                .push(format!("seed_import_failed: space {space_id:?} does not exist"));
+            report.warnings.push(format!(
+                "seed_import_failed: space {space_id:?} does not exist"
+            ));
             return Ok(report);
         }
     };
@@ -183,15 +255,7 @@ pub async fn run_seed(
     };
 
     for page in pages {
-        match seed_one_page(
-            store,
-            &tenant_id,
-            &space_id,
-            &default_acl,
-            &page,
-        )
-        .await
-        {
+        match seed_one_page(store, &tenant_id, &space_id, &default_acl, &page).await {
             Ok(SeedPageOutcome::Imported) => {
                 report.imported += 1;
                 *report.by_lang.entry(page.lang.clone()).or_insert(0) += 1;
@@ -270,7 +334,10 @@ async fn seed_one_page(
             let revisions = store
                 .list_revisions(tenant_id, space_id, &page.slug, Some(&page.lang))
                 .await?;
-            if revisions.iter().any(|revision| revision.author != SEED_AUTHOR) {
+            if revisions
+                .iter()
+                .any(|revision| revision.author != SEED_AUTHOR)
+            {
                 return Ok(SeedPageOutcome::UserModified);
             }
             if view.page.content_hash == page.content_hash
@@ -345,12 +412,7 @@ async fn seed_one_page(
             let chunk_hash = sha256_hex(draft.text.as_bytes());
             ChunkRecord {
                 tenant_id: tenant_id.to_string(),
-                chunk_id: doc_id::derive_chunk_id(
-                    tenant_id,
-                    &doc_id,
-                    index as u32,
-                    &chunk_hash,
-                ),
+                chunk_id: doc_id::derive_chunk_id(tenant_id, &doc_id, index as u32, &chunk_hash),
                 doc_id: doc_id.clone(),
                 space_id: space_id.to_string(),
                 seq: index as u32,
@@ -418,7 +480,10 @@ fn parse_seed_pages(lang_filter: Option<&str>) -> Result<Vec<SeedPage>, Vec<Stri
         } else if file.path.starts_with("docs/en/") {
             "en"
         } else {
-            errors.push(format!("seed file outside docs/zh or docs/en: {}", file.path));
+            errors.push(format!(
+                "seed file outside docs/zh or docs/en: {}",
+                file.path
+            ));
             continue;
         };
         let parsed = crate::frontmatter::parse(file.content);
@@ -483,9 +548,9 @@ fn valid_seed_slug(slug: &str) -> bool {
         && slug.len() <= 200
         && !slug.contains('\\')
         && !slug.contains("..")
-        && slug
-            .chars()
-            .all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '-' || ch == '_' || ch == '/')
+        && slug.chars().all(|ch| {
+            ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '-' || ch == '_' || ch == '/'
+        })
 }
 
 pub fn manifest_hash() -> String {
@@ -500,14 +565,8 @@ pub fn manifest_hash() -> String {
     hex::encode(hasher.finalize())
 }
 
-pub async fn auto_seed_if_empty(
-    store: &Arc<dyn Store>,
-    config: &Config,
-) -> Option<SeedReport> {
-    if !config.seed.enabled
-        || !config.seed.auto
-        || config.profile_name() != ProfileName::Solo
-    {
+pub async fn auto_seed_if_empty(store: &Arc<dyn Store>, config: &Config) -> Option<SeedReport> {
+    if !config.seed.enabled || !config.seed.auto || config.profile_name() != ProfileName::Solo {
         return None;
     }
     match store.is_database_empty(&config.storage.tenant_id).await {

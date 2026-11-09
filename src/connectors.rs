@@ -5,9 +5,7 @@
 use crate::config::Config;
 use crate::governance::Acl;
 use crate::providers::ProviderSet;
-use crate::store::{
-    ConnectorJobRecord, ConnectorRecord, DocumentRecord, ExternalRefRecord, Store,
-};
+use crate::store::{ConnectorJobRecord, ConnectorRecord, DocumentRecord, ExternalRefRecord, Store};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -96,7 +94,9 @@ fn parse_items(value: &Value) -> Result<Vec<ConnectorItem>, ConnectorError> {
     } else if let Some(array) = value.get("items").and_then(Value::as_array) {
         array.clone()
     } else {
-        return Err(ConnectorError::Invalid("expected an items array".to_string()));
+        return Err(ConnectorError::Invalid(
+            "expected an items array".to_string(),
+        ));
     };
     array
         .into_iter()
@@ -107,9 +107,15 @@ fn parse_items(value: &Value) -> Result<Vec<ConnectorItem>, ConnectorError> {
                 .or_else(|| item.get("path"))
                 .or_else(|| item.get("url"))
                 .and_then(Value::as_str)
-                .ok_or_else(|| ConnectorError::Invalid("item is missing external_id/id/path/url".to_string()))?
+                .ok_or_else(|| {
+                    ConnectorError::Invalid("item is missing external_id/id/path/url".to_string())
+                })?
                 .to_string();
-            let url = item.get("url").and_then(Value::as_str).unwrap_or("").to_string();
+            let url = item
+                .get("url")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_string();
             let title = item
                 .get("title")
                 .and_then(Value::as_str)
@@ -119,9 +125,15 @@ fn parse_items(value: &Value) -> Result<Vec<ConnectorItem>, ConnectorError> {
                 external_id,
                 url,
                 title,
-                revision: item.get("revision").and_then(|value| value.as_str()).map(str::to_string),
+                revision: item
+                    .get("revision")
+                    .and_then(|value| value.as_str())
+                    .map(str::to_string),
                 acl: item.get("acl").cloned(),
-                content: item.get("content").and_then(Value::as_str).map(str::to_string),
+                content: item
+                    .get("content")
+                    .and_then(Value::as_str)
+                    .map(str::to_string),
                 mime: item.get("mime").and_then(Value::as_str).map(str::to_string),
                 lang: item.get("lang").and_then(Value::as_str).map(str::to_string),
             })
@@ -135,11 +147,13 @@ struct FilesystemExport {
 
 impl FilesystemExport {
     fn from_config(config: &Value) -> Result<Self, ConnectorError> {
-        let dir = config
-            .get("dir")
+        let dir = config.get("dir").and_then(Value::as_str).ok_or_else(|| {
+            ConnectorError::Invalid("filesystem_export requires config.dir".to_string())
+        })?;
+        let manifest = config
+            .get("manifest")
             .and_then(Value::as_str)
-            .ok_or_else(|| ConnectorError::Invalid("filesystem_export requires config.dir".to_string()))?;
-        let manifest = config.get("manifest").and_then(Value::as_str).unwrap_or("manifest.json");
+            .unwrap_or("manifest.json");
         let path = std::path::Path::new(dir).join(manifest);
         let text = std::fs::read_to_string(&path)
             .map_err(|err| ConnectorError::Io(format!("{}: {err}", path.display())))?;
@@ -236,17 +250,25 @@ impl HttpJsonConnector {
         let base_url = config
             .get("base_url")
             .and_then(Value::as_str)
-            .ok_or_else(|| ConnectorError::Invalid("http_json requires config.base_url".to_string()))?;
+            .ok_or_else(|| {
+                ConnectorError::Invalid("http_json requires config.base_url".to_string())
+            })?;
         Ok(Self {
             base_url: base_url.trim_end_matches('/').to_string(),
-            api_key_env: config.get("api_key_env").and_then(Value::as_str).map(str::to_string),
+            api_key_env: config
+                .get("api_key_env")
+                .and_then(Value::as_str)
+                .map(str::to_string),
             client: reqwest::Client::new(),
         })
     }
 
     async fn fetch(&self) -> Result<Vec<ConnectorItem>, ConnectorError> {
         let url = self.base_url.clone();
-        let mut request = self.client.get(url).timeout(std::time::Duration::from_secs(15));
+        let mut request = self
+            .client
+            .get(url)
+            .timeout(std::time::Duration::from_secs(15));
         if let Some(env_name) = &self.api_key_env {
             if let Ok(key) = std::env::var(env_name) {
                 if !key.trim().is_empty() {
@@ -254,9 +276,15 @@ impl HttpJsonConnector {
                 }
             }
         }
-        let response = request.send().await.map_err(|err| ConnectorError::Http(err.to_string()))?;
+        let response = request
+            .send()
+            .await
+            .map_err(|err| ConnectorError::Http(err.to_string()))?;
         let status = response.status();
-        let value: Value = response.json().await.map_err(|err| ConnectorError::Http(err.to_string()))?;
+        let value: Value = response
+            .json()
+            .await
+            .map_err(|err| ConnectorError::Http(err.to_string()))?;
         if !status.is_success() {
             return Err(ConnectorError::Http(format!("HTTP {status}")));
         }
@@ -317,14 +345,22 @@ pub fn from_record(record: &ConnectorRecord) -> Result<Box<dyn Connector>, Conne
         "onedrive" => Ok(Box::new(StubConnector { kind: "onedrive" })),
         "confluence" => Ok(Box::new(StubConnector { kind: "confluence" })),
         "mediawiki" => Ok(Box::new(StubConnector { kind: "mediawiki" })),
-        other => Err(ConnectorError::Invalid(format!("unknown connector kind {other:?}"))),
+        other => Err(ConnectorError::Invalid(format!(
+            "unknown connector kind {other:?}"
+        ))),
     }
 }
 
 fn safe_external_path(external_id: &str) -> String {
     external_id
         .chars()
-        .map(|ch| if ch.is_ascii_alphanumeric() || matches!(ch, '.' | '-' | '_') { ch } else { '_' })
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() || matches!(ch, '.' | '-' | '_') {
+                ch
+            } else {
+                '_'
+            }
+        })
         .collect()
 }
 
@@ -348,9 +384,21 @@ pub async fn run_sync(
             stats["errors"] = json!(errors);
             let now = crate::util::now_rfc3339();
             let _ = store
-                .connector_job_update(&job.job_id, "failed", Some(&now), &stats.to_string(), Some(&error))
+                .connector_job_update(
+                    &job.job_id,
+                    "failed",
+                    Some(&now),
+                    &stats.to_string(),
+                    Some(&error),
+                )
                 .await;
-            return ConnectorJobRecord { status: "failed".into(), finished_at: Some(now), stats_json: stats.to_string(), error: Some(error), ..job };
+            return ConnectorJobRecord {
+                status: "failed".into(),
+                finished_at: Some(now),
+                stats_json: stats.to_string(),
+                error: Some(error),
+                ..job
+            };
         }
     };
     let mut cursor = None;
@@ -383,7 +431,11 @@ pub async fn run_sync(
                 fetched_at: now.clone(),
                 status: "active".to_string(),
             };
-            if let Some(content) = item.content.as_ref().filter(|content| !content.trim().is_empty()) {
+            if let Some(content) = item
+                .content
+                .as_ref()
+                .filter(|content| !content.trim().is_empty())
+            {
                 let relative = format!(
                     "connectors/{}/{}.md",
                     connector.kind,
@@ -400,13 +452,21 @@ pub async fn run_sync(
                 let content_hash = crate::util::sha256_hex(content.as_bytes());
                 let doc_id = crate::ingest::doc_id::derive_doc_id(&canonical, &content_hash);
                 reference.doc_id = doc_id.clone();
-                let drafts = crate::ingest::chunker::chunk_text(content, crate::ingest::chunker::DEFAULT_CHUNK_CHARS);
+                let drafts = crate::ingest::chunker::chunk_text(
+                    content,
+                    crate::ingest::chunker::DEFAULT_CHUNK_CHARS,
+                );
                 let mut chunks = Vec::new();
                 for (index, draft) in drafts.iter().enumerate() {
                     let chunk_hash = crate::util::sha256_hex(draft.text.as_bytes());
                     chunks.push(crate::store::ChunkRecord {
                         tenant_id: connector.tenant_id.clone(),
-                        chunk_id: crate::ingest::doc_id::derive_chunk_id(&connector.tenant_id, &doc_id, index as u32, &chunk_hash),
+                        chunk_id: crate::ingest::doc_id::derive_chunk_id(
+                            &connector.tenant_id,
+                            &doc_id,
+                            index as u32,
+                            &chunk_hash,
+                        ),
                         doc_id: doc_id.clone(),
                         space_id: connector.space_id.clone(),
                         seq: index as u32,
@@ -424,10 +484,15 @@ pub async fn run_sync(
                         embedding: None,
                     });
                 }
-                let mut chunks = chunks;
                 if let Some(provider) = &providers.embedding {
                     let mut warnings = Vec::new();
-                    crate::ingest::attach_embeddings(&mut chunks, provider.as_ref(), 32, &mut warnings).await;
+                    crate::ingest::attach_embeddings(
+                        &mut chunks,
+                        provider.as_ref(),
+                        32,
+                        &mut warnings,
+                    )
+                    .await;
                     for warning in warnings {
                         tracing::warn!(warning, "connector embedding");
                     }
@@ -439,7 +504,10 @@ pub async fn run_sync(
                     logical_path: canonical,
                     source_uri: reference.url.clone(),
                     title: item.title.clone(),
-                    mime: item.mime.clone().unwrap_or_else(|| "text/markdown".to_string()),
+                    mime: item
+                        .mime
+                        .clone()
+                        .unwrap_or_else(|| "text/markdown".to_string()),
                     raw_hash: content_hash.clone(),
                     content_hash: content_hash.clone(),
                     content: content.clone(),
@@ -452,7 +520,8 @@ pub async fn run_sync(
                     superseded_by: None,
                     status: "active".to_string(),
                     source_role: "external".to_string(),
-                    canonicalization_version: crate::ingest::doc_id::CANONICALIZATION_VERSION.to_string(),
+                    canonicalization_version: crate::ingest::doc_id::CANONICALIZATION_VERSION
+                        .to_string(),
                     extractor_version: crate::ingest::doc_id::EXTRACTOR_VERSION.to_string(),
                     chunker_version: crate::ingest::doc_id::CHUNKER_VERSION.to_string(),
                     created_at: now.clone(),
@@ -500,7 +569,13 @@ pub async fn run_sync(
         .map(str::to_string);
     let now = crate::util::now_rfc3339();
     let _ = store
-        .connector_job_update(&job.job_id, status, Some(&now), &stats.to_string(), first_error.as_deref())
+        .connector_job_update(
+            &job.job_id,
+            status,
+            Some(&now),
+            &stats.to_string(),
+            first_error.as_deref(),
+        )
         .await;
     let _ = store
         .connector_mark_synced(&connector.tenant_id, &connector.connector_id, &now)

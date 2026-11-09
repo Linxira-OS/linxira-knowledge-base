@@ -9,8 +9,10 @@ use std::sync::Arc;
 use tower::ServiceExt;
 
 fn test_config(path: &std::path::Path) -> Config {
-    let mut config = Config::default();
-    config.profile = Some(ProfileName::Solo);
+    let mut config = Config {
+        profile: Some(ProfileName::Solo),
+        ..Default::default()
+    };
     config.storage.backend = Backend::Sqlite;
     config.storage.sqlite_path = path.to_path_buf();
     config.storage.tenant_id = SOLO_TENANT.to_string();
@@ -38,11 +40,7 @@ async fn health_root_and_wiki_save_work_through_router() {
     let config = test_config(&temp.path().join("lkb.sqlite"));
     let store = store::open(&config).await.unwrap();
     store::bootstrap_space(&store, &config).await.unwrap();
-    let state = AppState::new(
-        store,
-        Arc::new(config),
-        Arc::new(ProviderSet::with_none()),
-    );
+    let state = AppState::new(store, Arc::new(config), Arc::new(ProviderSet::with_none()));
     let app = router(state);
 
     let health = app
@@ -168,11 +166,7 @@ async fn origin_mismatch_is_rejected_on_save() {
     let config = test_config(&temp.path().join("lkb.sqlite"));
     let store = store::open(&config).await.unwrap();
     store::bootstrap_space(&store, &config).await.unwrap();
-    let state = AppState::new(
-        store,
-        Arc::new(config),
-        Arc::new(ProviderSet::with_none()),
-    );
+    let state = AppState::new(store, Arc::new(config), Arc::new(ProviderSet::with_none()));
     let app = router(state);
 
     let root = app
@@ -199,10 +193,7 @@ async fn origin_mismatch_is_rejected_on_save() {
         .unwrap()
         .trim_start_matches("lkb_csrf=")
         .to_string();
-    let body = format!(
-        "title=x&markdown=y&csrf_token={}",
-        form_encode(&csrf)
-    );
+    let body = format!("title=x&markdown=y&csrf_token={}", form_encode(&csrf));
     let save = app
         .oneshot(
             Request::builder()

@@ -1,8 +1,8 @@
 use crate::config::{Backend, Config, ProfileName};
 use crate::error::StoreError;
 use crate::governance::{
-    Acl, GovernanceFields, GroupRole, Policy, PrincipalKind, PrincipalType, SpaceRole,
-    SqlDialect, TokenScope, UserRole,
+    Acl, GovernanceFields, GroupRole, Policy, PrincipalKind, PrincipalType, SpaceRole, SqlDialect,
+    TokenScope, UserRole,
 };
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -493,7 +493,6 @@ pub struct AuditFilter {
     pub limit: i64,
 }
 
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProviderRecord {
     pub provider_id: String,
@@ -646,7 +645,6 @@ pub struct QuotaReservation {
     pub expires_at: String,
     pub created_at: String,
 }
-
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DocumentSummaryRecord {
@@ -892,7 +890,6 @@ pub struct EntitlementRecord {
     pub updated_at: String,
 }
 
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConnectorRecord {
     pub connector_id: String,
@@ -933,19 +930,65 @@ pub struct ConnectorJobRecord {
     pub error: Option<String>,
 }
 
+/// Parameters for [`Store::search_events`].
+#[derive(Debug, Clone)]
+pub struct EventSearchParams<'a> {
+    pub query: &'a str,
+    pub depth: u32,
+    pub max_seeds: i64,
+    pub max_events: i64,
+    pub text_weight: f64,
+    pub limit: i64,
+    pub timeout_ms: u64,
+}
+
 #[async_trait]
 pub trait Store: Send + Sync {
     async fn connector_list(&self, tenant_id: &str) -> Result<Vec<ConnectorRecord>, StoreError>;
-    async fn connector_get(&self, tenant_id: &str, connector_id: &str) -> Result<Option<ConnectorRecord>, StoreError>;
+    async fn connector_get(
+        &self,
+        tenant_id: &str,
+        connector_id: &str,
+    ) -> Result<Option<ConnectorRecord>, StoreError>;
     async fn connector_upsert(&self, connector: &ConnectorRecord) -> Result<(), StoreError>;
-    async fn connector_delete(&self, tenant_id: &str, connector_id: &str) -> Result<bool, StoreError>;
-    async fn connector_mark_synced(&self, tenant_id: &str, connector_id: &str, at: &str) -> Result<(), StoreError>;
+    async fn connector_delete(
+        &self,
+        tenant_id: &str,
+        connector_id: &str,
+    ) -> Result<bool, StoreError>;
+    async fn connector_mark_synced(
+        &self,
+        tenant_id: &str,
+        connector_id: &str,
+        at: &str,
+    ) -> Result<(), StoreError>;
     async fn external_ref_upsert(&self, reference: &ExternalRefRecord) -> Result<(), StoreError>;
-    async fn external_ref_list(&self, tenant_id: &str, doc_id: Option<&str>, provider: Option<&str>, limit: i64) -> Result<Vec<ExternalRefRecord>, StoreError>;
+    async fn external_ref_list(
+        &self,
+        tenant_id: &str,
+        doc_id: Option<&str>,
+        provider: Option<&str>,
+        limit: i64,
+    ) -> Result<Vec<ExternalRefRecord>, StoreError>;
     async fn connector_job_create(&self, job: &ConnectorJobRecord) -> Result<(), StoreError>;
-    async fn connector_job_update(&self, job_id: &str, status: &str, finished_at: Option<&str>, stats_json: &str, error: Option<&str>) -> Result<(), StoreError>;
-    async fn connector_job_list(&self, connector_id: &str, limit: i64) -> Result<Vec<ConnectorJobRecord>, StoreError>;
-    async fn billing_get_wallet(&self, tenant_id: &str, currency: &str) -> Result<Option<WalletRecord>, StoreError>;
+    async fn connector_job_update(
+        &self,
+        job_id: &str,
+        status: &str,
+        finished_at: Option<&str>,
+        stats_json: &str,
+        error: Option<&str>,
+    ) -> Result<(), StoreError>;
+    async fn connector_job_list(
+        &self,
+        connector_id: &str,
+        limit: i64,
+    ) -> Result<Vec<ConnectorJobRecord>, StoreError>;
+    async fn billing_get_wallet(
+        &self,
+        tenant_id: &str,
+        currency: &str,
+    ) -> Result<Option<WalletRecord>, StoreError>;
     async fn billing_list_wallets(&self, tenant_id: &str) -> Result<Vec<WalletRecord>, StoreError>;
     async fn billing_ensure_wallet(&self, wallet: &WalletRecord) -> Result<(), StoreError>;
     async fn billing_post_ledger(
@@ -955,21 +998,56 @@ pub trait Store: Send + Sync {
         allow_negative: bool,
         currency: &str,
     ) -> Result<LedgerTxResult, StoreError>;
-    async fn billing_list_ledger(&self, tenant_id: &str, limit: i64) -> Result<Vec<LedgerEntryRecord>, StoreError>;
+    async fn billing_list_ledger(
+        &self,
+        tenant_id: &str,
+        limit: i64,
+    ) -> Result<Vec<LedgerEntryRecord>, StoreError>;
     async fn billing_upsert_topup(&self, topup: &TopupRecord) -> Result<(), StoreError>;
-    async fn billing_get_topup_by_key(&self, tenant_id: &str, idempotency_key: &str) -> Result<Option<TopupRecord>, StoreError>;
-    async fn billing_set_topup_status(&self, topup_id: &str, status: &str) -> Result<(), StoreError>;
+    async fn billing_get_topup_by_key(
+        &self,
+        tenant_id: &str,
+        idempotency_key: &str,
+    ) -> Result<Option<TopupRecord>, StoreError>;
+    async fn billing_set_topup_status(
+        &self,
+        topup_id: &str,
+        status: &str,
+    ) -> Result<(), StoreError>;
     async fn billing_upsert_plan(&self, plan: &PlanRecord) -> Result<(), StoreError>;
     async fn billing_get_plan(&self, plan_id: &str) -> Result<Option<PlanRecord>, StoreError>;
     async fn billing_list_plans(&self) -> Result<Vec<PlanRecord>, StoreError>;
-    async fn billing_upsert_subscription(&self, subscription: &SubscriptionRecord) -> Result<(), StoreError>;
-    async fn billing_get_subscription(&self, tenant_id: &str) -> Result<Option<SubscriptionRecord>, StoreError>;
-    async fn billing_upsert_entitlement(&self, entitlement: &EntitlementRecord) -> Result<(), StoreError>;
-    async fn billing_get_entitlement(&self, tenant_id: &str) -> Result<Option<EntitlementRecord>, StoreError>;
-    async fn billing_insert_payment_event(&self, event: &PaymentEventRecord) -> Result<bool, StoreError>;
-    async fn billing_mark_payment_event(&self, provider_event_id: &str, status: &str) -> Result<(), StoreError>;
+    async fn billing_upsert_subscription(
+        &self,
+        subscription: &SubscriptionRecord,
+    ) -> Result<(), StoreError>;
+    async fn billing_get_subscription(
+        &self,
+        tenant_id: &str,
+    ) -> Result<Option<SubscriptionRecord>, StoreError>;
+    async fn billing_upsert_entitlement(
+        &self,
+        entitlement: &EntitlementRecord,
+    ) -> Result<(), StoreError>;
+    async fn billing_get_entitlement(
+        &self,
+        tenant_id: &str,
+    ) -> Result<Option<EntitlementRecord>, StoreError>;
+    async fn billing_insert_payment_event(
+        &self,
+        event: &PaymentEventRecord,
+    ) -> Result<bool, StoreError>;
+    async fn billing_mark_payment_event(
+        &self,
+        provider_event_id: &str,
+        status: &str,
+    ) -> Result<(), StoreError>;
     async fn billing_upsert_invoice(&self, invoice: &InvoiceRecord) -> Result<(), StoreError>;
-    async fn billing_list_invoices(&self, tenant_id: &str, limit: i64) -> Result<Vec<InvoiceRecord>, StoreError>;
+    async fn billing_list_invoices(
+        &self,
+        tenant_id: &str,
+        limit: i64,
+    ) -> Result<Vec<InvoiceRecord>, StoreError>;
 
     fn backend(&self) -> &'static str;
     fn dialect(&self) -> SqlDialect;
@@ -1042,9 +1120,13 @@ pub trait Store: Send + Sync {
     ) -> Result<(), StoreError>;
     async fn count_space_owners(&self, space_id: &str) -> Result<i64, StoreError>;
 
-
-    async fn list_pages(&self, policy: &Policy, limit: i64) -> Result<Vec<PageSummary>, StoreError>;
-    async fn list_page_records(&self, policy: &Policy, limit: i64) -> Result<Vec<PageRecord>, StoreError>;
+    async fn list_pages(&self, policy: &Policy, limit: i64)
+        -> Result<Vec<PageSummary>, StoreError>;
+    async fn list_page_records(
+        &self,
+        policy: &Policy,
+        limit: i64,
+    ) -> Result<Vec<PageRecord>, StoreError>;
     async fn get_revision(
         &self,
         tenant_id: &str,
@@ -1147,13 +1229,7 @@ pub trait Store: Send + Sync {
     async fn search_events(
         &self,
         policy: &Policy,
-        query: &str,
-        depth: u32,
-        max_seeds: i64,
-        max_events: i64,
-        text_weight: f64,
-        limit: i64,
-        timeout_ms: u64,
+        params: EventSearchParams<'_>,
     ) -> Result<Vec<SearchHit>, StoreError>;
 
     async fn get_seed_meta(
@@ -1164,11 +1240,32 @@ pub trait Store: Send + Sync {
     async fn upsert_seed_meta(&self, meta: &SeedMeta) -> Result<(), StoreError>;
     async fn is_database_empty(&self, tenant_id: &str) -> Result<bool, StoreError>;
 
-    async fn get_user_by_email(&self, tenant_id: &str, email: &str) -> Result<Option<UserRecord>, StoreError>;
-    async fn get_user_by_external_id(&self, tenant_id: &str, source: &str, external_id: &str) -> Result<Option<UserRecord>, StoreError>;
+    async fn get_user_by_email(
+        &self,
+        tenant_id: &str,
+        email: &str,
+    ) -> Result<Option<UserRecord>, StoreError>;
+    async fn get_user_by_external_id(
+        &self,
+        tenant_id: &str,
+        source: &str,
+        external_id: &str,
+    ) -> Result<Option<UserRecord>, StoreError>;
     async fn create_sso_user(&self, user: &UserRecord) -> Result<(), StoreError>;
-    async fn link_sso_identity(&self, tenant_id: &str, user_id: &str, email: &str, external_id: &str, last_sso_at: &str) -> Result<(), StoreError>;
-    async fn touch_sso_login(&self, tenant_id: &str, user_id: &str, last_sso_at: &str) -> Result<(), StoreError>;
+    async fn link_sso_identity(
+        &self,
+        tenant_id: &str,
+        user_id: &str,
+        email: &str,
+        external_id: &str,
+        last_sso_at: &str,
+    ) -> Result<(), StoreError>;
+    async fn touch_sso_login(
+        &self,
+        tenant_id: &str,
+        user_id: &str,
+        last_sso_at: &str,
+    ) -> Result<(), StoreError>;
     async fn add_user(
         &self,
         tenant_id: &str,
@@ -1263,20 +1360,59 @@ pub trait Store: Send + Sync {
     ) -> Result<(), StoreError>;
 
     async fn list_providers(&self, tenant_id: &str) -> Result<Vec<ProviderRecord>, StoreError>;
-    async fn get_provider(&self, tenant_id: &str, provider_id: &str) -> Result<Option<ProviderRecord>, StoreError>;
-    async fn upsert_provider(&self, tenant_id: &str, provider: &ProviderRecord) -> Result<(), StoreError>;
-    async fn delete_provider(&self, tenant_id: &str, provider_id: &str) -> Result<bool, StoreError>;
+    async fn get_provider(
+        &self,
+        tenant_id: &str,
+        provider_id: &str,
+    ) -> Result<Option<ProviderRecord>, StoreError>;
+    async fn upsert_provider(
+        &self,
+        tenant_id: &str,
+        provider: &ProviderRecord,
+    ) -> Result<(), StoreError>;
+    async fn delete_provider(&self, tenant_id: &str, provider_id: &str)
+        -> Result<bool, StoreError>;
 
-    async fn list_provider_models(&self, tenant_id: &str) -> Result<Vec<ProviderModelRecord>, StoreError>;
-    async fn get_provider_model(&self, tenant_id: &str, id: &str) -> Result<Option<ProviderModelRecord>, StoreError>;
-    async fn upsert_provider_model(&self, tenant_id: &str, model: &ProviderModelRecord) -> Result<(), StoreError>;
+    async fn list_provider_models(
+        &self,
+        tenant_id: &str,
+    ) -> Result<Vec<ProviderModelRecord>, StoreError>;
+    async fn get_provider_model(
+        &self,
+        tenant_id: &str,
+        id: &str,
+    ) -> Result<Option<ProviderModelRecord>, StoreError>;
+    async fn upsert_provider_model(
+        &self,
+        tenant_id: &str,
+        model: &ProviderModelRecord,
+    ) -> Result<(), StoreError>;
 
-    async fn list_model_aliases(&self, tenant_id: &str) -> Result<Vec<ModelAliasRecord>, StoreError>;
-    async fn get_model_alias(&self, tenant_id: &str, public_id: &str) -> Result<Option<ModelAliasRecord>, StoreError>;
-    async fn upsert_model_alias(&self, tenant_id: &str, alias: &ModelAliasRecord) -> Result<(), StoreError>;
-    async fn delete_model_alias(&self, tenant_id: &str, public_id: &str) -> Result<bool, StoreError>;
+    async fn list_model_aliases(
+        &self,
+        tenant_id: &str,
+    ) -> Result<Vec<ModelAliasRecord>, StoreError>;
+    async fn get_model_alias(
+        &self,
+        tenant_id: &str,
+        public_id: &str,
+    ) -> Result<Option<ModelAliasRecord>, StoreError>;
+    async fn upsert_model_alias(
+        &self,
+        tenant_id: &str,
+        alias: &ModelAliasRecord,
+    ) -> Result<(), StoreError>;
+    async fn delete_model_alias(
+        &self,
+        tenant_id: &str,
+        public_id: &str,
+    ) -> Result<bool, StoreError>;
 
-    async fn list_routes(&self, tenant_id: &str, alias: Option<&str>) -> Result<Vec<RouteRecord>, StoreError>;
+    async fn list_routes(
+        &self,
+        tenant_id: &str,
+        alias: Option<&str>,
+    ) -> Result<Vec<RouteRecord>, StoreError>;
     async fn upsert_route(&self, tenant_id: &str, route: &RouteRecord) -> Result<(), StoreError>;
     async fn delete_route(&self, tenant_id: &str, route_id: &str) -> Result<bool, StoreError>;
     async fn update_route_health(
@@ -1304,9 +1440,11 @@ pub trait Store: Send + Sync {
         filter: &UsageFilter,
     ) -> Result<UsageAggregate, StoreError>;
 
-    async fn list_token_quotas(&self, tenant_id: &str) -> Result<Vec<TokenQuotaRecord>, StoreError>;
+    async fn list_token_quotas(&self, tenant_id: &str)
+        -> Result<Vec<TokenQuotaRecord>, StoreError>;
     async fn upsert_token_quota(&self, quota: &TokenQuotaRecord) -> Result<(), StoreError>;
-    async fn delete_token_quota(&self, tenant_id: &str, quota_id: &str) -> Result<bool, StoreError>;
+    async fn delete_token_quota(&self, tenant_id: &str, quota_id: &str)
+        -> Result<bool, StoreError>;
 
     async fn get_quota_counter(
         &self,
@@ -1316,7 +1454,8 @@ pub trait Store: Send + Sync {
         period_start: &str,
     ) -> Result<Option<QuotaCounter>, StoreError>;
     async fn list_quota_counters(&self, tenant_id: &str) -> Result<Vec<QuotaCounter>, StoreError>;
-    async fn add_quota_reservation(&self, reservation: &QuotaReservation) -> Result<(), StoreError>;
+    async fn add_quota_reservation(&self, reservation: &QuotaReservation)
+        -> Result<(), StoreError>;
     async fn get_quota_reservation(
         &self,
         tenant_id: &str,
@@ -1348,7 +1487,10 @@ pub trait Store: Send + Sync {
         now: &str,
     ) -> Result<usize, StoreError>;
 
-    async fn upsert_document_summary(&self, summary: &DocumentSummaryRecord) -> Result<(), StoreError>;
+    async fn upsert_document_summary(
+        &self,
+        summary: &DocumentSummaryRecord,
+    ) -> Result<(), StoreError>;
     async fn get_document_summary(
         &self,
         tenant_id: &str,
@@ -1360,7 +1502,11 @@ pub trait Store: Send + Sync {
     ) -> Result<Option<DocumentSummaryRecord>, StoreError>;
 
     async fn create_summary_job(&self, job: &SummaryJobRecord) -> Result<bool, StoreError>;
-    async fn list_summary_jobs(&self, status: &str, limit: i64) -> Result<Vec<SummaryJobRecord>, StoreError>;
+    async fn list_summary_jobs(
+        &self,
+        status: &str,
+        limit: i64,
+    ) -> Result<Vec<SummaryJobRecord>, StoreError>;
     async fn update_summary_job(
         &self,
         job_id: &str,
@@ -1371,9 +1517,21 @@ pub trait Store: Send + Sync {
         error: Option<&str>,
     ) -> Result<(), StoreError>;
 
-    async fn create_conversation(&self, conversation: &ConversationRecord) -> Result<(), StoreError>;
-    async fn get_conversation(&self, tenant_id: &str, conversation_id: &str) -> Result<Option<ConversationRecord>, StoreError>;
-    async fn list_conversations(&self, tenant_id: &str, owner_id: &str, limit: i64) -> Result<Vec<ConversationRecord>, StoreError>;
+    async fn create_conversation(
+        &self,
+        conversation: &ConversationRecord,
+    ) -> Result<(), StoreError>;
+    async fn get_conversation(
+        &self,
+        tenant_id: &str,
+        conversation_id: &str,
+    ) -> Result<Option<ConversationRecord>, StoreError>;
+    async fn list_conversations(
+        &self,
+        tenant_id: &str,
+        owner_id: &str,
+        limit: i64,
+    ) -> Result<Vec<ConversationRecord>, StoreError>;
     async fn restore_conversation(
         &self,
         tenant_id: &str,
@@ -1393,7 +1551,11 @@ pub trait Store: Send + Sync {
         external_session_id: &str,
     ) -> Result<(), StoreError>;
     async fn insert_message(&self, message: &MessageRecord) -> Result<(), StoreError>;
-    async fn list_messages(&self, conversation_id: &str, limit: i64) -> Result<Vec<MessageRecord>, StoreError>;
+    async fn list_messages(
+        &self,
+        conversation_id: &str,
+        limit: i64,
+    ) -> Result<Vec<MessageRecord>, StoreError>;
 
     async fn insert_audit(&self, event: &AuditEventRecord) -> Result<(), StoreError>;
     async fn list_audit(&self, filter: &AuditFilter) -> Result<Vec<AuditEventRecord>, StoreError>;
@@ -1423,12 +1585,9 @@ pub async fn open(config: &Config) -> anyhow::Result<Arc<dyn Store>> {
             Arc::new(store)
         }
         Backend::Postgres => {
-            let url = config
-                .database_url()
-                .ok_or_else(|| anyhow::anyhow!(
-                    "environment variable {} is not set",
-                    config.storage.url_env
-                ))?;
+            let url = config.database_url().ok_or_else(|| {
+                anyhow::anyhow!("environment variable {} is not set", config.storage.url_env)
+            })?;
             let store = postgres::PostgresStore::open(&url).await?;
             let started = std::time::Instant::now();
             store.migrate().await?;

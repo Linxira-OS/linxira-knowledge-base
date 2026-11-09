@@ -10,8 +10,10 @@ use std::path::Path;
 use std::sync::Arc;
 
 fn test_config(path: &Path) -> Config {
-    let mut config = Config::default();
-    config.profile = Some(ProfileName::Solo);
+    let mut config = Config {
+        profile: Some(ProfileName::Solo),
+        ..Default::default()
+    };
     config.storage.backend = Backend::Sqlite;
     config.storage.sqlite_path = path.to_path_buf();
     config.storage.tenant_id = SOLO_TENANT.to_string();
@@ -159,14 +161,8 @@ async fn user_modified_page_is_not_overwritten() {
     let hash = sha256_hex(markdown.as_bytes());
     let version = view.page.version + 1;
     let now = now_rfc3339();
-    let revision_id = doc_id::derive_revision_id(
-        SOLO_TENANT,
-        "product",
-        "00-index",
-        "zh",
-        &hash,
-        version,
-    );
+    let revision_id =
+        doc_id::derive_revision_id(SOLO_TENANT, "product", "00-index", "zh", &hash, version);
     view.page.version = version;
     view.page.current_revision_id = revision_id.clone();
     view.page.content_hash = hash.clone();
@@ -219,7 +215,9 @@ async fn auto_seed_runs_only_on_empty_solo_database() {
     let temp = tempfile::tempdir().unwrap();
     let config = test_config(&temp.path().join("lkb.sqlite"));
     let store = open_store(&config).await;
-    let report = auto_seed_if_empty(&store, &config).await.expect("auto seed");
+    let report = auto_seed_if_empty(&store, &config)
+        .await
+        .expect("auto seed");
     assert_eq!(report.imported, 24, "{}", report.human());
     assert!(auto_seed_if_empty(&store, &config).await.is_none());
 }
@@ -263,7 +261,16 @@ async fn seed_enqueues_summary_jobs() {
     let temp = tempfile::tempdir().unwrap();
     let config = test_config(&temp.path().join("seed-summary.sqlite"));
     let store = open_store(&config).await;
-    let report = run_seed(&store, &config, &SeedOptions { space_id: "product".into(), lang: Some("zh".into()) }).await.unwrap();
+    let report = run_seed(
+        &store,
+        &config,
+        &SeedOptions {
+            space_id: "product".into(),
+            lang: Some("zh".into()),
+        },
+    )
+    .await
+    .unwrap();
     assert!(report.imported > 0);
     let jobs = store.list_summary_jobs("queued", 200).await.unwrap();
     assert!(jobs.len() >= report.imported as usize);

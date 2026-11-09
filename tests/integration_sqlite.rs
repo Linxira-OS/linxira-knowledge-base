@@ -10,8 +10,10 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 fn test_config(path: &Path) -> Config {
-    let mut config = Config::default();
-    config.profile = Some(ProfileName::Solo);
+    let mut config = Config {
+        profile: Some(ProfileName::Solo),
+        ..Default::default()
+    };
     config.storage.backend = Backend::Sqlite;
     config.storage.sqlite_path = path.to_path_buf();
     config.storage.tenant_id = SOLO_TENANT.to_string();
@@ -34,15 +36,9 @@ async fn sqlite_import_search_answer_export_roundtrip() {
     let store = open_test_store(&config).await;
 
     let examples = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("examples");
-    let report = import_path(
-        &store,
-        &examples,
-        &ImportOptions::default(),
-        None,
-        None,
-    )
-    .await
-    .expect("import examples");
+    let report = import_path(&store, &examples, &ImportOptions::default(), None, None)
+        .await
+        .expect("import examples");
     assert!(report.imported >= 7, "report: {}", report.human());
     assert!(report.failed.is_empty(), "report: {}", report.human());
 
@@ -58,7 +54,11 @@ async fn sqlite_import_search_answer_export_roundtrip() {
     )
     .await
     .expect("search");
-    assert!(!response.hits.is_empty(), "degraded: {:?}", response.degraded);
+    assert!(
+        !response.hits.is_empty(),
+        "degraded: {:?}",
+        response.degraded
+    );
     assert!(
         response
             .hits
@@ -82,14 +82,9 @@ async fn sqlite_import_search_answer_export_roundtrip() {
     assert!(answer.knowledge_as_of.is_some());
 
     let mut exported = Vec::new();
-    let count = export_jsonl(
-        &store,
-        SOLO_TENANT,
-        Some(SOLO_SPACE),
-        &mut exported,
-    )
-    .await
-    .expect("export");
+    let count = export_jsonl(&store, SOLO_TENANT, Some(SOLO_SPACE), &mut exported)
+        .await
+        .expect("export");
     assert!(count >= 7);
     let first_ids: BTreeSet<String> = store
         .list_documents(SOLO_TENANT, Some(SOLO_SPACE))
@@ -115,7 +110,11 @@ async fn sqlite_import_search_answer_export_roundtrip() {
     .await
     .expect("re-import export");
     assert!(report_two.imported >= 7, "report: {}", report_two.human());
-    assert!(report_two.failed.is_empty(), "report: {}", report_two.human());
+    assert!(
+        report_two.failed.is_empty(),
+        "report: {}",
+        report_two.human()
+    );
 
     let second_ids: BTreeSet<String> = store_two
         .list_documents(SOLO_TENANT, Some(SOLO_SPACE))

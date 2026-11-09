@@ -31,8 +31,7 @@ pub trait EmbeddingProvider: Send + Sync {
 pub trait JudgeProvider: Send + Sync {
     /// Return one score per candidate, in the same order. The caller keeps
     /// membership unchanged and only reorders by these scores.
-    async fn rerank(&self, query: &str, candidates: &[String])
-        -> Result<Vec<f32>, ProviderError>;
+    async fn rerank(&self, query: &str, candidates: &[String]) -> Result<Vec<f32>, ProviderError>;
     fn id(&self) -> String;
 }
 
@@ -44,8 +43,10 @@ pub struct ExtractionInput<'a> {
 
 #[async_trait]
 pub trait EventExtractor: Send + Sync {
-    async fn extract(&self, input: &ExtractionInput<'_>)
-        -> Result<crate::event::ExtractedEvent, ProviderError>;
+    async fn extract(
+        &self,
+        input: &ExtractionInput<'_>,
+    ) -> Result<crate::event::ExtractedEvent, ProviderError>;
     fn version(&self) -> String;
     fn model_id(&self) -> String;
 }
@@ -153,7 +154,7 @@ impl OpenAiCompatible {
     pub fn from_config(config: &ModelConfig) -> Result<Self, ProviderError> {
         let base_url = config
             .base_url_or_default()
-            .ok_or_else(|| ProviderError::NotConfigured)?;
+            .ok_or(ProviderError::NotConfigured)?;
         let model = config
             .model
             .clone()
@@ -173,7 +174,11 @@ impl OpenAiCompatible {
             model,
             api_key,
             max_retries: config.max_retries,
-            id: format!("{}:{}", config.provider, config.model.as_deref().unwrap_or("")),
+            id: format!(
+                "{}:{}",
+                config.provider,
+                config.model.as_deref().unwrap_or("")
+            ),
         })
     }
 
@@ -190,9 +195,10 @@ impl OpenAiCompatible {
                 Ok(response) => {
                     let status = response.status();
                     if status.is_success() {
-                        return response.json::<Value>().await.map_err(|err| {
-                            ProviderError::InvalidResponse(err.to_string())
-                        });
+                        return response
+                            .json::<Value>()
+                            .await
+                            .map_err(|err| ProviderError::InvalidResponse(err.to_string()));
                     }
                     if status.is_server_error() && attempt < self.max_retries {
                         attempt += 1;
@@ -234,7 +240,9 @@ impl LlmProvider for OpenAiCompatible {
             .pointer("/choices/0/message/content")
             .and_then(Value::as_str)
             .map(|value| value.to_string())
-            .ok_or_else(|| ProviderError::InvalidResponse("missing choices[0].message.content".into()))
+            .ok_or_else(|| {
+                ProviderError::InvalidResponse("missing choices[0].message.content".into())
+            })
     }
 
     fn id(&self) -> String {
@@ -281,11 +289,7 @@ impl EmbeddingProvider for OpenAiCompatible {
 
 #[async_trait]
 impl JudgeProvider for OpenAiCompatible {
-    async fn rerank(
-        &self,
-        query: &str,
-        candidates: &[String],
-    ) -> Result<Vec<f32>, ProviderError> {
+    async fn rerank(&self, query: &str, candidates: &[String]) -> Result<Vec<f32>, ProviderError> {
         if candidates.is_empty() {
             return Ok(Vec::new());
         }
@@ -297,7 +301,8 @@ impl JudgeProvider for OpenAiCompatible {
                 candidate.replace('\n', " ")
             ));
         }
-        let system = "You are a retrieval judge. Score how well each candidate supports the query. \
+        let system =
+            "You are a retrieval judge. Score how well each candidate supports the query. \
 Respond only with JSON: {\"scores\":[number,...]} in candidate order. Scores are 0..1.";
         let user = format!("Query: {query}\nCandidates:\n{listing}");
         let raw = self.generate(system, &user).await?;
@@ -354,12 +359,12 @@ fn parse_extracted_event(raw: &str) -> Result<crate::event::ExtractedEvent, Prov
             continue;
         }
         let entity_type = crate::event::normalize_entity_type(&entity.entity_type);
-        let key = (crate::event::normalize_entity_name(&name), entity_type.clone());
+        let key = (
+            crate::event::normalize_entity_name(&name),
+            entity_type.clone(),
+        );
         if seen.insert(key) {
-            entities.push(crate::event::ExtractedEntity {
-                name,
-                entity_type,
-            });
+            entities.push(crate::event::ExtractedEntity { name, entity_type });
         }
     }
     parsed.entities = entities;
@@ -552,7 +557,7 @@ pub mod fake {
                     }
                     rest = &after[end + 2..];
                 } else {
-                    event.push_str("[[" );
+                    event.push_str("[[");
                     rest = after;
                     break;
                 }

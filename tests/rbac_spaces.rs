@@ -53,7 +53,6 @@ async fn add_token(store: &Arc<dyn Store>, tenant: &str, username: &str, scope: 
     raw
 }
 
-
 async fn body_json(response: axum::response::Response) -> serde_json::Value {
     let bytes = axum::body::to_bytes(response.into_body(), 1_000_000)
         .await
@@ -150,8 +149,16 @@ async fn group_and_explicit_roles_follow_precedence() {
     .await;
     assert_eq!(status, StatusCode::CREATED, "{json}");
 
-    let space = create_space(&app, &owner_token, Some("group"), Some(&group), "group space").await;
-    let (_, alice_spaces) = oneshot_json(&app, "GET", "/api/v1/spaces", Some(&alice_token), None).await;
+    let space = create_space(
+        &app,
+        &owner_token,
+        Some("group"),
+        Some(&group),
+        "group space",
+    )
+    .await;
+    let (_, alice_spaces) =
+        oneshot_json(&app, "GET", "/api/v1/spaces", Some(&alice_token), None).await;
     let alice_role = alice_spaces["spaces"]
         .as_array()
         .unwrap()
@@ -176,7 +183,12 @@ async fn group_and_explicit_roles_follow_precedence() {
     assert_eq!(bob_role, "viewer");
 
     // Explicit member role wins over the group-derived viewer.
-    let bob_user_id = store.get_user(tenant, "bob").await.unwrap().unwrap().user_id;
+    let bob_user_id = store
+        .get_user(tenant, "bob")
+        .await
+        .unwrap()
+        .unwrap()
+        .user_id;
     let (status, _) = oneshot_json(
         &app,
         "POST",
@@ -205,7 +217,10 @@ async fn group_and_explicit_roles_follow_precedence() {
         .unwrap();
     assert_eq!(access.role, SpaceRole::Editor);
     let usage = lkb::quota::refresh(&store, tenant, &space).await.unwrap();
-    assert_eq!(usage.members, 2, "group membership must be expanded in usage");
+    assert_eq!(
+        usage.members, 2,
+        "group membership must be expanded in usage"
+    );
 }
 
 #[tokio::test]
@@ -224,7 +239,12 @@ async fn member_isolation_and_last_owner_protection() {
         Arc::new(ProviderSet::with_none()),
     ));
     let space = create_space(&app, &owner_token, None, None, "private space").await;
-    let carol_id = store.get_user(tenant, "carol").await.unwrap().unwrap().user_id;
+    let carol_id = store
+        .get_user(tenant, "carol")
+        .await
+        .unwrap()
+        .unwrap()
+        .user_id;
 
     let (status, _) = oneshot_json(
         &app,
@@ -259,7 +279,12 @@ async fn member_isolation_and_last_owner_protection() {
     .await;
     assert_eq!(status, StatusCode::OK);
 
-    let owner_id = store.get_user(tenant, "owner").await.unwrap().unwrap().user_id;
+    let owner_id = store
+        .get_user(tenant, "owner")
+        .await
+        .unwrap()
+        .unwrap()
+        .user_id;
     let (status, json) = oneshot_json(
         &app,
         "DELETE",
@@ -402,7 +427,12 @@ async fn space_crud_quota_and_audit_smoke() {
     let json = body_json(response).await;
     assert_eq!(json["error"], "space_quota_exceeded");
 
-    let target_id = store.get_user(tenant, "target").await.unwrap().unwrap().user_id;
+    let target_id = store
+        .get_user(tenant, "target")
+        .await
+        .unwrap()
+        .unwrap()
+        .user_id;
     let (status, json) = oneshot_json(
         &app,
         "POST",

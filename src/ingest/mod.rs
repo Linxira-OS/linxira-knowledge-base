@@ -9,7 +9,7 @@ use crate::store::{
     ChunkRecord, DocumentRecord, EntityRecord, EventEntityRecord, EventRecord, SpaceRecord, Store,
     UpsertOutcome,
 };
-use crate::util::{html_escape, now_rfc3339, normalize_rfc3339, sha256_hex};
+use crate::util::{html_escape, normalize_rfc3339, now_rfc3339, sha256_hex};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::io::Write;
@@ -257,11 +257,7 @@ fn walk(root: &Path, current: &Path, result: &mut ScanResult) -> Result<(), Stri
 }
 
 fn skip_directory(name: &str) -> bool {
-    name.starts_with('.')
-        || matches!(
-            name,
-            "target" | "node_modules" | ".lkb" | "data" | "blobs"
-        )
+    name.starts_with('.') || matches!(name, "target" | "node_modules" | ".lkb" | "data" | "blobs")
 }
 
 fn relative_display(root: &Path, path: &Path) -> String {
@@ -272,16 +268,15 @@ fn relative_display(root: &Path, path: &Path) -> String {
 }
 
 fn read_file_item(root: &Path, path: &Path, extension: &str) -> Result<SourceItem, String> {
-    let metadata = std::fs::metadata(path)
-        .map_err(|err| format!("cannot stat {}: {err}", path.display()))?;
+    let metadata =
+        std::fs::metadata(path).map_err(|err| format!("cannot stat {}: {err}", path.display()))?;
     if metadata.len() > 32 * 1024 * 1024 {
         return Err("file is larger than 32 MiB".to_string());
     }
-    let bytes = std::fs::read(path)
-        .map_err(|err| format!("cannot read {}: {err}", path.display()))?;
+    let bytes =
+        std::fs::read(path).map_err(|err| format!("cannot read {}: {err}", path.display()))?;
     let raw_hash = sha256_hex(&bytes);
-    let content = String::from_utf8(bytes)
-        .map_err(|_| "file is not valid UTF-8".to_string())?;
+    let content = String::from_utf8(bytes).map_err(|_| "file is not valid UTF-8".to_string())?;
     let relative_path = relative_display(root, path);
     let mime = mime_for(extension);
     let (content, text, title, lang) = if extension == "md" || extension == "markdown" {
@@ -332,11 +327,11 @@ fn read_file_item(root: &Path, path: &Path, extension: &str) -> Result<SourceIte
 
 #[cfg(feature = "pdf")]
 fn read_pdf_item(root: &Path, path: &Path) -> Result<SourceItem, String> {
-    let bytes = std::fs::read(path)
-        .map_err(|err| format!("cannot read {}: {err}", path.display()))?;
+    let bytes =
+        std::fs::read(path).map_err(|err| format!("cannot read {}: {err}", path.display()))?;
     let raw_hash = sha256_hex(&bytes);
-    let text = pdf_extract::extract_text(path)
-        .map_err(|err| format!("PDF extraction failed: {err}"))?;
+    let text =
+        pdf_extract::extract_text(path).map_err(|err| format!("PDF extraction failed: {err}"))?;
     let relative_path = relative_display(root, path);
     Ok(SourceItem {
         relative_path: relative_path.clone(),
@@ -414,10 +409,7 @@ fn parse_jsonl_item(line: &str) -> Result<SourceItem, String> {
         .map(|value| value.to_string())
         .unwrap_or_else(|| mime_for(&extension));
     let (text, extracted_title) = if mime.contains("html") {
-        (
-            html::extract_text(&content),
-            html::extract_title(&content),
-        )
+        (html::extract_text(&content), html::extract_title(&content))
     } else {
         (content.clone(), None)
     };
@@ -427,7 +419,11 @@ fn parse_jsonl_item(line: &str) -> Result<SourceItem, String> {
         .map(|value| value.to_string())
         .or(extracted_title)
         .or_else(|| first_heading(&content))
-        .or_else(|| Path::new(path).file_stem().map(|s| s.to_string_lossy().to_string()));
+        .or_else(|| {
+            Path::new(path)
+                .file_stem()
+                .map(|s| s.to_string_lossy().to_string())
+        });
     let acl = value
         .get("acl")
         .or_else(|| metadata.and_then(|m| m.get("acl")))
@@ -450,13 +446,13 @@ fn parse_jsonl_item(line: &str) -> Result<SourceItem, String> {
         .get("valid_from")
         .or_else(|| metadata.and_then(|m| m.get("valid_from")))
         .and_then(serde_json::Value::as_str)
-        .map(|value| normalize_rfc3339(value))
+        .map(normalize_rfc3339)
         .transpose()?;
     let valid_to = value
         .get("valid_to")
         .or_else(|| metadata.and_then(|m| m.get("valid_to")))
         .and_then(serde_json::Value::as_str)
-        .map(|value| normalize_rfc3339(value))
+        .map(normalize_rfc3339)
         .transpose()?;
     let version = value
         .get("version")
@@ -532,14 +528,7 @@ async fn resolve_space_acl(
             )))
         }
     };
-    let record = SpaceRecord::new(
-        tenant_id,
-        space_id,
-        space_id,
-        &acl,
-        owner,
-        &now_rfc3339(),
-    );
+    let record = SpaceRecord::new(tenant_id, space_id, space_id, &acl, owner, &now_rfc3339());
     store.ensure_space(&record).await?;
     Ok(acl)
 }
@@ -569,10 +558,7 @@ pub async fn import_path(
         }
     };
 
-    let scan = source
-        .scan()
-        .await
-        .map_err(StoreError::Invalid)?;
+    let scan = source.scan().await.map_err(StoreError::Invalid)?;
     let initial_skipped = scan.skipped.len();
     let mut report = ImportReport {
         path: path.display().to_string(),
@@ -642,7 +628,10 @@ pub async fn import_path(
             .content_hash
             .clone()
             .unwrap_or_else(|| sha256_hex(item.content.as_bytes()));
-        let raw_hash = item.raw_hash.clone().unwrap_or_else(|| content_hash.clone());
+        let raw_hash = item
+            .raw_hash
+            .clone()
+            .unwrap_or_else(|| content_hash.clone());
         let doc_id = doc_id::derive_doc_id(&canonical, &content_hash);
         let now = now_rfc3339();
         let valid_from = item.valid_from.clone().unwrap_or_else(|| now.clone());
@@ -657,11 +646,11 @@ pub async fn import_path(
                 continue;
             }
         }
-        let status = item
-            .status
-            .clone()
-            .unwrap_or_else(|| "active".to_string());
-        if !matches!(status.as_str(), "active" | "superseded" | "orphaned" | "deleted") {
+        let status = item.status.clone().unwrap_or_else(|| "active".to_string());
+        if !matches!(
+            status.as_str(),
+            "active" | "superseded" | "orphaned" | "deleted"
+        ) {
             report.failed.push(ImportFailure {
                 path: item.relative_path.clone(),
                 reason: format!("invalid status {status:?}"),
@@ -717,11 +706,17 @@ pub async fn import_path(
             .collect();
 
         if let Some(provider) = embedding {
-            attach_embeddings(&mut chunks, provider, options.embed_batch_size, &mut report.warnings).await;
+            attach_embeddings(
+                &mut chunks,
+                provider,
+                options.embed_batch_size,
+                &mut report.warnings,
+            )
+            .await;
         }
 
         let quota_delta = crate::quota::QuotaDelta {
-            source_bytes: item.content.as_bytes().len() as i64,
+            source_bytes: item.content.len() as i64,
             index_bytes: chunks.iter().map(|chunk| chunk.text.len() as i64).sum(),
             history_bytes: 0,
             documents: 1,
@@ -786,8 +781,14 @@ pub async fn import_path(
         if outcome.is_ok() {
             crate::summary::enqueue(store, &document, &document.content_hash).await;
             if let Some(extractor) = extractor {
-                extract_and_store_events(store, extractor, &document, &chunks, &mut report.warnings)
-                    .await;
+                extract_and_store_events(
+                    store,
+                    extractor,
+                    &document,
+                    &chunks,
+                    &mut report.warnings,
+                )
+                .await;
             }
         }
         crate::quota::release(store, &space_record, &quota_delta).await;
@@ -822,7 +823,13 @@ pub(crate) async fn extract_and_store_events(
     let model = extractor.model_id();
     for chunk in chunks {
         match store
-            .has_current_event(&chunk.tenant_id, &chunk.space_id, &chunk.chunk_id, &version, &model)
+            .has_current_event(
+                &chunk.tenant_id,
+                &chunk.space_id,
+                &chunk.chunk_id,
+                &version,
+                &model,
+            )
             .await
         {
             Ok(true) => continue,
@@ -965,7 +972,9 @@ pub(crate) async fn attach_embeddings(
                 break;
             }
             Err(err) => {
-                warnings.push(format!("embedding failed: {err}; keyword index remains usable"));
+                warnings.push(format!(
+                    "embedding failed: {err}; keyword index remains usable"
+                ));
                 break;
             }
         }
@@ -1014,11 +1023,7 @@ pub fn report_json(report: &ImportReport) -> String {
 }
 
 pub fn failure_html(path: &str, reason: &str) -> String {
-    format!(
-        "<p>{}: {}</p>",
-        html_escape(path),
-        html_escape(reason)
-    )
+    format!("<p>{}: {}</p>", html_escape(path), html_escape(reason))
 }
 
 #[cfg(test)]

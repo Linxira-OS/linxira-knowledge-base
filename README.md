@@ -1,8 +1,13 @@
 # 分层 AI 知识库（Layered Knowledge Base）
 
+[![CI](https://github.com/Linxira-OS/linxira-knowledge-base/actions/workflows/ci.yml/badge.svg)](https://github.com/Linxira-OS/linxira-knowledge-base/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Rust stable](https://img.shields.io/badge/rust-stable-blue.svg)](https://www.rust-lang.org/)
+
 **一句话定位**：同一检索内核，通过 solo / team / enterprise 三档 profile（配置档位）提供从个人单机到企业多租户的 AI 知识库能力。
 
-> 仓库：`Linxira-OS/linxira-knowledge-base`（private）；包 / CLI / 二进制名仍为 `lkb`。
+> 仓库：`Linxira-OS/linxira-knowledge-base`；包 / CLI / 二进制名仍为 `lkb`。
+> Topics（建议）：`rag` · `knowledge-base` · `wiki` · `rust` · `self-hosted` · `mcp`
 
 ## 为什么分层
 

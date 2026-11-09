@@ -55,12 +55,7 @@ pub fn derive_doc_id(canonical_path: &str, content_hash: &str) -> String {
     hex::encode(&hasher.finalize()[..16])
 }
 
-pub fn derive_chunk_id(
-    tenant_id: &str,
-    doc_id: &str,
-    seq: u32,
-    content_hash: &str,
-) -> String {
+pub fn derive_chunk_id(tenant_id: &str, doc_id: &str, seq: u32, content_hash: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(tenant_id.as_bytes());
     hasher.update([0u8]);

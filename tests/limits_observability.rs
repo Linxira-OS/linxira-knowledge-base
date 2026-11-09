@@ -58,11 +58,18 @@ async fn add_user_token(store: &Arc<dyn Store>, tenant: &str, name: &str) -> Str
 }
 
 async fn get(app: &axum::Router, uri: &str, token: Option<&str>) -> (StatusCode, Option<String>) {
-    let mut builder = Request::builder().uri(uri).method("GET").header(header::HOST, "localhost");
+    let mut builder = Request::builder()
+        .uri(uri)
+        .method("GET")
+        .header(header::HOST, "localhost");
     if let Some(token) = token {
         builder = builder.header(header::AUTHORIZATION, format!("Bearer {token}"));
     }
-    let response = app.clone().oneshot(builder.body(Body::empty()).unwrap()).await.unwrap();
+    let response = app
+        .clone()
+        .oneshot(builder.body(Body::empty()).unwrap())
+        .await
+        .unwrap();
     let retry = response
         .headers()
         .get(header::RETRY_AFTER)
@@ -189,7 +196,10 @@ async fn quota_reservation_does_not_oversell_under_concurrency() {
             tokio::time::sleep(Duration::from_millis(5)).await;
         }
     }
-    assert!(successes <= 1, "quota oversold: {successes} reservations for 100 bytes");
+    assert!(
+        successes <= 1,
+        "quota oversold: {successes} reservations for 100 bytes"
+    );
 }
 
 #[test]
@@ -224,7 +234,13 @@ fn cli_json_log_has_required_fields_and_no_secrets() {
     }
     assert!(line["degraded_codes"].is_array());
     let text = line.to_string();
-    for forbidden in ["api_key", "authorization", "query_text", "password", "cookie"] {
+    for forbidden in [
+        "api_key",
+        "authorization",
+        "query_text",
+        "password",
+        "cookie",
+    ] {
         assert!(!text.contains(forbidden), "log leaked {forbidden}: {text}");
     }
 }

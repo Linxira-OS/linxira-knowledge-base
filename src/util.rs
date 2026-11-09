@@ -194,9 +194,8 @@ pub fn query_terms(query: &str) -> Vec<String> {
     let mut segments = Vec::new();
     let mut current = String::new();
     for ch in query.chars() {
-        let keep = ch.is_alphanumeric()
-            || matches!(ch, '_' | '-' | '.' | '/' | '@' | '+')
-            || is_cjk(ch);
+        let keep =
+            ch.is_alphanumeric() || matches!(ch, '_' | '-' | '.' | '/' | '@' | '+') || is_cjk(ch);
         if keep {
             current.push(ch);
         } else if !current.is_empty() {

@@ -1,8 +1,8 @@
 use lkb::governance::{Acl, Policy, Principal, PrincipalKind, TokenScope, UserRole};
 use lkb::providers::ProviderSet;
 use lkb::search::{search, SearchMode};
-use lkb::store::Store;
 use lkb::store::postgres::PostgresStore;
+use lkb::store::Store;
 use std::path::PathBuf;
 use std::sync::Arc;
 

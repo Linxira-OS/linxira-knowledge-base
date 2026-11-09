@@ -2,9 +2,7 @@
 
 use crate::config::Config;
 use crate::gateway::Gateway;
-use crate::store::{
-    DocumentRecord, DocumentSummaryRecord, Store, SummaryJobRecord,
-};
+use crate::store::{DocumentRecord, DocumentSummaryRecord, Store, SummaryJobRecord};
 use serde_json::{json, Value};
 use std::sync::Arc;
 
@@ -59,7 +57,10 @@ pub fn extractive_summary(document: &DocumentRecord, revision_id: &str) -> Value
         .split_whitespace()
         .filter(|word| word.chars().count() > 2)
         .take(8)
-        .map(|word| word.trim_matches(|ch: char| !ch.is_alphanumeric()).to_string())
+        .map(|word| {
+            word.trim_matches(|ch: char| !ch.is_alphanumeric())
+                .to_string()
+        })
         .filter(|word| !word.is_empty())
         .collect();
     json!({
@@ -76,7 +77,13 @@ pub fn extractive_summary(document: &DocumentRecord, revision_id: &str) -> Value
 fn parse_summary(content: &str, document: &DocumentRecord, revision_id: &str) -> Option<Value> {
     let text = crate::util::strip_code_fence(content);
     let mut value: Value = serde_json::from_str(text).ok()?;
-    if value.get("tldr").and_then(Value::as_str).unwrap_or("").trim().is_empty() {
+    if value
+        .get("tldr")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .trim()
+        .is_empty()
+    {
         return None;
     }
     if value.get("source_revision").is_none() {
@@ -96,7 +103,11 @@ async fn generate_summary(
     revision_id: &str,
 ) -> (Value, Option<String>, Option<String>) {
     if !config.summary.enabled || !config.summary.auto {
-        return (extractive_summary(document, revision_id), None, Some("summary_generation_failed".to_string()));
+        return (
+            extractive_summary(document, revision_id),
+            None,
+            Some("summary_generation_failed".to_string()),
+        );
     }
     let prompt = format!(
         "Summarize the document as strict JSON with keys tldr (one sentence), bullets (3-5 strings), keywords (strings), entities (objects with name/type), lang, source_revision. Document:\n{}",
@@ -113,18 +124,29 @@ async fn generate_summary(
         space_id: Some(document.space_id.clone()),
         role: "system".to_string(),
         alias: config.summary.model_alias.clone(),
-        messages: vec![crate::gateway::ChatMessage { role: "user".into(), content: prompt }],
+        messages: vec![crate::gateway::ChatMessage {
+            role: "user".into(),
+            content: prompt,
+        }],
         max_output_tokens: 512,
         temperature: 0.0,
         source: "summary".to_string(),
         rewritten_query: None,
     };
-    match Gateway::new(store.clone()).with_local_ledger(config.billing.engine.eq_ignore_ascii_case("local")).chat(&request).await {
+    match Gateway::new(store.clone())
+        .with_local_ledger(config.billing.engine.eq_ignore_ascii_case("local"))
+        .chat(&request)
+        .await
+    {
         Ok(response) => {
             if let Some(value) = parse_summary(&response.content, document, revision_id) {
                 (value, response.usage_event_id, None)
             } else {
-                (extractive_summary(document, revision_id), response.usage_event_id, Some("summary_generation_failed".to_string()))
+                (
+                    extractive_summary(document, revision_id),
+                    response.usage_event_id,
+                    Some("summary_generation_failed".to_string()),
+                )
             }
         }
         Err(err) => (
@@ -162,7 +184,14 @@ pub async fn process_pending(store: &Arc<dyn Store>, config: &Config, limit: i64
             .and_then(|documents| documents.into_iter().find(|doc| doc.doc_id == job.doc_id));
         let Some(document) = document else {
             let _ = store
-                .update_summary_job(&job.job_id, "failed", job.attempts + 1, None, Some(&crate::util::now_rfc3339()), Some("document_not_found"))
+                .update_summary_job(
+                    &job.job_id,
+                    "failed",
+                    job.attempts + 1,
+                    None,
+                    Some(&crate::util::now_rfc3339()),
+                    Some("document_not_found"),
+                )
                 .await;
             continue;
         };
@@ -178,9 +207,20 @@ pub async fn process_pending(store: &Arc<dyn Store>, config: &Config, limit: i64
             .await
             .ok()
             .flatten();
-        if existing.as_ref().map(|summary| summary.status == "ready").unwrap_or(false) {
+        if existing
+            .as_ref()
+            .map(|summary| summary.status == "ready")
+            .unwrap_or(false)
+        {
             let _ = store
-                .update_summary_job(&job.job_id, "ready", job.attempts, None, Some(&crate::util::now_rfc3339()), None)
+                .update_summary_job(
+                    &job.job_id,
+                    "ready",
+                    job.attempts,
+                    None,
+                    Some(&crate::util::now_rfc3339()),
+                    None,
+                )
                 .await;
             continue;
         }
@@ -196,14 +236,22 @@ pub async fn process_pending(store: &Arc<dyn Store>, config: &Config, limit: i64
                 doc_id: job.doc_id.clone(),
                 revision_id: job.revision_id.clone(),
                 lang: document.lang.clone(),
-                model: if summary.get("fallback").and_then(Value::as_bool).unwrap_or(false) {
+                model: if summary
+                    .get("fallback")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false)
+                {
                     EXTRACTIVE_MODEL.to_string()
                 } else {
                     config.summary.model_alias.clone()
                 },
                 prompt_version: config.summary.prompt_version.clone(),
                 content_hash: document.content_hash.clone(),
-                status: if failed { "failed".to_string() } else { "ready".to_string() },
+                status: if failed {
+                    "failed".to_string()
+                } else {
+                    "ready".to_string()
+                },
                 summary_json: summary.to_string(),
                 usage_event_id,
                 generated_at: Some(crate::util::now_rfc3339()),
@@ -218,16 +266,33 @@ pub async fn process_pending(store: &Arc<dyn Store>, config: &Config, limit: i64
                     "ready"
                 };
                 let _ = store
-                    .update_summary_job(&job.job_id, status, attempts, None, Some(&crate::util::now_rfc3339()), error.as_deref())
+                    .update_summary_job(
+                        &job.job_id,
+                        status,
+                        attempts,
+                        None,
+                        Some(&crate::util::now_rfc3339()),
+                        error.as_deref(),
+                    )
                     .await;
                 if status == "queued" {
-                    tokio::time::sleep(std::time::Duration::from_millis(config.summary.retry_backoff_ms)).await;
+                    tokio::time::sleep(std::time::Duration::from_millis(
+                        config.summary.retry_backoff_ms,
+                    ))
+                    .await;
                     continue;
                 }
                 processed += 1;
             } else {
                 let _ = store
-                    .update_summary_job(&job.job_id, "failed", attempts, None, Some(&crate::util::now_rfc3339()), Some("summary_store_failed"))
+                    .update_summary_job(
+                        &job.job_id,
+                        "failed",
+                        attempts,
+                        None,
+                        Some(&crate::util::now_rfc3339()),
+                        Some("summary_store_failed"),
+                    )
                     .await;
             }
             break;

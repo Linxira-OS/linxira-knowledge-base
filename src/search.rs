@@ -3,7 +3,7 @@ use crate::contract::{sort_degraded, Degraded};
 use crate::error::StoreError;
 use crate::governance::Policy;
 use crate::providers::ProviderSet;
-use crate::store::{SearchHit, Store};
+use crate::store::{EventSearchParams, SearchHit, Store};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -138,26 +138,26 @@ pub async fn search_with_tuning(
     let mode_used = resolve_mode(store, providers, policy, mode, &mut degraded).await?;
 
     let mut hits = match mode_used {
-        SearchMode::Bm25 => {
-            keyword_candidates(store, policy, query, limit, &mut degraded).await?
-        }
+        SearchMode::Bm25 => keyword_candidates(store, policy, query, limit, &mut degraded).await?,
         SearchMode::Bm25Judge => {
             let mut keyword =
                 keyword_candidates(store, policy, query, limit, &mut degraded).await?;
-            apply_judge(store, policy, tuning, providers, query, &mut keyword, &mut degraded).await;
+            apply_judge(
+                store,
+                policy,
+                tuning,
+                providers,
+                query,
+                &mut keyword,
+                &mut degraded,
+            )
+            .await;
             keyword
         }
         SearchMode::Event => {
-            let event_hits = event_candidates(
-                store,
-                providers,
-                policy,
-                query,
-                tuning,
-                true,
-                &mut degraded,
-            )
-            .await?;
+            let event_hits =
+                event_candidates(store, providers, policy, query, tuning, true, &mut degraded)
+                    .await?;
             match event_hits {
                 Some(hits) if !hits.is_empty() => hits,
                 _ => keyword_candidates(store, policy, query, limit, &mut degraded).await?,
@@ -345,13 +345,15 @@ async fn event_candidates(
     let timeout = Duration::from_millis(tuning.event_timeout_ms.max(1));
     let future = store.search_events(
         policy,
-        query,
-        tuning.event_depth,
-        tuning.event_max_seeds as i64,
-        tuning.event_max_events as i64,
-        tuning.event_text_weight,
-        (tuning.event_max_events as i64).max(1),
-        tuning.event_timeout_ms,
+        EventSearchParams {
+            query,
+            depth: tuning.event_depth,
+            max_seeds: tuning.event_max_seeds as i64,
+            max_events: tuning.event_max_events as i64,
+            text_weight: tuning.event_text_weight,
+            limit: (tuning.event_max_events as i64).max(1),
+            timeout_ms: tuning.event_timeout_ms,
+        },
     );
     match tokio::time::timeout(timeout, future).await {
         Ok(Ok(hits)) if hits.is_empty() => {
@@ -400,15 +402,18 @@ async fn apply_judge(
         query,
         candidates.iter().enumerate().map(|(index, candidate)| format!("[{}] {}", index + 1, candidate)).collect::<Vec<_>>().join("\n")
     );
-    let gateway = crate::gateway::Gateway::new(store.clone())
-        .with_local_ledger(tuning.billing_local_ledger);
+    let gateway =
+        crate::gateway::Gateway::new(store.clone()).with_local_ledger(tuning.billing_local_ledger);
     let request = crate::gateway::GatewayRequest {
         request_id: format!("judge_{}", crate::util::random_hex(10)),
         principal: policy.principal.clone(),
         space_id: policy.principal.allowed_space_ids.first().cloned(),
         role: "user".to_string(),
         alias: tuning.judge_alias.clone(),
-        messages: vec![crate::gateway::ChatMessage { role: "user".into(), content: prompt }],
+        messages: vec![crate::gateway::ChatMessage {
+            role: "user".into(),
+            content: prompt,
+        }],
         max_output_tokens: 256,
         temperature: 0.0,
         source: "judge".to_string(),
@@ -418,40 +423,60 @@ async fn apply_judge(
         let text = crate::util::strip_code_fence(&response.content);
         if let Ok(value) = serde_json::from_str::<serde_json::Value>(text) {
             if let Some(scores) = value.get("scores").and_then(serde_json::Value::as_array) {
-                let values: Vec<f64> = scores.iter().filter_map(serde_json::Value::as_f64).collect();
+                let values: Vec<f64> = scores
+                    .iter()
+                    .filter_map(serde_json::Value::as_f64)
+                    .collect();
                 if values.len() == top {
                     for (hit, score) in hits.iter_mut().zip(values) {
                         hit.rerank_score = Some(score);
                     }
                     let mut head: Vec<SearchHit> = hits.drain(..top).collect();
-                    head.sort_by(|a, b| b.rerank_score.partial_cmp(&a.rerank_score).unwrap_or(std::cmp::Ordering::Equal).then_with(|| a.chunk_id.cmp(&b.chunk_id)));
-                    head.extend(hits.drain(..));
+                    head.sort_by(|a, b| {
+                        b.rerank_score
+                            .partial_cmp(&a.rerank_score)
+                            .unwrap_or(std::cmp::Ordering::Equal)
+                            .then_with(|| a.chunk_id.cmp(&b.chunk_id))
+                    });
+                    head.append(hits);
                     *hits = head;
                     return;
                 }
             }
         }
-        degraded.push(Degraded::decision_unavailable("judge returned invalid scores"));
+        degraded.push(Degraded::decision_unavailable(
+            "judge returned invalid scores",
+        ));
         return;
     }
     // Preserve the old adapter path as a fallback, but report the gateway failure.
     if let Some(judge) = &providers.judge {
         match judge.rerank(query, &candidates).await {
             Ok(scores) if scores.len() == top => {
-                for (hit, score) in hits.iter_mut().zip(scores.into_iter()) {
+                for (hit, score) in hits.iter_mut().zip(scores) {
                     hit.rerank_score = Some(score as f64);
                 }
                 let mut head: Vec<SearchHit> = hits.drain(..top).collect();
-                head.sort_by(|a, b| b.rerank_score.partial_cmp(&a.rerank_score).unwrap_or(std::cmp::Ordering::Equal).then_with(|| a.chunk_id.cmp(&b.chunk_id)));
-                head.extend(hits.drain(..));
+                head.sort_by(|a, b| {
+                    b.rerank_score
+                        .partial_cmp(&a.rerank_score)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                        .then_with(|| a.chunk_id.cmp(&b.chunk_id))
+                });
+                head.append(hits);
                 *hits = head;
             }
-            Ok(_) => degraded.push(Degraded::decision_unavailable("judge returned wrong score count")),
+            Ok(_) => degraded.push(Degraded::decision_unavailable(
+                "judge returned wrong score count",
+            )),
             Err(err) => degraded.push(Degraded::decision_unavailable(&err.to_string())),
         }
     } else {
         degraded.push(Degraded::decision_unavailable(
-            providers.judge_error.as_deref().unwrap_or("judge is not configured"),
+            providers
+                .judge_error
+                .as_deref()
+                .unwrap_or("judge is not configured"),
         ));
     }
 }
@@ -619,8 +644,14 @@ mod tests {
 
     #[test]
     fn modes_parse_aliases() {
-        assert_eq!(SearchMode::parse("event_entity").unwrap(), SearchMode::Event);
-        assert_eq!(SearchMode::parse("bm25_judge").unwrap(), SearchMode::Bm25Judge);
+        assert_eq!(
+            SearchMode::parse("event_entity").unwrap(),
+            SearchMode::Event
+        );
+        assert_eq!(
+            SearchMode::parse("bm25_judge").unwrap(),
+            SearchMode::Bm25Judge
+        );
         assert!(SearchMode::parse("unknown").is_err());
     }
 }

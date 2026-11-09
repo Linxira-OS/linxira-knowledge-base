@@ -87,25 +87,55 @@ fn tool(name: &str, description: &str, scope: &str, properties: Value, required:
 
 pub fn tools() -> Vec<Value> {
     vec![
-        tool("kb_search", "Search the knowledge base", "kb.read",
+        tool(
+            "kb_search",
+            "Search the knowledge base",
+            "kb.read",
             json!({"query": {"type": "string"}, "space": {"type": ["string", "null"]}, "top_k": {"type": "integer"}}),
-            json!(["query"])),
-        tool("kb_answer", "Answer a question with citations", "kb.read",
+            json!(["query"]),
+        ),
+        tool(
+            "kb_answer",
+            "Answer a question with citations",
+            "kb.read",
             json!({"query": {"type": "string"}, "space": {"type": ["string", "null"]}}),
-            json!(["query"])),
-        tool("kb_get_page", "Read a wiki page", "kb.read",
+            json!(["query"]),
+        ),
+        tool(
+            "kb_get_page",
+            "Read a wiki page",
+            "kb.read",
             json!({"space": {"type": "string"}, "slug": {"type": "string"}, "lang": {"type": ["string", "null"]}}),
-            json!(["space", "slug"])),
-        tool("kb_get_page_summary", "Read a page summary", "kb.read",
+            json!(["space", "slug"]),
+        ),
+        tool(
+            "kb_get_page_summary",
+            "Read a page summary",
+            "kb.read",
             json!({"space": {"type": "string"}, "slug": {"type": "string"}, "lang": {"type": ["string", "null"]}}),
-            json!(["space", "slug"])),
-        tool("kb_get_page_history", "Read page revision history", "kb.read",
+            json!(["space", "slug"]),
+        ),
+        tool(
+            "kb_get_page_history",
+            "Read page revision history",
+            "kb.read",
             json!({"space": {"type": "string"}, "slug": {"type": "string"}, "lang": {"type": ["string", "null"]}}),
-            json!(["space", "slug"])),
-        tool("kb_list_spaces", "List accessible spaces", "kb.read", json!({}), json!([])),
-        tool("kb_write_page", "Save a wiki page", "kb.write",
+            json!(["space", "slug"]),
+        ),
+        tool(
+            "kb_list_spaces",
+            "List accessible spaces",
+            "kb.read",
+            json!({}),
+            json!([]),
+        ),
+        tool(
+            "kb_write_page",
+            "Save a wiki page",
+            "kb.write",
             json!({"space": {"type": "string"}, "slug": {"type": "string"}, "title": {"type": "string"}, "markdown": {"type": "string"}, "lang": {"type": ["string", "null"]}}),
-            json!(["space", "slug", "title", "markdown"])),
+            json!(["space", "slug", "title", "markdown"]),
+        ),
     ]
 }
 
@@ -130,10 +160,17 @@ fn string_arg(arguments: &Value, key: &str) -> Result<String, (String, String)> 
 }
 
 fn scoped_space(principal: &Principal, space: &str) -> Result<(), (String, String)> {
-    if principal.allowed_space_ids.iter().any(|allowed| allowed == space) {
+    if principal
+        .allowed_space_ids
+        .iter()
+        .any(|allowed| allowed == space)
+    {
         Ok(())
     } else {
-        Err(("forbidden".into(), format!("space {space} is outside the token scope")))
+        Err((
+            "forbidden".into(),
+            format!("space {space} is outside the token scope"),
+        ))
     }
 }
 
@@ -158,17 +195,32 @@ pub async fn call_tool(
             let top_k = arguments.get("top_k").and_then(Value::as_u64).unwrap_or(10) as usize;
             let mut tuning = crate::search::SearchTuning::from_retrieval(&config.retrieval);
             tuning.billing_local_ledger = config.billing.engine.eq_ignore_ascii_case("local");
-            let response = crate::search::search_with_tuning(store, providers, &policy, &query, SearchMode::Auto, top_k.max(1).min(100), &tuning)
-                .await
-                .map_err(|err| ("search_failed".to_string(), err.to_string()))?;
+            let response = crate::search::search_with_tuning(
+                store,
+                providers,
+                &policy,
+                &query,
+                SearchMode::Auto,
+                top_k.clamp(1, 100),
+                &tuning,
+            )
+            .await
+            .map_err(|err| ("search_failed".to_string(), err.to_string()))?;
             Ok(serde_json::to_value(response).unwrap_or(Value::Null))
         }
         "kb_answer" => {
             let query = string_arg(arguments, "query")?;
             let options = crate::answer::AnswerOptions::default();
-            let answer = crate::answer::build_answer_with_ledger(store, providers, &policy, &query, &options, config.billing.engine.eq_ignore_ascii_case("local"))
-                .await
-                .map_err(|err| ("answer_failed".to_string(), err.to_string()))?;
+            let answer = crate::answer::build_answer_with_ledger(
+                store,
+                providers,
+                &policy,
+                &query,
+                &options,
+                config.billing.engine.eq_ignore_ascii_case("local"),
+            )
+            .await
+            .map_err(|err| ("answer_failed".to_string(), err.to_string()))?;
             Ok(serde_json::to_value(answer).unwrap_or(Value::Null))
         }
         "kb_get_page" => {
@@ -195,7 +247,16 @@ pub async fn call_tool(
             let canonical = crate::ingest::doc_id::canonical_relative_path(&logical)
                 .map_err(|err| ("internal_error".to_string(), err))?;
             let doc_id = crate::ingest::doc_id::derive_doc_id(&canonical, &view.page.content_hash);
-            match crate::summary::latest_summary(store, &principal.tenant_id, &space, &doc_id, &view.page.content_hash, config).await {
+            match crate::summary::latest_summary(
+                store,
+                &principal.tenant_id,
+                &space,
+                &doc_id,
+                &view.page.content_hash,
+                config,
+            )
+            .await
+            {
                 Some(summary) => Ok(json!({"summary": summary})),
                 None => Ok(json!({"summary": Value::Null, "status": "pending"})),
             }
@@ -216,7 +277,12 @@ pub async fn call_tool(
                 .map_err(|err| ("store_error".to_string(), err.to_string()))?;
             let visible: Vec<_> = spaces
                 .into_iter()
-                .filter(|space| principal.allowed_space_ids.iter().any(|allowed| allowed == &space.space_id))
+                .filter(|space| {
+                    principal
+                        .allowed_space_ids
+                        .iter()
+                        .any(|allowed| allowed == &space.space_id)
+                })
                 .collect();
             Ok(json!({"spaces": visible}))
         }
@@ -233,8 +299,18 @@ pub async fn call_tool(
                 .map_err(|err| ("store_error".to_string(), err.to_string()))?;
             let now = crate::util::now_rfc3339();
             let content_hash = crate::util::sha256_hex(markdown.as_bytes());
-            let version = existing.as_ref().map(|view| view.page.version + 1).unwrap_or(1);
-            let revision_id = crate::ingest::doc_id::derive_revision_id(&principal.tenant_id, &space, &slug, &lang, &content_hash, version);
+            let version = existing
+                .as_ref()
+                .map(|view| view.page.version + 1)
+                .unwrap_or(1);
+            let revision_id = crate::ingest::doc_id::derive_revision_id(
+                &principal.tenant_id,
+                &space,
+                &slug,
+                &lang,
+                &content_hash,
+                version,
+            );
             let acl_json = match existing.as_ref().map(|view| view.page.acl_json.clone()) {
                 Some(json) => json,
                 None => store
@@ -242,7 +318,10 @@ pub async fn call_tool(
                     .await
                     .map_err(|err| ("store_error".to_string(), err.to_string()))?
                     .map(|space| space.default_acl_json)
-                    .unwrap_or_else(|| "{\"mode\":\"allow_all\",\"users\":[],\"groups\":[],\"version\":1}".to_string()),
+                    .unwrap_or_else(|| {
+                        "{\"mode\":\"allow_all\",\"users\":[],\"groups\":[],\"version\":1}"
+                            .to_string()
+                    }),
             };
             let acl_principals = existing
                 .as_ref()
@@ -255,7 +334,10 @@ pub async fn call_tool(
                 lang: lang.clone(),
                 title: title.clone(),
                 summary: markdown.chars().take(200).collect(),
-                order_index: existing.as_ref().map(|view| view.page.order_index).unwrap_or(0),
+                order_index: existing
+                    .as_ref()
+                    .map(|view| view.page.order_index)
+                    .unwrap_or(0),
                 current_revision_id: revision_id.clone(),
                 content_hash: content_hash.clone(),
                 acl_json: acl_json.clone(),
@@ -264,7 +346,10 @@ pub async fn call_tool(
                 valid_to: None,
                 version,
                 superseded_by: None,
-                created_at: existing.as_ref().map(|view| view.page.created_at.clone()).unwrap_or_else(|| now.clone()),
+                created_at: existing
+                    .as_ref()
+                    .map(|view| view.page.created_at.clone())
+                    .unwrap_or_else(|| now.clone()),
                 updated_at: now.clone(),
             };
             let revision = crate::store::RevisionRecord {
@@ -291,15 +376,23 @@ pub async fn call_tool(
                 .save_page(&page, &revision)
                 .await
                 .map_err(|err| ("store_error".to_string(), err.to_string()))?;
-            Ok(json!({"space": space, "slug": slug, "lang": lang, "version": version, "revision_id": revision_id}))
+            Ok(
+                json!({"space": space, "slug": slug, "lang": lang, "version": version, "revision_id": revision_id}),
+            )
         }
-        other => Err(("method_not_found".to_string(), format!("unknown tool {other}"))),
+        other => Err((
+            "method_not_found".to_string(),
+            format!("unknown tool {other}"),
+        )),
     }
 }
 
 fn page_args(arguments: &Value) -> Result<(String, String, Option<String>), (String, String)> {
     let space = string_arg(arguments, "space")?;
     let slug = string_arg(arguments, "slug")?;
-    let lang = arguments.get("lang").and_then(Value::as_str).map(str::to_string);
+    let lang = arguments
+        .get("lang")
+        .and_then(Value::as_str)
+        .map(str::to_string);
     Ok((space, slug, lang))
 }

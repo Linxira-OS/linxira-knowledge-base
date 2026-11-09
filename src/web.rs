@@ -9,8 +9,8 @@ use crate::ingest::{attach_embeddings, chunker, doc_id, extract_and_store_events
 use crate::providers::ProviderSet;
 use crate::search::{search_with_tuning, SearchMode, SearchResponse, SearchTuning};
 use crate::store::{
-    AuditFilter, ChunkRecord, ConversationRecord, DocumentRecord, GroupMemberRecord,
-    GroupRecord, MessageRecord, ModelAliasRecord, PageRecord, ProviderModelRecord, ProviderRecord,
+    AuditFilter, ChunkRecord, ConversationRecord, DocumentRecord, GroupMemberRecord, GroupRecord,
+    MessageRecord, ModelAliasRecord, PageRecord, ProviderModelRecord, ProviderRecord,
     QuotaOverrideRecord, QuotaRecord, QuotaScope, RevisionRecord, RouteRecord, SpaceMemberRecord,
     SpaceRecord, StorageUsage, Store, TokenQuotaRecord, UsageFilter,
 };
@@ -18,24 +18,24 @@ use crate::util::{
     constant_time_eq, html_escape, now_rfc3339, random_hex, sha256_hex, sha256_hex_str,
     truncate_chars, url_encode_path_segment,
 };
+use argon2::password_hash::{PasswordHash, PasswordVerifier};
+use argon2::Argon2;
+use axum::body::{Body, Bytes};
 use axum::extract::{ConnectInfo, Form, Path as AxumPath, Query, Request, State};
 use axum::http::{header, HeaderMap, HeaderValue, StatusCode};
 use axum::middleware::{self, Next};
 use axum::response::{Html, IntoResponse, Redirect, Response};
-use axum::body::{Body, Bytes};
 use axum::routing::{get, post};
-use tokio::sync::mpsc;
-use futures_util::StreamExt;
-use tokio_stream::wrappers::ReceiverStream;
 use axum::{Json, Router};
-use argon2::password_hash::{PasswordHash, PasswordVerifier};
-use argon2::Argon2;
+use futures_util::StreamExt;
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
+use tokio::sync::mpsc;
+use tokio_stream::wrappers::ReceiverStream;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -47,11 +47,7 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn new(
-        store: Arc<dyn Store>,
-        config: Arc<Config>,
-        providers: Arc<ProviderSet>,
-    ) -> Self {
+    pub fn new(store: Arc<dyn Store>, config: Arc<Config>, providers: Arc<ProviderSet>) -> Self {
         let limits = Arc::new(crate::limits::Limits::new(config.limits.clone()));
         Self {
             store,
@@ -78,11 +74,16 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v1/spaces", get(list_spaces_v1).post(create_space_v1))
         .route(
             "/api/v1/spaces/{space_id}",
-            get(get_space_v1).patch(patch_space_v1).delete(delete_space_v1),
+            get(get_space_v1)
+                .patch(patch_space_v1)
+                .delete(delete_space_v1),
         )
         .route("/api/v1/spaces/{space_id}/archive", post(archive_space_v1))
         .route("/api/v1/spaces/{space_id}/restore", post(restore_space_v1))
-        .route("/api/v1/spaces/{space_id}/transfer", post(transfer_space_v1))
+        .route(
+            "/api/v1/spaces/{space_id}/transfer",
+            post(transfer_space_v1),
+        )
         .route("/api/v1/spaces/{space_id}/usage", get(space_usage_v1))
         .route(
             "/api/v1/spaces/{space_id}/members",
@@ -92,11 +93,16 @@ pub fn router(state: AppState) -> Router {
             "/api/v1/spaces/{space_id}/members/{principal_type}/{principal_id}",
             axum::routing::patch(patch_space_member_v1).delete(remove_space_member_v1),
         )
-        .route("/api/v1/spaces/{space_id}/quota", axum::routing::put(set_space_quota_v1))
+        .route(
+            "/api/v1/spaces/{space_id}/quota",
+            axum::routing::put(set_space_quota_v1),
+        )
         .route("/api/v1/groups", get(list_groups_v1).post(create_group_v1))
         .route(
             "/api/v1/groups/{group_id}",
-            get(get_group_v1).patch(patch_group_v1).delete(delete_group_v1),
+            get(get_group_v1)
+                .patch(patch_group_v1)
+                .delete(delete_group_v1),
         )
         .route(
             "/api/v1/groups/{group_id}/members",
@@ -115,9 +121,15 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v1/billing/invoices", get(billing_invoices_v1))
         .route("/api/v1/billing/topup", post(billing_topup_v1))
         .route("/api/v1/billing/subscribe", post(billing_subscribe_v1))
-        .route("/api/v1/billing/subscription", get(billing_subscription_v1).patch(billing_subscription_patch_v1))
+        .route(
+            "/api/v1/billing/subscription",
+            get(billing_subscription_v1).patch(billing_subscription_patch_v1),
+        )
         .route("/api/v1/billing/entitlement", get(billing_entitlement_v1))
-        .route("/api/v1/billing/webhook/{provider}", post(billing_webhook_v1))
+        .route(
+            "/api/v1/billing/webhook/{provider}",
+            post(billing_webhook_v1),
+        )
         .route("/api/v1/gateway/chat", post(gateway_chat_v1))
         .route("/api/v1/auth/sso/status", get(auth_sso_status_v1))
         .route("/api/v1/auth/csrf", get(auth_csrf_v1))
@@ -134,14 +146,23 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v1/answer/stream", get(answer_stream_v1))
         .route(
             "/api/v1/pages/{space}/{slug}",
-            get(page_json_v1).put(page_save_json_v1).post(page_save_json_v1).delete(page_delete_json_v1),
+            get(page_json_v1)
+                .put(page_save_json_v1)
+                .post(page_save_json_v1)
+                .delete(page_delete_json_v1),
         )
         .route("/api/v1/pages/{space}/{slug}/history", get(page_history_v1))
-        .route("/api/v1/pages/{space}/{slug}/restore", post(page_restore_json_v1))
+        .route(
+            "/api/v1/pages/{space}/{slug}/restore",
+            post(page_restore_json_v1),
+        )
         .route("/api/v1/pages/{space}/{slug}/summary", get(page_summary_v1))
         .route("/api/v1/query", post(query_v1))
         .route("/api/v1/query/stream", post(query_stream_v1))
-        .route("/api/v1/conversations", get(list_conversations_v1).post(create_conversation_v1))
+        .route(
+            "/api/v1/conversations",
+            get(list_conversations_v1).post(create_conversation_v1),
+        )
         .route(
             "/api/v1/conversations/{conversation_id}",
             get(get_conversation_v1).delete(delete_conversation_v1),
@@ -160,8 +181,7 @@ pub fn router(state: AppState) -> Router {
         )
         .route(
             "/api/v1/admin/providers/{provider_id}",
-            axum::routing::patch(admin_provider_patch_v1)
-                .delete(admin_provider_delete_v1),
+            axum::routing::patch(admin_provider_patch_v1).delete(admin_provider_delete_v1),
         )
         .route(
             "/api/v1/admin/provider-models",
@@ -173,8 +193,7 @@ pub fn router(state: AppState) -> Router {
         )
         .route(
             "/api/v1/admin/aliases/{public_id}",
-            axum::routing::patch(admin_alias_patch_v1)
-                .delete(admin_alias_delete_v1),
+            axum::routing::patch(admin_alias_patch_v1).delete(admin_alias_delete_v1),
         )
         .route(
             "/api/v1/admin/routes",
@@ -182,8 +201,7 @@ pub fn router(state: AppState) -> Router {
         )
         .route(
             "/api/v1/admin/routes/{route_id}",
-            axum::routing::patch(admin_route_patch_v1)
-                .delete(admin_route_delete_v1),
+            axum::routing::patch(admin_route_patch_v1).delete(admin_route_delete_v1),
         )
         .route("/api/v1/admin/usage", get(admin_usage_v1))
         .route(
@@ -195,28 +213,55 @@ pub fn router(state: AppState) -> Router {
             axum::routing::delete(admin_quota_delete_v1),
         )
         .route("/api/v1/admin/users", get(admin_users_v1))
-        .route("/api/v1/admin/users/{user_id}", axum::routing::patch(admin_user_patch_v1))
-        .route("/api/v1/admin/users/{user_id}/disable", post(admin_user_disable_v1))
+        .route(
+            "/api/v1/admin/users/{user_id}",
+            axum::routing::patch(admin_user_patch_v1),
+        )
+        .route(
+            "/api/v1/admin/users/{user_id}/disable",
+            post(admin_user_disable_v1),
+        )
         .route("/api/v1/admin/roles", get(admin_roles_v1))
         .route("/api/v1/admin/groups", get(admin_groups_v1))
         .route("/api/v1/admin/spaces", get(admin_spaces_v1))
-        .route("/api/v1/admin/usage/aggregate", get(admin_usage_aggregate_v1))
-        .route("/api/v1/connectors", get(connectors_v1).post(connectors_create_v1))
+        .route(
+            "/api/v1/admin/usage/aggregate",
+            get(admin_usage_aggregate_v1),
+        )
+        .route(
+            "/api/v1/connectors",
+            get(connectors_v1).post(connectors_create_v1),
+        )
         .route(
             "/api/v1/connectors/{connector_id}",
             axum::routing::patch(connectors_patch_v1).delete(connectors_delete_v1),
         )
-        .route("/api/v1/connectors/{connector_id}/test", post(connectors_test_v1))
-        .route("/api/v1/connectors/{connector_id}/sync", post(connectors_sync_v1))
-        .route("/api/v1/connectors/{connector_id}/jobs", get(connectors_jobs_v1))
+        .route(
+            "/api/v1/connectors/{connector_id}/test",
+            post(connectors_test_v1),
+        )
+        .route(
+            "/api/v1/connectors/{connector_id}/sync",
+            post(connectors_sync_v1),
+        )
+        .route(
+            "/api/v1/connectors/{connector_id}/jobs",
+            get(connectors_jobs_v1),
+        )
         .route("/api/v1/external-refs", get(external_refs_v1))
         .route("/api/v1/admin/audit", get(list_audit_v1))
         .route(
             "/api/v1/admin/quota-overrides",
             post(create_quota_override_v1),
         )
-        .layer(middleware::from_fn_with_state(state.clone(), request_logging))
-        .layer(middleware::from_fn_with_state(state.clone(), sso_middleware))
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            request_logging,
+        ))
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            sso_middleware,
+        ))
         .with_state(state)
 }
 
@@ -233,7 +278,11 @@ pub async fn serve(state: AppState, bind: &str) -> anyhow::Result<()> {
     }
     let listener = tokio::net::TcpListener::bind(address).await?;
     tracing::info!(%address, profile = state.config.profile_name().as_str(), "lkb listening");
-    axum::serve(listener, router(state).into_make_service_with_connect_info::<SocketAddr>()).await?;
+    axum::serve(
+        listener,
+        router(state).into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await?;
     Ok(())
 }
 
@@ -287,7 +336,9 @@ fn cookie_value(headers: &HeaderMap, name: &str) -> Option<String> {
 }
 
 fn host_header(headers: &HeaderMap) -> Option<&str> {
-    headers.get(header::HOST).and_then(|value| value.to_str().ok())
+    headers
+        .get(header::HOST)
+        .and_then(|value| value.to_str().ok())
 }
 
 fn build_cookie(
@@ -320,15 +371,16 @@ fn csrf_token_for(state: &AppState, headers: &HeaderMap) -> (String, Option<Stri
         }
     }
     let token = random_hex(32);
-    let secure = state
-        .config
-        .cookie_secure_for_host(host_header(headers));
+    let secure = state.config.cookie_secure_for_host(host_header(headers));
     let cookie = build_cookie("lkb_csrf", &token, 24 * 3600, false, secure);
     (token, Some(cookie))
 }
 
 fn check_origin(headers: &HeaderMap) -> Result<(), AppError> {
-    let origin = match headers.get(header::ORIGIN).and_then(|value| value.to_str().ok()) {
+    let origin = match headers
+        .get(header::ORIGIN)
+        .and_then(|value| value.to_str().ok())
+    {
         Some(value) => value,
         None => return Ok(()),
     };
@@ -361,7 +413,8 @@ fn verify_csrf(
     let cookie = cookie_value(headers, "lkb_csrf")
         .filter(|value| !value.is_empty())
         .ok_or_else(|| AppError::forbidden("missing CSRF cookie"))?;
-    let form = form_token.filter(|value| !value.is_empty())
+    let form = form_token
+        .filter(|value| !value.is_empty())
         .ok_or_else(|| AppError::forbidden("missing CSRF form token"))?;
     if !constant_time_eq(cookie.as_bytes(), form.as_bytes()) {
         return Err(AppError::forbidden("CSRF token mismatch"));
@@ -393,7 +446,11 @@ async fn authenticate(state: &AppState, headers: &HeaderMap) -> Result<Principal
             groups: Vec::new(),
             allow_all: false,
             kind: crate::governance::PrincipalKind::Human,
-            scope: if user.role.is_admin() { TokenScope::Admin } else { TokenScope::Write },
+            scope: if user.role.is_admin() {
+                TokenScope::Admin
+            } else {
+                TokenScope::Write
+            },
             tenant_role: user.role,
             token_id: None,
         };
@@ -570,11 +627,7 @@ async fn authenticate_v1(
     }
 }
 
-fn require_scope(
-    principal: &Principal,
-    scope: TokenScope,
-    action: &str,
-) -> Result<(), AppError> {
+fn require_scope(principal: &Principal, scope: TokenScope, action: &str) -> Result<(), AppError> {
     let allowed = match scope {
         TokenScope::Read => principal.scope.allows_read(),
         TokenScope::Write => principal.scope.allows_write(),
@@ -673,12 +726,7 @@ fn render_markdown(markdown: &str) -> String {
     ammonia::clean(&html)
 }
 
-fn html_page(
-    title: &str,
-    body: &str,
-    principal: Option<&Principal>,
-    csrf: Option<&str>,
-) -> String {
+fn html_page(title: &str, body: &str, principal: Option<&Principal>, csrf: Option<&str>) -> String {
     let nav = match (principal, csrf) {
         (Some(principal), Some(csrf)) => format!(
             "<nav><span>{}</span> <a href=\"/\">首页</a> \
@@ -764,10 +812,7 @@ async fn health(State(state): State<AppState>) -> Response {
         Ok(()) => {
             let seed = state
                 .store
-                .get_seed_meta(
-                    &state.config.storage.tenant_id,
-                    &state.config.seed.space,
-                )
+                .get_seed_meta(&state.config.storage.tenant_id, &state.config.seed.space)
                 .await
                 .ok()
                 .flatten();
@@ -794,10 +839,7 @@ async fn health(State(state): State<AppState>) -> Response {
     }
 }
 
-async fn authenticate_api(
-    state: &AppState,
-    headers: &HeaderMap,
-) -> Result<Principal, AppError> {
+async fn authenticate_api(state: &AppState, headers: &HeaderMap) -> Result<Principal, AppError> {
     let outcome = if headers.contains_key(header::AUTHORIZATION)
         || state.config.auth.mode == AuthMode::None
     {
@@ -844,10 +886,7 @@ async fn api_search(
 ) -> Result<Json<SearchResponse>, AppError> {
     let principal = authenticate_api(&state, &headers).await?;
     let k = query.k.unwrap_or(10);
-    state
-        .limits
-        .check_query(&query.q, k)
-        .map_err(|err| err)?;
+    state.limits.check_query(&query.q, k)?;
     let _limits = crate::limits::enforce(
         &state.store,
         &state.limits,
@@ -863,8 +902,7 @@ async fn api_search(
         .mode
         .clone()
         .unwrap_or_else(|| state.config.retrieval.mode.clone());
-    let mode = SearchMode::parse(&mode_str)
-        .map_err(|err| AppError::bad_request(err))?;
+    let mode = SearchMode::parse(&mode_str).map_err(AppError::bad_request)?;
     let mut tuning = SearchTuning::from_retrieval(&state.config.retrieval);
     tuning.lang = lang_arg(query.lang.clone());
     tuning.billing_local_ledger = state.config.billing.engine.eq_ignore_ascii_case("local");
@@ -912,8 +950,7 @@ async fn api_ask(
         .mode
         .clone()
         .unwrap_or_else(|| state.config.retrieval.mode.clone());
-    let mode = SearchMode::parse(&mode_str)
-        .map_err(|err| AppError::bad_request(err))?;
+    let mode = SearchMode::parse(&mode_str).map_err(AppError::bad_request)?;
     let mut tuning = SearchTuning::from_retrieval(&state.config.retrieval);
     tuning.lang = lang_arg(request.lang.clone());
     tuning.billing_local_ledger = state.config.billing.engine.eq_ignore_ascii_case("local");
@@ -951,7 +988,11 @@ fn login_rate_key(headers: &HeaderMap, username: &str) -> String {
         .and_then(|value| value.split(',').next())
         .map(str::trim)
         .filter(|value| !value.is_empty())
-        .or_else(|| headers.get("x-real-ip").and_then(|value| value.to_str().ok()))
+        .or_else(|| {
+            headers
+                .get("x-real-ip")
+                .and_then(|value| value.to_str().ok())
+        })
         .unwrap_or("local");
     format!("{ip}|{username}")
 }
@@ -1081,9 +1122,7 @@ async fn login_submit(
         })
         .await?;
 
-    let secure = state
-        .config
-        .cookie_secure_for_host(host_header(&headers));
+    let secure = state.config.cookie_secure_for_host(host_header(&headers));
     let cookie = build_cookie(
         &state.config.auth.cookie_name,
         &raw_session,
@@ -1110,16 +1149,8 @@ async fn logout(
     if let Some(hash) = session_hash(&headers, &state) {
         state.store.delete_session(&hash).await?;
     }
-    let secure = state
-        .config
-        .cookie_secure_for_host(host_header(&headers));
-    let cookie = build_cookie(
-        &state.config.auth.cookie_name,
-        "",
-        0,
-        true,
-        secure,
-    );
+    let secure = state.config.cookie_secure_for_host(host_header(&headers));
+    let cookie = build_cookie(&state.config.auth.cookie_name, "", 0, true, secure);
     let mut response = Redirect::to("/login").into_response();
     append_set_cookie(&mut response, cookie);
     Ok(response)
@@ -1274,7 +1305,11 @@ async fn page_edit(
             view.revision.markdown.clone(),
             view.page.lang.clone(),
         ),
-        None => (slug.clone(), String::new(), lang.unwrap_or_else(|| "zh".to_string())),
+        None => (
+            slug.clone(),
+            String::new(),
+            lang.unwrap_or_else(|| "zh".to_string()),
+        ),
     };
     let body = format!(
         "<form method=\"post\" action=\"/w/{}/{}\">\
@@ -1335,9 +1370,7 @@ async fn page_history(
         .get_page(&policy, &space, &slug, lang.as_deref())
         .await?
         .ok_or_else(|| AppError::not_found("page not found"))?;
-    let history_lang = lang
-        .clone()
-        .unwrap_or_else(|| view.page.lang.clone());
+    let history_lang = lang.clone().unwrap_or_else(|| view.page.lang.clone());
     let revisions = state
         .store
         .list_revisions(
@@ -1467,8 +1500,9 @@ async fn page_save(
         ));
     }
     let acl = match &existing {
-        Some(view) => Acl::from_json(&view.page.acl_json)
-            .unwrap_or_else(|_| page_acl(&state, &principal)),
+        Some(view) => {
+            Acl::from_json(&view.page.acl_json).unwrap_or_else(|_| page_acl(&state, &principal))
+        }
         None => page_acl(&state, &principal),
     };
     if state
@@ -1552,7 +1586,7 @@ async fn page_save(
     };
     let drafts = chunker::chunk_text(&form.markdown, chunker::DEFAULT_CHUNK_CHARS);
     let quota_delta = crate::quota::QuotaDelta {
-        source_bytes: form.markdown.as_bytes().len() as i64,
+        source_bytes: form.markdown.len() as i64,
         index_bytes: drafts.iter().map(|draft| draft.text.len() as i64).sum(),
         history_bytes: 0,
         documents: 1,
@@ -1569,12 +1603,14 @@ async fn page_save(
     if let Err(err) = index_wiki_document(
         &state,
         &principal,
-        &space,
-        &slug,
-        &page_lang,
-        &form.title,
-        &form.markdown,
-        &acl,
+        WikiIndexInput {
+            space: &space,
+            slug: &slug,
+            lang: &page_lang,
+            title: &form.title,
+            markdown: &form.markdown,
+            acl: &acl,
+        },
     )
     .await
     {
@@ -1610,19 +1646,30 @@ fn validate_slug(slug: &str) -> Result<(), AppError> {
     Ok(())
 }
 
+struct WikiIndexInput<'a> {
+    space: &'a str,
+    slug: &'a str,
+    lang: &'a str,
+    title: &'a str,
+    markdown: &'a str,
+    acl: &'a Acl,
+}
+
 async fn index_wiki_document(
     state: &AppState,
     principal: &Principal,
-    space: &str,
-    slug: &str,
-    lang: &str,
-    title: &str,
-    markdown: &str,
-    acl: &Acl,
+    input: WikiIndexInput<'_>,
 ) -> Result<(), AppError> {
+    let WikiIndexInput {
+        space,
+        slug,
+        lang,
+        title,
+        markdown,
+        acl,
+    } = input;
     let relative = format!("wiki/{space}/{lang}/{slug}.md");
-    let canonical = doc_id::canonical_relative_path(&relative)
-        .map_err(|err| AppError::bad_request(err))?;
+    let canonical = doc_id::canonical_relative_path(&relative).map_err(AppError::bad_request)?;
     let content_hash = sha256_hex(markdown.as_bytes());
     let doc_id = doc_id::derive_doc_id(&canonical, &content_hash);
     let now = now_rfc3339();
@@ -1715,7 +1762,6 @@ async fn index_wiki_document(
     Ok(())
 }
 
-
 fn ip_hash(headers: &HeaderMap) -> Option<String> {
     let ip = headers
         .get("x-forwarded-for")
@@ -1770,11 +1816,7 @@ async fn metrics_handler() -> Response {
         .into_response()
 }
 
-async fn request_logging(
-    State(state): State<AppState>,
-    request: Request,
-    next: Next,
-) -> Response {
+async fn request_logging(State(state): State<AppState>, request: Request, next: Next) -> Response {
     let request_id = request
         .headers()
         .get("x-request-id")
@@ -1856,10 +1898,8 @@ async fn request_logging(
             return response;
         }
     }
-    let mut response = crate::i18n::with_locale(locale.clone(), async move {
-        next.run(request).await
-    })
-    .await;
+    let mut response =
+        crate::i18n::with_locale(locale.clone(), async move { next.run(request).await }).await;
     crate::logging::concurrency_leave();
     let status = response.status().as_u16();
     let error_code = response
@@ -1897,7 +1937,9 @@ async fn request_logging(
         response.headers_mut().insert("x-request-id", value);
     }
     if let Ok(value) = axum::http::HeaderValue::from_str(&locale) {
-        response.headers_mut().insert(header::CONTENT_LANGUAGE, value);
+        response
+            .headers_mut()
+            .insert(header::CONTENT_LANGUAGE, value);
     }
     response
 }
@@ -2150,7 +2192,8 @@ async fn list_spaces_v1(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> Result<Json<Value>, AppError> {
-    let (principal, _, _limits) = v1_auth(&state, &headers, TokenScope::Read, "space.list", None).await?;
+    let (principal, _, _limits) =
+        v1_auth(&state, &headers, TokenScope::Read, "space.list", None).await?;
     let mut out = Vec::new();
     for space in state.store.list_spaces(&principal.tenant_id).await? {
         if space.status == "deleted" {
@@ -2168,9 +2211,31 @@ async fn list_spaces_v1(
     Ok(Json(json!({"spaces": out})))
 }
 
-async fn audit_admin_write(state: &AppState, principal: &Principal, action: &str, target_type: &str, target_id: impl std::fmt::Display) {
+async fn audit_admin_write(
+    state: &AppState,
+    principal: &Principal,
+    action: &str,
+    target_type: &str,
+    target_id: impl std::fmt::Display,
+) {
     let target_id = target_id.to_string();
-    crate::audit::record(&state.store, &principal.tenant_id, None, &principal.principal_id, "user", action, target_type, &target_id, "allow", 200, None, None, None, json!({})).await;
+    crate::audit::record(
+        &state.store,
+        &principal.tenant_id,
+        None,
+        &principal.principal_id,
+        "user",
+        action,
+        target_type,
+        &target_id,
+        "allow",
+        200,
+        None,
+        None,
+        None,
+        json!({}),
+    )
+    .await;
 }
 
 async fn create_space_v1(
@@ -2178,7 +2243,8 @@ async fn create_space_v1(
     headers: HeaderMap,
     Json(request): Json<CreateSpaceRequest>,
 ) -> Result<Response, AppError> {
-    let (principal, session, _limits) = v1_auth(&state, &headers, TokenScope::Write, "space.create", None).await?;
+    let (principal, session, _limits) =
+        v1_auth(&state, &headers, TokenScope::Write, "space.create", None).await?;
     v1_session_write_guard(&state, &headers, session)?;
     if principal.kind == PrincipalKind::Agent {
         return Err(AppError::forbidden("agents cannot create spaces"));
@@ -2190,9 +2256,13 @@ async fn create_space_v1(
     let owner_id = request
         .owner_id
         .unwrap_or_else(|| principal.principal_id.clone());
-    if !principal.tenant_role.is_admin() && owner_type == "user" && owner_id != principal.principal_id
+    if !principal.tenant_role.is_admin()
+        && owner_type == "user"
+        && owner_id != principal.principal_id
     {
-        return Err(AppError::forbidden("cannot create a space for another user"));
+        return Err(AppError::forbidden(
+            "cannot create a space for another user",
+        ));
     }
     if owner_type == "group" {
         let group = state
@@ -2207,11 +2277,15 @@ async fn create_space_v1(
             .map(|member| member.role == GroupRole::GroupAdmin)
             .unwrap_or(false);
         if !is_admin && !principal.tenant_role.is_admin() {
-            return Err(AppError::forbidden("group_admin required to create a group space"));
+            return Err(AppError::forbidden(
+                "group_admin required to create a group space",
+            ));
         }
     }
     if !principal.tenant_role.is_admin() && !state.config.spaces.allow_user_creation {
-        return Err(AppError::forbidden("self-service space creation is disabled"));
+        return Err(AppError::forbidden(
+            "self-service space creation is disabled",
+        ));
     }
     let space_id = match request.space_id {
         Some(value) => {
@@ -2253,16 +2327,12 @@ async fn create_space_v1(
     );
     space.owner_type = owner_type.clone();
     space.owner_id = owner_id.clone();
-    if owner_type == "user" {
-        space.owner_principal_id = owner_id.clone();
-    } else {
-        space.owner_principal_id = owner_id.clone();
-    }
-    space.visibility = request
-        .visibility
-        .unwrap_or_else(|| "private".to_string());
+    space.owner_principal_id = owner_id.clone();
+    space.visibility = request.visibility.unwrap_or_else(|| "private".to_string());
     if space.visibility != "private" && space.visibility != "internal" {
-        return Err(AppError::bad_request("visibility must be private or internal"));
+        return Err(AppError::bad_request(
+            "visibility must be private or internal",
+        ));
     }
     space.settings = request
         .settings
@@ -2321,7 +2391,14 @@ async fn get_space_v1(
     AxumPath(space_id): AxumPath<String>,
     headers: HeaderMap,
 ) -> Result<Json<Value>, AppError> {
-    let (principal, _, _limits) = v1_auth(&state, &headers, TokenScope::Read, "space.get", Some(&space_id)).await?;
+    let (principal, _, _limits) = v1_auth(
+        &state,
+        &headers,
+        TokenScope::Read,
+        "space.get",
+        Some(&space_id),
+    )
+    .await?;
     let space = state
         .store
         .get_space(&principal.tenant_id, &space_id)
@@ -2354,7 +2431,14 @@ async fn patch_space_v1(
     headers: HeaderMap,
     Json(request): Json<UpdateSpaceRequest>,
 ) -> Result<Json<Value>, AppError> {
-    let (principal, session, _limits) = v1_auth(&state, &headers, TokenScope::Write, "space.update", Some(&space_id)).await?;
+    let (principal, session, _limits) = v1_auth(
+        &state,
+        &headers,
+        TokenScope::Write,
+        "space.update",
+        Some(&space_id),
+    )
+    .await?;
     v1_session_write_guard(&state, &headers, session)?;
     let mut space = state
         .store
@@ -2379,7 +2463,9 @@ async fn patch_space_v1(
     }
     if let Some(visibility) = request.visibility {
         if visibility != "private" && visibility != "internal" {
-            return Err(AppError::bad_request("visibility must be private or internal"));
+            return Err(AppError::bad_request(
+                "visibility must be private or internal",
+            ));
         }
         space.visibility = visibility;
     }
@@ -2405,7 +2491,9 @@ async fn patch_space_v1(
         json!({}),
     )
     .await;
-    Ok(Json(json!({"space": space_json(&space, Some(SpaceRole::SpaceAdmin)), "request_id": request_id})))
+    Ok(Json(
+        json!({"space": space_json(&space, Some(SpaceRole::SpaceAdmin)), "request_id": request_id}),
+    ))
 }
 
 async fn delete_space_v1(
@@ -2413,7 +2501,14 @@ async fn delete_space_v1(
     AxumPath(space_id): AxumPath<String>,
     headers: HeaderMap,
 ) -> Result<Json<Value>, AppError> {
-    let (principal, session, _limits) = v1_auth(&state, &headers, TokenScope::Write, "space.delete", Some(&space_id)).await?;
+    let (principal, session, _limits) = v1_auth(
+        &state,
+        &headers,
+        TokenScope::Write,
+        "space.delete",
+        Some(&space_id),
+    )
+    .await?;
     v1_session_write_guard(&state, &headers, session)?;
     let mut space = state
         .store
@@ -2450,7 +2545,9 @@ async fn delete_space_v1(
         json!({}),
     )
     .await;
-    Ok(Json(json!({"space_id": space_id, "status": "deleted", "request_id": request_id})))
+    Ok(Json(
+        json!({"space_id": space_id, "status": "deleted", "request_id": request_id}),
+    ))
 }
 
 async fn archive_space_v1(
@@ -2458,7 +2555,14 @@ async fn archive_space_v1(
     AxumPath(space_id): AxumPath<String>,
     headers: HeaderMap,
 ) -> Result<Json<Value>, AppError> {
-    let (principal, session, _limits) = v1_auth(&state, &headers, TokenScope::Write, "space.archive", Some(&space_id)).await?;
+    let (principal, session, _limits) = v1_auth(
+        &state,
+        &headers,
+        TokenScope::Write,
+        "space.archive",
+        Some(&space_id),
+    )
+    .await?;
     v1_session_write_guard(&state, &headers, session)?;
     let mut space = state
         .store
@@ -2498,7 +2602,9 @@ async fn archive_space_v1(
         json!({}),
     )
     .await;
-    Ok(Json(json!({"space_id": space_id, "status": "archived", "request_id": request_id})))
+    Ok(Json(
+        json!({"space_id": space_id, "status": "archived", "request_id": request_id}),
+    ))
 }
 
 async fn restore_space_v1(
@@ -2506,7 +2612,14 @@ async fn restore_space_v1(
     AxumPath(space_id): AxumPath<String>,
     headers: HeaderMap,
 ) -> Result<Json<Value>, AppError> {
-    let (principal, session, _limits) = v1_auth(&state, &headers, TokenScope::Write, "space.restore", Some(&space_id)).await?;
+    let (principal, session, _limits) = v1_auth(
+        &state,
+        &headers,
+        TokenScope::Write,
+        "space.restore",
+        Some(&space_id),
+    )
+    .await?;
     v1_session_write_guard(&state, &headers, session)?;
     let mut space = state
         .store
@@ -2544,7 +2657,9 @@ async fn restore_space_v1(
         json!({}),
     )
     .await;
-    Ok(Json(json!({"space_id": space_id, "status": "active", "request_id": request_id})))
+    Ok(Json(
+        json!({"space_id": space_id, "status": "active", "request_id": request_id}),
+    ))
 }
 
 async fn transfer_space_v1(
@@ -2553,7 +2668,14 @@ async fn transfer_space_v1(
     headers: HeaderMap,
     Json(request): Json<TransferSpaceRequest>,
 ) -> Result<Json<Value>, AppError> {
-    let (principal, session, _limits) = v1_auth(&state, &headers, TokenScope::Write, "space.transfer", Some(&space_id)).await?;
+    let (principal, session, _limits) = v1_auth(
+        &state,
+        &headers,
+        TokenScope::Write,
+        "space.transfer",
+        Some(&space_id),
+    )
+    .await?;
     v1_session_write_guard(&state, &headers, session)?;
     let mut space = state
         .store
@@ -2584,15 +2706,14 @@ async fn transfer_space_v1(
                 return Err(AppError::bad_request("target user not found"));
             }
         }
-        "group" => {
+        "group"
             if state
                 .store
                 .get_group(&principal.tenant_id, &request.owner_id)
                 .await?
-                .is_none()
-            {
-                return Err(AppError::bad_request("target group not found"));
-            }
+                .is_none() =>
+        {
+            return Err(AppError::bad_request("target group not found"));
         }
         _ => {}
     }
@@ -2647,7 +2768,9 @@ async fn transfer_space_v1(
         json!({"from_type": old_type, "from_id": old_id, "to_type": request.owner_type, "to_id": request.owner_id}),
     )
     .await;
-    Ok(Json(json!({"space": space_json(&space, Some(SpaceRole::SpaceOwner)), "request_id": request_id})))
+    Ok(Json(
+        json!({"space": space_json(&space, Some(SpaceRole::SpaceOwner)), "request_id": request_id}),
+    ))
 }
 
 async fn space_usage_v1(
@@ -2655,7 +2778,14 @@ async fn space_usage_v1(
     AxumPath(space_id): AxumPath<String>,
     headers: HeaderMap,
 ) -> Result<Json<Value>, AppError> {
-    let (principal, _, _limits) = v1_auth(&state, &headers, TokenScope::Read, "space.usage", Some(&space_id)).await?;
+    let (principal, _, _limits) = v1_auth(
+        &state,
+        &headers,
+        TokenScope::Read,
+        "space.usage",
+        Some(&space_id),
+    )
+    .await?;
     let space = state
         .store
         .get_space(&principal.tenant_id, &space_id)
@@ -2717,7 +2847,6 @@ fn validate_space_id(value: &str) -> Result<(), AppError> {
     }
     Ok(())
 }
-
 
 fn parse_principal_type(value: &str) -> Result<PrincipalType, AppError> {
     PrincipalType::parse(value).map_err(AppError::bad_request)
@@ -2811,7 +2940,14 @@ async fn list_space_members_v1(
     AxumPath(space_id): AxumPath<String>,
     headers: HeaderMap,
 ) -> Result<Json<Value>, AppError> {
-    let (principal, _, _limits) = v1_auth(&state, &headers, TokenScope::Read, "member.list", Some(&space_id)).await?;
+    let (principal, _, _limits) = v1_auth(
+        &state,
+        &headers,
+        TokenScope::Read,
+        "member.list",
+        Some(&space_id),
+    )
+    .await?;
     require_space_role(
         &state,
         &principal,
@@ -2834,7 +2970,14 @@ async fn add_space_member_v1(
     headers: HeaderMap,
     Json(request): Json<MemberRequest>,
 ) -> Result<Response, AppError> {
-    let (principal, session, _limits) = v1_auth(&state, &headers, TokenScope::Write, "member.add", Some(&space_id)).await?;
+    let (principal, session, _limits) = v1_auth(
+        &state,
+        &headers,
+        TokenScope::Write,
+        "member.add",
+        Some(&space_id),
+    )
+    .await?;
     v1_session_write_guard(&state, &headers, session)?;
     let space = state
         .store
@@ -2853,8 +2996,13 @@ async fn add_space_member_v1(
     require_active_space(&space).await?;
     let principal_type = parse_principal_type(&request.principal_type)?;
     let role = parse_space_role(&request.role)?;
-    validate_member_target(&state, &principal.tenant_id, principal_type, &request.principal_id)
-        .await?;
+    validate_member_target(
+        &state,
+        &principal.tenant_id,
+        principal_type,
+        &request.principal_id,
+    )
+    .await?;
     let existing = state
         .store
         .get_space_member(&space_id, principal_type, &request.principal_id)
@@ -2913,7 +3061,14 @@ async fn patch_space_member_v1(
     headers: HeaderMap,
     Json(request): Json<MemberPatchRequest>,
 ) -> Result<Json<Value>, AppError> {
-    let (principal, session, _limits) = v1_auth(&state, &headers, TokenScope::Write, "member.role", Some(&space_id)).await?;
+    let (principal, session, _limits) = v1_auth(
+        &state,
+        &headers,
+        TokenScope::Write,
+        "member.role",
+        Some(&space_id),
+    )
+    .await?;
     v1_session_write_guard(&state, &headers, session)?;
     require_space_role(
         &state,
@@ -2984,7 +3139,14 @@ async fn remove_space_member_v1(
     AxumPath((space_id, principal_type, principal_id)): AxumPath<(String, String, String)>,
     headers: HeaderMap,
 ) -> Result<Json<Value>, AppError> {
-    let (principal, session, _limits) = v1_auth(&state, &headers, TokenScope::Write, "member.remove", Some(&space_id)).await?;
+    let (principal, session, _limits) = v1_auth(
+        &state,
+        &headers,
+        TokenScope::Write,
+        "member.remove",
+        Some(&space_id),
+    )
+    .await?;
     v1_session_write_guard(&state, &headers, session)?;
     require_space_role(
         &state,
@@ -3033,7 +3195,9 @@ async fn remove_space_member_v1(
         json!({"role": existing.role.as_str()}),
     )
     .await;
-    Ok(Json(json!({"space_id": space_id, "removed": true, "request_id": request_id})))
+    Ok(Json(
+        json!({"space_id": space_id, "removed": true, "request_id": request_id}),
+    ))
 }
 
 #[derive(Debug, Deserialize)]
@@ -3052,7 +3216,14 @@ async fn set_space_quota_v1(
     headers: HeaderMap,
     Json(request): Json<SpaceQuotaRequest>,
 ) -> Result<Json<Value>, AppError> {
-    let (principal, session, _limits) = v1_auth(&state, &headers, TokenScope::Write, "quota.update", Some(&space_id)).await?;
+    let (principal, session, _limits) = v1_auth(
+        &state,
+        &headers,
+        TokenScope::Write,
+        "quota.update",
+        Some(&space_id),
+    )
+    .await?;
     v1_session_write_guard(&state, &headers, session)?;
     require_space_role(
         &state,
@@ -3099,7 +3270,9 @@ async fn set_space_quota_v1(
         json!({"reason": request.reason}),
     )
     .await;
-    Ok(Json(json!({"quota": quota_json(&quota), "request_id": request_id})))
+    Ok(Json(
+        json!({"quota": quota_json(&quota), "request_id": request_id}),
+    ))
 }
 
 #[derive(Debug, Deserialize)]
@@ -3117,8 +3290,8 @@ async fn create_quota_override_v1(
     headers: HeaderMap,
     Json(request): Json<QuotaOverrideRequest>,
 ) -> Result<Json<Value>, AppError> {
-    let (principal, session, _limits) = v1_auth(&state, &headers, TokenScope::Admin, "quota.override", None)
-        .await?;
+    let (principal, session, _limits) =
+        v1_auth(&state, &headers, TokenScope::Admin, "quota.override", None).await?;
     v1_session_write_guard(&state, &headers, session)?;
     if request.reason.trim().is_empty() {
         return Err(AppError::bad_request("reason is required"));
@@ -3175,7 +3348,8 @@ async fn list_groups_v1(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> Result<Json<Value>, AppError> {
-    let (principal, _, _limits) = v1_auth(&state, &headers, TokenScope::Read, "group.list", None).await?;
+    let (principal, _, _limits) =
+        v1_auth(&state, &headers, TokenScope::Read, "group.list", None).await?;
     let groups = if principal.tenant_role.is_admin() {
         state.store.list_groups(&principal.tenant_id).await?
     } else {
@@ -3197,10 +3371,13 @@ async fn create_group_v1(
     headers: HeaderMap,
     Json(request): Json<GroupRequest>,
 ) -> Result<Response, AppError> {
-    let (principal, session, _limits) = v1_auth(&state, &headers, TokenScope::Write, "group.create", None).await?;
+    let (principal, session, _limits) =
+        v1_auth(&state, &headers, TokenScope::Write, "group.create", None).await?;
     v1_session_write_guard(&state, &headers, session)?;
     if !principal.tenant_role.is_admin() && !state.config.groups.allow_user_creation {
-        return Err(AppError::forbidden("self-service group creation is disabled"));
+        return Err(AppError::forbidden(
+            "self-service group creation is disabled",
+        ));
     }
     let name = request
         .name
@@ -3258,7 +3435,8 @@ async fn get_group_v1(
     AxumPath(group_id): AxumPath<String>,
     headers: HeaderMap,
 ) -> Result<Json<Value>, AppError> {
-    let (principal, _, _limits) = v1_auth(&state, &headers, TokenScope::Read, "group.get", None).await?;
+    let (principal, _, _limits) =
+        v1_auth(&state, &headers, TokenScope::Read, "group.get", None).await?;
     let group = require_group_admin(&state, &principal, &group_id, "group.get", &headers).await?;
     Ok(Json(json!({"group": group_json(&group)})))
 }
@@ -3269,7 +3447,8 @@ async fn patch_group_v1(
     headers: HeaderMap,
     Json(request): Json<GroupRequest>,
 ) -> Result<Json<Value>, AppError> {
-    let (principal, session, _limits) = v1_auth(&state, &headers, TokenScope::Write, "group.update", None).await?;
+    let (principal, session, _limits) =
+        v1_auth(&state, &headers, TokenScope::Write, "group.update", None).await?;
     v1_session_write_guard(&state, &headers, session)?;
     let mut group =
         require_group_admin(&state, &principal, &group_id, "group.update", &headers).await?;
@@ -3302,7 +3481,9 @@ async fn patch_group_v1(
         json!({}),
     )
     .await;
-    Ok(Json(json!({"group": group_json(&group), "request_id": request_id})))
+    Ok(Json(
+        json!({"group": group_json(&group), "request_id": request_id}),
+    ))
 }
 
 async fn delete_group_v1(
@@ -3310,7 +3491,8 @@ async fn delete_group_v1(
     AxumPath(group_id): AxumPath<String>,
     headers: HeaderMap,
 ) -> Result<Json<Value>, AppError> {
-    let (principal, session, _limits) = v1_auth(&state, &headers, TokenScope::Write, "group.archive", None).await?;
+    let (principal, session, _limits) =
+        v1_auth(&state, &headers, TokenScope::Write, "group.archive", None).await?;
     v1_session_write_guard(&state, &headers, session)?;
     let mut group =
         require_group_admin(&state, &principal, &group_id, "group.archive", &headers).await?;
@@ -3335,7 +3517,9 @@ async fn delete_group_v1(
         json!({}),
     )
     .await;
-    Ok(Json(json!({"group_id": group_id, "status": "archived", "request_id": request_id})))
+    Ok(Json(
+        json!({"group_id": group_id, "status": "archived", "request_id": request_id}),
+    ))
 }
 
 async fn list_group_members_v1(
@@ -3343,15 +3527,15 @@ async fn list_group_members_v1(
     AxumPath(group_id): AxumPath<String>,
     headers: HeaderMap,
 ) -> Result<Json<Value>, AppError> {
-    let (principal, _, _limits) = v1_auth(&state, &headers, TokenScope::Read, "group.member_list", None).await?;
-    require_group_admin(
+    let (principal, _, _limits) = v1_auth(
         &state,
-        &principal,
-        &group_id,
-        "group.member_list",
         &headers,
+        TokenScope::Read,
+        "group.member_list",
+        None,
     )
     .await?;
+    require_group_admin(&state, &principal, &group_id, "group.member_list", &headers).await?;
     let members = state.store.list_group_members(&group_id).await?;
     Ok(Json(json!({
         "group_id": group_id,
@@ -3373,17 +3557,16 @@ async fn add_group_member_v1(
     headers: HeaderMap,
     Json(request): Json<GroupMemberRequest>,
 ) -> Result<Response, AppError> {
-    let (principal, session, _limits) =
-        v1_auth(&state, &headers, TokenScope::Write, "group.member_add", None).await?;
-    v1_session_write_guard(&state, &headers, session)?;
-    require_group_admin(
+    let (principal, session, _limits) = v1_auth(
         &state,
-        &principal,
-        &group_id,
-        "group.member_add",
         &headers,
+        TokenScope::Write,
+        "group.member_add",
+        None,
     )
     .await?;
+    v1_session_write_guard(&state, &headers, session)?;
+    require_group_admin(&state, &principal, &group_id, "group.member_add", &headers).await?;
     if state
         .store
         .get_user_by_id(&principal.tenant_id, &request.principal_id)
@@ -3444,17 +3627,16 @@ async fn patch_group_member_v1(
     headers: HeaderMap,
     Json(request): Json<GroupMemberPatchRequest>,
 ) -> Result<Json<Value>, AppError> {
-    let (principal, session, _limits) =
-        v1_auth(&state, &headers, TokenScope::Write, "group.member_role", None).await?;
-    v1_session_write_guard(&state, &headers, session)?;
-    require_group_admin(
+    let (principal, session, _limits) = v1_auth(
         &state,
-        &principal,
-        &group_id,
-        "group.member_role",
         &headers,
+        TokenScope::Write,
+        "group.member_role",
+        None,
     )
     .await?;
+    v1_session_write_guard(&state, &headers, session)?;
+    require_group_admin(&state, &principal, &group_id, "group.member_role", &headers).await?;
     let role = parse_group_role(&request.role)?;
     let existing = state
         .store
@@ -3506,8 +3688,14 @@ async fn remove_group_member_v1(
     AxumPath((group_id, principal_id)): AxumPath<(String, String)>,
     headers: HeaderMap,
 ) -> Result<Json<Value>, AppError> {
-    let (principal, session, _limits) =
-        v1_auth(&state, &headers, TokenScope::Write, "group.member_remove", None).await?;
+    let (principal, session, _limits) = v1_auth(
+        &state,
+        &headers,
+        TokenScope::Write,
+        "group.member_remove",
+        None,
+    )
+    .await?;
     v1_session_write_guard(&state, &headers, session)?;
     require_group_admin(
         &state,
@@ -3522,7 +3710,8 @@ async fn remove_group_member_v1(
         .get_group_member(&group_id, &principal_id)
         .await?
         .ok_or_else(|| AppError::not_found("group member not found"))?;
-    if existing.role == GroupRole::GroupAdmin && state.store.count_group_admins(&group_id).await? <= 1
+    if existing.role == GroupRole::GroupAdmin
+        && state.store.count_group_admins(&group_id).await? <= 1
     {
         return Err(AppError::new(
             StatusCode::CONFLICT,
@@ -3552,17 +3741,19 @@ async fn remove_group_member_v1(
         json!({"role": existing.role.as_str()}),
     )
     .await;
-    Ok(Json(json!({"group_id": group_id, "removed": true, "request_id": request_id})))
+    Ok(Json(
+        json!({"group_id": group_id, "removed": true, "request_id": request_id}),
+    ))
 }
-
-
 
 fn sse_response(rx: mpsc::Receiver<Bytes>) -> Result<Response, AppError> {
     Response::builder()
         .status(StatusCode::OK)
         .header(header::CONTENT_TYPE, "text/event-stream")
         .header(header::CACHE_CONTROL, "no-cache")
-        .body(Body::from_stream(ReceiverStream::new(rx).map(|bytes| Ok::<_, std::convert::Infallible>(bytes))))
+        .body(Body::from_stream(
+            ReceiverStream::new(rx).map(Ok::<_, std::convert::Infallible>),
+        ))
         .map_err(|err| AppError::internal(format!("stream response failed: {err}")))
 }
 
@@ -3571,7 +3762,11 @@ fn requested_space(principal: &Principal, requested: Option<&String>) -> Result<
         .cloned()
         .or_else(|| principal.allowed_space_ids.first().cloned())
         .ok_or_else(|| AppError::forbidden("no space available"))?;
-    if !principal.allowed_space_ids.iter().any(|allowed| allowed == &space) {
+    if !principal
+        .allowed_space_ids
+        .iter()
+        .any(|allowed| allowed == &space)
+    {
         return Err(AppError::forbidden("space is outside the principal scope"));
     }
     Ok(space)
@@ -3606,7 +3801,16 @@ async fn search_v1(
     let mut tuning = SearchTuning::from_retrieval(&state.config.retrieval);
     tuning.lang = policy.lang.clone();
     tuning.billing_local_ledger = state.config.billing.engine.eq_ignore_ascii_case("local");
-    let response = search_with_tuning(&state.store, &state.providers, &policy, &text, mode, k, &tuning).await?;
+    let response = search_with_tuning(
+        &state.store,
+        &state.providers,
+        &policy,
+        &text,
+        mode,
+        k,
+        &tuning,
+    )
+    .await?;
     Ok(Json(serde_json::to_value(response).unwrap_or(Value::Null)))
 }
 
@@ -3643,9 +3847,14 @@ async fn answer_v1(
         tuning,
     };
     let mut answer = build_answer_with_ledger(
-        &state.store, &state.providers, &policy, &body.query, &options,
+        &state.store,
+        &state.providers,
+        &policy,
+        &body.query,
+        &options,
         state.config.billing.engine.eq_ignore_ascii_case("local"),
-    ).await?;
+    )
+    .await?;
     if let Some(conversation_id) = &body.conversation_id {
         let conversation = state
             .store
@@ -3653,7 +3862,9 @@ async fn answer_v1(
             .await?
             .ok_or_else(|| AppError::not_found("conversation not found"))?;
         if conversation.owner_id != principal.principal_id || conversation.space_id != space {
-            return Err(AppError::forbidden("conversation belongs to another owner or space"));
+            return Err(AppError::forbidden(
+                "conversation belongs to another owner or space",
+            ));
         }
         answer.conversation_id = Some(conversation_id.clone());
         answer.summary_kind = Some("dynamic".to_string());
@@ -3678,9 +3889,14 @@ async fn answer_stream_v1(
     let (tx, rx) = mpsc::channel::<Bytes>(64);
     let task_tx = tx.clone();
     tokio::spawn(async move {
-        if let Err(err) = run_query(State(state), headers, Json(request), Some(task_tx.clone())).await {
+        if let Err(err) =
+            run_query(State(state), headers, Json(request), Some(task_tx.clone())).await
+        {
             let _ = task_tx
-                .send(sse_frame("error", &json!({"code": err.code(), "message": err.message()})))
+                .send(sse_frame(
+                    "error",
+                    &json!({"code": err.code(), "message": err.message()}),
+                ))
                 .await;
         }
         drop(task_tx);
@@ -3713,14 +3929,25 @@ async fn page_json_v1(
     headers: HeaderMap,
     Query(query): Query<std::collections::HashMap<String, String>>,
 ) -> Result<Json<Value>, AppError> {
-    let (principal, _session, _limits) =
-        v1_auth(&state, &headers, TokenScope::Read, "page.json.read", Some(&space)).await?;
+    let (principal, _session, _limits) = v1_auth(
+        &state,
+        &headers,
+        TokenScope::Read,
+        "page.json.read",
+        Some(&space),
+    )
+    .await?;
     let policy = Policy::new(principal.clone(), None)
         .map_err(AppError::bad_request)?
         .with_lang(query.get("lang").cloned());
     let view = state
         .store
-        .get_page(&policy, &space, &slug, query.get("lang").map(String::as_str))
+        .get_page(
+            &policy,
+            &space,
+            &slug,
+            query.get("lang").map(String::as_str),
+        )
         .await?
         .ok_or_else(|| AppError::not_found("page not found"))?;
     Ok(Json(page_json(&view)))
@@ -3732,11 +3959,22 @@ async fn page_history_v1(
     headers: HeaderMap,
     Query(query): Query<std::collections::HashMap<String, String>>,
 ) -> Result<Json<Value>, AppError> {
-    let (principal, _session, _limits) =
-        v1_auth(&state, &headers, TokenScope::Read, "page.json.history", Some(&space)).await?;
+    let (principal, _session, _limits) = v1_auth(
+        &state,
+        &headers,
+        TokenScope::Read,
+        "page.json.history",
+        Some(&space),
+    )
+    .await?;
     let revisions = state
         .store
-        .list_revisions(&principal.tenant_id, &space, &slug, query.get("lang").map(String::as_str))
+        .list_revisions(
+            &principal.tenant_id,
+            &space,
+            &slug,
+            query.get("lang").map(String::as_str),
+        )
         .await?;
     if query.get("include_markdown").map(String::as_str) == Some("true") {
         let mut items = Vec::new();
@@ -3754,9 +3992,13 @@ async fn page_history_v1(
                 "markdown": full.map(|record| record.markdown),
             }));
         }
-        return Ok(Json(json!({"space": space, "slug": slug, "revisions": items})));
+        return Ok(Json(
+            json!({"space": space, "slug": slug, "revisions": items}),
+        ));
     }
-    Ok(Json(json!({"space": space, "slug": slug, "revisions": revisions})))
+    Ok(Json(
+        json!({"space": space, "slug": slug, "revisions": revisions}),
+    ))
 }
 
 #[derive(Debug, Deserialize)]
@@ -3773,10 +4015,24 @@ async fn page_save_json_v1(
     headers: HeaderMap,
     Json(body): Json<PageJsonBody>,
 ) -> Result<Json<Value>, AppError> {
-    let (principal, session, _limits) =
-        v1_auth(&state, &headers, TokenScope::Write, "page.json.save", Some(&space)).await?;
+    let (principal, session, _limits) = v1_auth(
+        &state,
+        &headers,
+        TokenScope::Write,
+        "page.json.save",
+        Some(&space),
+    )
+    .await?;
     v1_session_write_guard(&state, &headers, session)?;
-    require_space_role(&state, &principal, &space, SpaceRole::Editor, "page.json.save", &headers).await?;
+    require_space_role(
+        &state,
+        &principal,
+        &space,
+        SpaceRole::Editor,
+        "page.json.save",
+        &headers,
+    )
+    .await?;
     validate_slug(&slug)?;
     if body.markdown.trim().is_empty() {
         return Err(AppError::bad_request("markdown must not be empty"));
@@ -3790,8 +4046,13 @@ async fn page_save_json_v1(
     let policy = Policy::new(principal.clone(), None)
         .map_err(AppError::bad_request)?
         .with_lang(Some(lang.clone()));
-    let existing = state.store.get_page(&policy, &space, &slug, Some(&lang)).await?;
-    let current_revision = existing.as_ref().map(|view| view.page.current_revision_id.clone());
+    let existing = state
+        .store
+        .get_page(&policy, &space, &slug, Some(&lang))
+        .await?;
+    let current_revision = existing
+        .as_ref()
+        .map(|view| view.page.current_revision_id.clone());
     if if_match != "*" && current_revision.as_deref() != Some(if_match.as_str()) {
         return Err(AppError::new(
             StatusCode::CONFLICT,
@@ -3803,10 +4064,17 @@ async fn page_save_json_v1(
         return Err(AppError::not_found("page not found"));
     }
     let acl = match &existing {
-        Some(view) => Acl::from_json(&view.page.acl_json).unwrap_or_else(|_| page_acl(&state, &principal)),
+        Some(view) => {
+            Acl::from_json(&view.page.acl_json).unwrap_or_else(|_| page_acl(&state, &principal))
+        }
         None => page_acl(&state, &principal),
     };
-    if state.store.get_space(&principal.tenant_id, &space).await?.is_none() {
+    if state
+        .store
+        .get_space(&principal.tenant_id, &space)
+        .await?
+        .is_none()
+    {
         state
             .store
             .ensure_space(&crate::store::SpaceRecord::new(
@@ -3821,8 +4089,18 @@ async fn page_save_json_v1(
     }
     let now = now_rfc3339();
     let content_hash = crate::util::sha256_hex(body.markdown.as_bytes());
-    let version = existing.as_ref().map(|view| view.page.version + 1).unwrap_or(1);
-    let revision_id = crate::ingest::doc_id::derive_revision_id(&principal.tenant_id, &space, &slug, &lang, &content_hash, version);
+    let version = existing
+        .as_ref()
+        .map(|view| view.page.version + 1)
+        .unwrap_or(1);
+    let revision_id = crate::ingest::doc_id::derive_revision_id(
+        &principal.tenant_id,
+        &space,
+        &slug,
+        &lang,
+        &content_hash,
+        version,
+    );
     let title = body.title.clone().unwrap_or_else(|| slug.clone());
     let page = crate::store::PageRecord {
         tenant_id: principal.tenant_id.clone(),
@@ -3830,8 +4108,14 @@ async fn page_save_json_v1(
         slug: slug.clone(),
         lang: lang.clone(),
         title: title.clone(),
-        summary: body.summary.clone().unwrap_or_else(|| body.markdown.chars().take(200).collect()),
-        order_index: existing.as_ref().map(|view| view.page.order_index).unwrap_or(0),
+        summary: body
+            .summary
+            .clone()
+            .unwrap_or_else(|| body.markdown.chars().take(200).collect()),
+        order_index: existing
+            .as_ref()
+            .map(|view| view.page.order_index)
+            .unwrap_or(0),
         current_revision_id: revision_id.clone(),
         content_hash: content_hash.clone(),
         acl_json: acl.to_json(),
@@ -3840,7 +4124,10 @@ async fn page_save_json_v1(
         valid_to: None,
         version,
         superseded_by: None,
-        created_at: existing.as_ref().map(|view| view.page.created_at.clone()).unwrap_or_else(|| now.clone()),
+        created_at: existing
+            .as_ref()
+            .map(|view| view.page.created_at.clone())
+            .unwrap_or_else(|| now.clone()),
         updated_at: now.clone(),
     };
     let revision = crate::store::RevisionRecord {
@@ -3870,7 +4157,7 @@ async fn page_save_json_v1(
         .ok_or_else(|| AppError::not_found("space not found"))?;
     let drafts = chunker::chunk_text(&body.markdown, chunker::DEFAULT_CHUNK_CHARS);
     let quota_delta = crate::quota::QuotaDelta {
-        source_bytes: body.markdown.as_bytes().len() as i64,
+        source_bytes: body.markdown.len() as i64,
         index_bytes: drafts.iter().map(|draft| draft.text.len() as i64).sum(),
         history_bytes: 0,
         documents: 1,
@@ -3885,8 +4172,19 @@ async fn page_save_json_v1(
         return Err(err.into());
     }
     if let Err(err) = index_wiki_document(
-        &state, &principal, &space, &slug, &lang, &page.title, &body.markdown, &acl,
-    ).await {
+        &state,
+        &principal,
+        WikiIndexInput {
+            space: &space,
+            slug: &slug,
+            lang: &lang,
+            title: &page.title,
+            markdown: &body.markdown,
+            acl: &acl,
+        },
+    )
+    .await
+    {
         crate::quota::release(&state.store, &space_record, &quota_delta).await;
         return Err(err);
     }
@@ -3903,12 +4201,32 @@ async fn page_delete_json_v1(
     headers: HeaderMap,
     Query(query): Query<std::collections::HashMap<String, String>>,
 ) -> Result<Json<Value>, AppError> {
-    let (principal, session, _limits) =
-        v1_auth(&state, &headers, TokenScope::Write, "page.json.delete", Some(&space)).await?;
+    let (principal, session, _limits) = v1_auth(
+        &state,
+        &headers,
+        TokenScope::Write,
+        "page.json.delete",
+        Some(&space),
+    )
+    .await?;
     v1_session_write_guard(&state, &headers, session)?;
-    require_space_role(&state, &principal, &space, SpaceRole::SpaceOwner, "page.json.delete", &headers).await?;
-    let lang = query.get("lang").cloned().unwrap_or_else(|| "zh".to_string());
-    let removed = state.store.archive_page(&principal.tenant_id, &space, &slug, &lang).await?;
+    require_space_role(
+        &state,
+        &principal,
+        &space,
+        SpaceRole::SpaceOwner,
+        "page.json.delete",
+        &headers,
+    )
+    .await?;
+    let lang = query
+        .get("lang")
+        .cloned()
+        .unwrap_or_else(|| "zh".to_string());
+    let removed = state
+        .store
+        .archive_page(&principal.tenant_id, &space, &slug, &lang)
+        .await?;
     if !removed {
         return Err(AppError::not_found("page not found"));
     }
@@ -3920,7 +4238,9 @@ async fn page_delete_json_v1(
         .archive_document_path(&principal.tenant_id, &space, &canonical)
         .await
         .map_err(|err| AppError::internal(format!("index archive failed: {err}")))?;
-    Ok(Json(json!({"space": space, "slug": slug, "archived": true})))
+    Ok(Json(
+        json!({"space": space, "slug": slug, "archived": true}),
+    ))
 }
 
 async fn page_restore_json_v1(
@@ -3929,12 +4249,32 @@ async fn page_restore_json_v1(
     headers: HeaderMap,
     Query(query): Query<std::collections::HashMap<String, String>>,
 ) -> Result<Json<Value>, AppError> {
-    let (principal, session, _limits) =
-        v1_auth(&state, &headers, TokenScope::Write, "page.json.restore", Some(&space)).await?;
+    let (principal, session, _limits) = v1_auth(
+        &state,
+        &headers,
+        TokenScope::Write,
+        "page.json.restore",
+        Some(&space),
+    )
+    .await?;
     v1_session_write_guard(&state, &headers, session)?;
-    require_space_role(&state, &principal, &space, SpaceRole::SpaceOwner, "page.json.restore", &headers).await?;
-    let lang = query.get("lang").cloned().unwrap_or_else(|| "zh".to_string());
-    let restored = state.store.restore_page(&principal.tenant_id, &space, &slug, &lang).await?;
+    require_space_role(
+        &state,
+        &principal,
+        &space,
+        SpaceRole::SpaceOwner,
+        "page.json.restore",
+        &headers,
+    )
+    .await?;
+    let lang = query
+        .get("lang")
+        .cloned()
+        .unwrap_or_else(|| "zh".to_string());
+    let restored = state
+        .store
+        .restore_page(&principal.tenant_id, &space, &slug, &lang)
+        .await?;
     if !restored {
         return Err(AppError::not_found("archived page not found"));
     }
@@ -3946,9 +4286,10 @@ async fn page_restore_json_v1(
         .restore_document_path(&principal.tenant_id, &space, &canonical)
         .await
         .map_err(|err| AppError::internal(format!("index restore failed: {err}")))?;
-    Ok(Json(json!({"space": space, "slug": slug, "restored": true})))
+    Ok(Json(
+        json!({"space": space, "slug": slug, "restored": true}),
+    ))
 }
-
 
 fn principal_json(principal: &Principal) -> Value {
     json!({
@@ -4013,7 +4354,11 @@ async fn auth_login_v1(
     let header_token = headers
         .get("x-csrf-token")
         .and_then(|value| value.to_str().ok());
-    verify_api_csrf(&state, &headers, body.csrf_token.as_deref().or(header_token))?;
+    verify_api_csrf(
+        &state,
+        &headers,
+        body.csrf_token.as_deref().or(header_token),
+    )?;
     if state.config.auth.mode == AuthMode::None {
         return Err(AppError::forbidden("authentication is disabled"));
     }
@@ -4034,9 +4379,19 @@ async fn auth_login_v1(
         _ => {
             state.limiter.record_failure(&key);
             crate::audit::record(
-                &state.store, &state.config.storage.tenant_id, None, "anonymous", "anonymous",
-                "auth.login", "user", &body.username, "denied", 401, None,
-                client_ip(&headers).as_deref(), user_agent(&headers).as_deref(),
+                &state.store,
+                &state.config.storage.tenant_id,
+                None,
+                "anonymous",
+                "anonymous",
+                "auth.login",
+                "user",
+                &body.username,
+                "denied",
+                401,
+                None,
+                client_ip(&headers).as_deref(),
+                user_agent(&headers).as_deref(),
                 json!({"reason": "invalid_credentials"}),
             )
             .await;
@@ -4051,9 +4406,19 @@ async fn auth_login_v1(
     {
         state.limiter.record_failure(&key);
         crate::audit::record(
-            &state.store, &state.config.storage.tenant_id, None, "anonymous", "anonymous",
-            "auth.login", "user", &body.username, "denied", 401, None,
-            client_ip(&headers).as_deref(), user_agent(&headers).as_deref(),
+            &state.store,
+            &state.config.storage.tenant_id,
+            None,
+            "anonymous",
+            "anonymous",
+            "auth.login",
+            "user",
+            &body.username,
+            "denied",
+            401,
+            None,
+            client_ip(&headers).as_deref(),
+            user_agent(&headers).as_deref(),
             json!({"reason": "invalid_credentials"}),
         )
         .await;
@@ -4084,7 +4449,11 @@ async fn auth_login_v1(
         groups: Vec::new(),
         allow_all: false,
         kind: crate::governance::PrincipalKind::Human,
-        scope: if user.role.is_admin() { TokenScope::Admin } else { TokenScope::Write },
+        scope: if user.role.is_admin() {
+            TokenScope::Admin
+        } else {
+            TokenScope::Write
+        },
         tenant_role: user.role,
         token_id: None,
     };
@@ -4214,8 +4583,14 @@ async fn page_revision_v1(
     AxumPath((space, slug, revision_id)): AxumPath<(String, String, String)>,
     headers: HeaderMap,
 ) -> Result<Json<Value>, AppError> {
-    let (principal, _session, _limits) =
-        v1_auth(&state, &headers, TokenScope::Read, "page.revision.read", Some(&space)).await?;
+    let (principal, _session, _limits) = v1_auth(
+        &state,
+        &headers,
+        TokenScope::Read,
+        "page.revision.read",
+        Some(&space),
+    )
+    .await?;
     let policy = Policy::new(principal.clone(), None).map_err(AppError::bad_request)?;
     state
         .store
@@ -4249,8 +4624,14 @@ async fn restore_conversation_v1(
     AxumPath(conversation_id): AxumPath<String>,
     headers: HeaderMap,
 ) -> Result<Json<Value>, AppError> {
-    let (principal, session, _limits) =
-        v1_auth(&state, &headers, TokenScope::Read, "conversation.restore", None).await?;
+    let (principal, session, _limits) = v1_auth(
+        &state,
+        &headers,
+        TokenScope::Read,
+        "conversation.restore",
+        None,
+    )
+    .await?;
     v1_session_write_guard(&state, &headers, session)?;
     let conversation = state
         .store
@@ -4264,9 +4645,10 @@ async fn restore_conversation_v1(
         .store
         .restore_conversation(&principal.tenant_id, &conversation_id)
         .await?;
-    Ok(Json(json!({"conversation_id": conversation_id, "restored": restored, "status": "active"})))
+    Ok(Json(
+        json!({"conversation_id": conversation_id, "restored": restored, "status": "active"}),
+    ))
 }
-
 
 fn billing_error(err: crate::billing::BillingError) -> AppError {
     AppError::new(err.status(), err.code(), err.to_string())
@@ -4315,7 +4697,10 @@ async fn billing_wallet_v1(
         v1_auth(&state, &headers, TokenScope::Read, "billing.wallet", None).await?;
     require_feature(&state, Feature::Billing)?;
     let billing = local_billing(&state);
-    let wallet = billing.wallet(&principal.tenant_id).await.map_err(billing_error)?;
+    let wallet = billing
+        .wallet(&principal.tenant_id)
+        .await
+        .map_err(billing_error)?;
     let entitlement = billing.entitlement(&principal.tenant_id).await;
     Ok(Json(json!({"wallet": wallet, "entitlement": entitlement})))
 }
@@ -4328,8 +4713,14 @@ async fn billing_ledger_v1(
     let (principal, _session, _limits) =
         v1_auth(&state, &headers, TokenScope::Read, "billing.ledger", None).await?;
     require_feature(&state, Feature::Billing)?;
-    let limit = query.get("limit").and_then(|value| value.parse().ok()).unwrap_or(100);
-    let entries = state.store.billing_list_ledger(&principal.tenant_id, limit).await?;
+    let limit = query
+        .get("limit")
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(100);
+    let entries = state
+        .store
+        .billing_list_ledger(&principal.tenant_id, limit)
+        .await?;
     Ok(Json(json!({"entries": entries})))
 }
 
@@ -4341,8 +4732,14 @@ async fn billing_invoices_v1(
     let (principal, _session, _limits) =
         v1_auth(&state, &headers, TokenScope::Read, "billing.invoices", None).await?;
     require_feature(&state, Feature::Billing)?;
-    let limit = query.get("limit").and_then(|value| value.parse().ok()).unwrap_or(100);
-    let invoices = state.store.billing_list_invoices(&principal.tenant_id, limit).await?;
+    let limit = query
+        .get("limit")
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(100);
+    let invoices = state
+        .store
+        .billing_list_invoices(&principal.tenant_id, limit)
+        .await?;
     Ok(Json(json!({"invoices": invoices})))
 }
 
@@ -4365,11 +4762,15 @@ async fn billing_topup_v1(
     v1_session_write_guard(&state, &headers, session)?;
     require_feature(&state, Feature::Billing)?;
     if !principal.tenant_role.is_admin() {
-        return Err(AppError::forbidden("tenant admin required for manual topups"));
+        return Err(AppError::forbidden(
+            "tenant admin required for manual topups",
+        ));
     }
     let channel = body.channel.clone().unwrap_or_else(|| "manual".to_string());
     if !matches!(channel.as_str(), "manual" | "mock") {
-        return Err(AppError::bad_request("manual topup channel must be manual or mock"));
+        return Err(AppError::bad_request(
+            "manual topup channel must be manual or mock",
+        ));
     }
     let key = body
         .idempotency_key
@@ -4377,15 +4778,34 @@ async fn billing_topup_v1(
         .unwrap_or_else(|| format!("manual:{}", crate::util::random_hex(12)));
     let billing = local_billing(&state);
     let topup = billing
-        .topup(&principal.tenant_id, body.amount_micros, &channel, None, &key)
+        .topup(
+            &principal.tenant_id,
+            body.amount_micros,
+            &channel,
+            None,
+            &key,
+        )
         .await
         .map_err(billing_error)?;
     let settled = billing.settle_topup(&topup).await.map_err(billing_error)?;
-    let wallet = billing.wallet(&principal.tenant_id).await.map_err(billing_error)?;
+    let wallet = billing
+        .wallet(&principal.tenant_id)
+        .await
+        .map_err(billing_error)?;
     crate::audit::record(
-        &state.store, &principal.tenant_id, None, &principal.principal_id, "user",
-        "billing.topup", "topup", &settled.topup_id, "allow", 201, None,
-        client_ip(&headers).as_deref(), user_agent(&headers).as_deref(),
+        &state.store,
+        &principal.tenant_id,
+        None,
+        &principal.principal_id,
+        "user",
+        "billing.topup",
+        "topup",
+        &settled.topup_id,
+        "allow",
+        201,
+        None,
+        client_ip(&headers).as_deref(),
+        user_agent(&headers).as_deref(),
         json!({"amount_micros": body.amount_micros, "channel": channel}),
     )
     .await;
@@ -4407,8 +4827,14 @@ async fn billing_checkout_v2(
     headers: HeaderMap,
     Json(body): Json<CheckoutBody>,
 ) -> Result<Json<Value>, AppError> {
-    let (principal, session, _limits) =
-        v1_auth(&state, &headers, TokenScope::Write, "billing.checkout", None).await?;
+    let (principal, session, _limits) = v1_auth(
+        &state,
+        &headers,
+        TokenScope::Write,
+        "billing.checkout",
+        None,
+    )
+    .await?;
     v1_session_write_guard(&state, &headers, session)?;
     require_feature(&state, Feature::Billing)?;
     ensure_plans(&state).await?;
@@ -4425,15 +4851,19 @@ async fn billing_checkout_v2(
     if amount <= 0 {
         return Err(AppError::bad_request("plan is free; no checkout required"));
     }
-    let provider = crate::payment::provider_for_billing(&state.config.payment, &state.config.billing)
-        .map_err(payment_error)?;
+    let provider =
+        crate::payment::provider_for_billing(&state.config.payment, &state.config.billing)
+            .map_err(payment_error)?;
     let session = provider
         .create_checkout(&crate::payment::CheckoutRequest {
             tenant_id: principal.tenant_id.clone(),
             space_id: None,
             plan: plan.plan_id.clone(),
             amount_minor: amount,
-            currency: body.currency.clone().unwrap_or_else(|| plan.currency.clone()),
+            currency: body
+                .currency
+                .clone()
+                .unwrap_or_else(|| plan.currency.clone()),
         })
         .await
         .map_err(payment_error)?;
@@ -4466,7 +4896,11 @@ async fn billing_webhook_v1(
     body: Bytes,
 ) -> Result<Json<Value>, AppError> {
     if !state.config.billing.enabled {
-        return Err(AppError::new(StatusCode::FORBIDDEN, "billing_not_enabled", "billing is not enabled"));
+        return Err(AppError::new(
+            StatusCode::FORBIDDEN,
+            "billing_not_enabled",
+            "billing is not enabled",
+        ));
     }
     let mut payment_config = state.config.payment.clone();
     payment_config.provider = provider_name.clone();
@@ -4474,16 +4908,31 @@ async fn billing_webhook_v1(
         .map_err(payment_error)?;
     let header_pairs: Vec<(String, String)> = headers
         .iter()
-        .map(|(name, value)| (name.as_str().to_string(), value.to_str().unwrap_or("").to_string()))
+        .map(|(name, value)| {
+            (
+                name.as_str().to_string(),
+                value.to_str().unwrap_or("").to_string(),
+            )
+        })
         .collect();
     let event = provider
-        .verify_webhook(&crate::payment::WebhookRequest { headers: header_pairs, body: body.to_vec() })
+        .verify_webhook(&crate::payment::WebhookRequest {
+            headers: header_pairs,
+            body: body.to_vec(),
+        })
         .await
         .map_err(payment_error)?;
     let payload: Value = serde_json::from_slice(&body).unwrap_or(Value::Null);
-    let record = crate::billing::payment_event_record(&event.provider, &event.event_id, &event.event_type, &payload);
+    let record = crate::billing::payment_event_record(
+        &event.provider,
+        &event.event_id,
+        &event.event_type,
+        &payload,
+    );
     if !state.store.billing_insert_payment_event(&record).await? {
-        return Ok(Json(json!({"received": true, "duplicate": true, "event_id": event.event_id})));
+        return Ok(Json(
+            json!({"received": true, "duplicate": true, "event_id": event.event_id}),
+        ));
     }
     let tenant = event
         .tenant_id
@@ -4501,12 +4950,16 @@ async fn billing_webhook_v1(
             let amount = event.amount_minor.unwrap_or(0);
             let topup = match state.store.billing_get_topup_by_key(&tenant, &key).await? {
                 Some(topup) => topup,
-                None => {
-                    billing
-                        .topup(&tenant, amount, &event.provider, event.provider_ref.as_deref(), &key)
-                        .await
-                        .map_err(billing_error)?
-                }
+                None => billing
+                    .topup(
+                        &tenant,
+                        amount,
+                        &event.provider,
+                        event.provider_ref.as_deref(),
+                        &key,
+                    )
+                    .await
+                    .map_err(billing_error)?,
             };
             billing.settle_topup(&topup).await.map_err(billing_error)?;
             handled = "paid";
@@ -4514,7 +4967,12 @@ async fn billing_webhook_v1(
         "charge.refunded" | "refund.created" => {
             let amount = event.amount_minor.unwrap_or(0);
             billing
-                .reverse_topup_refund(&tenant, amount, &event.event_type, &format!("refund:{}", event.event_id))
+                .reverse_topup_refund(
+                    &tenant,
+                    amount,
+                    &event.event_type,
+                    &format!("refund:{}", event.event_id),
+                )
                 .await
                 .map_err(billing_error)?;
             handled = "refunded";
@@ -4533,7 +4991,6 @@ async fn billing_webhook_v1(
     })))
 }
 
-
 #[derive(Debug, Deserialize)]
 struct SubscribeBody {
     plan_id: String,
@@ -4548,8 +5005,14 @@ async fn billing_subscribe_v1(
     headers: HeaderMap,
     Json(body): Json<SubscribeBody>,
 ) -> Result<Json<Value>, AppError> {
-    let (principal, session, _limits) =
-        v1_auth(&state, &headers, TokenScope::Write, "billing.subscribe", None).await?;
+    let (principal, session, _limits) = v1_auth(
+        &state,
+        &headers,
+        TokenScope::Write,
+        "billing.subscribe",
+        None,
+    )
+    .await?;
     v1_session_write_guard(&state, &headers, session)?;
     require_feature(&state, Feature::Billing)?;
     if !principal.tenant_role.is_admin() {
@@ -4558,7 +5021,15 @@ async fn billing_subscribe_v1(
     ensure_plans(&state).await?;
     let trial_days = body
         .trial_days
-        .or_else(|| body.trial.map(|trial| if trial { state.config.billing.trial_days } else { 0 }))
+        .or_else(|| {
+            body.trial.map(|trial| {
+                if trial {
+                    state.config.billing.trial_days
+                } else {
+                    0
+                }
+            })
+        })
         .unwrap_or(0);
     let billing = local_billing(&state);
     let subscription = billing
@@ -4567,21 +5038,39 @@ async fn billing_subscribe_v1(
         .map_err(billing_error)?;
     let entitlement = billing.entitlement(&principal.tenant_id).await;
     crate::audit::record(
-        &state.store, &principal.tenant_id, None, &principal.principal_id, "user",
-        "billing.subscribe", "subscription", &subscription.subscription_id, "allow", 200, None,
-        client_ip(&headers).as_deref(), user_agent(&headers).as_deref(),
+        &state.store,
+        &principal.tenant_id,
+        None,
+        &principal.principal_id,
+        "user",
+        "billing.subscribe",
+        "subscription",
+        &subscription.subscription_id,
+        "allow",
+        200,
+        None,
+        client_ip(&headers).as_deref(),
+        user_agent(&headers).as_deref(),
         json!({"plan_id": body.plan_id, "trial_days": trial_days}),
     )
     .await;
-    Ok(Json(json!({"subscription": subscription, "entitlement": entitlement})))
+    Ok(Json(
+        json!({"subscription": subscription, "entitlement": entitlement}),
+    ))
 }
 
 async fn billing_subscription_v1(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> Result<Json<Value>, AppError> {
-    let (principal, _session, _limits) =
-        v1_auth(&state, &headers, TokenScope::Read, "billing.subscription", None).await?;
+    let (principal, _session, _limits) = v1_auth(
+        &state,
+        &headers,
+        TokenScope::Read,
+        "billing.subscription",
+        None,
+    )
+    .await?;
     require_feature(&state, Feature::Billing)?;
     let billing = local_billing(&state);
     Ok(Json(json!({
@@ -4600,8 +5089,14 @@ async fn billing_subscription_patch_v1(
     headers: HeaderMap,
     Json(body): Json<TransitionBody>,
 ) -> Result<Json<Value>, AppError> {
-    let (principal, session, _limits) =
-        v1_auth(&state, &headers, TokenScope::Write, "billing.subscription.update", None).await?;
+    let (principal, session, _limits) = v1_auth(
+        &state,
+        &headers,
+        TokenScope::Write,
+        "billing.subscription.update",
+        None,
+    )
+    .await?;
     v1_session_write_guard(&state, &headers, session)?;
     require_feature(&state, Feature::Billing)?;
     if !principal.tenant_role.is_admin() {
@@ -4615,26 +5110,45 @@ async fn billing_subscription_patch_v1(
         .map_err(billing_error)?;
     let entitlement = billing.entitlement(&principal.tenant_id).await;
     crate::audit::record(
-        &state.store, &principal.tenant_id, None, &principal.principal_id, "user",
-        "billing.subscription.transition", "subscription", &subscription.subscription_id, "allow", 200, None,
-        client_ip(&headers).as_deref(), user_agent(&headers).as_deref(),
+        &state.store,
+        &principal.tenant_id,
+        None,
+        &principal.principal_id,
+        "user",
+        "billing.subscription.transition",
+        "subscription",
+        &subscription.subscription_id,
+        "allow",
+        200,
+        None,
+        client_ip(&headers).as_deref(),
+        user_agent(&headers).as_deref(),
         json!({"status": status.as_str()}),
     )
     .await;
-    Ok(Json(json!({"subscription": subscription, "entitlement": entitlement})))
+    Ok(Json(
+        json!({"subscription": subscription, "entitlement": entitlement}),
+    ))
 }
 
 async fn billing_entitlement_v1(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> Result<Json<Value>, AppError> {
-    let (principal, _session, _limits) =
-        v1_auth(&state, &headers, TokenScope::Read, "billing.entitlement", None).await?;
+    let (principal, _session, _limits) = v1_auth(
+        &state,
+        &headers,
+        TokenScope::Read,
+        "billing.entitlement",
+        None,
+    )
+    .await?;
     require_feature(&state, Feature::Billing)?;
     let billing = local_billing(&state);
-    Ok(Json(json!({"entitlement": billing.entitlement(&principal.tenant_id).await})))
+    Ok(Json(
+        json!({"entitlement": billing.entitlement(&principal.tenant_id).await}),
+    ))
 }
-
 
 fn redact_connector_config(value: &Value) -> Value {
     match value {
@@ -4647,7 +5161,14 @@ fn redact_connector_config(value: &Value) -> Value {
                         || lowered.contains("api_key")
                         || lowered.contains("password")
                         || lowered.contains("authorization");
-                    (key.clone(), if secret { json!("***") } else { redact_connector_config(value) })
+                    (
+                        key.clone(),
+                        if secret {
+                            json!("***")
+                        } else {
+                            redact_connector_config(value)
+                        },
+                    )
                 })
                 .collect(),
         ),
@@ -4703,7 +5224,9 @@ async fn connectors_v1(
     let (principal, _guard) = admin_auth(&state, &headers, "connectors.list").await?;
     require_feature(&state, Feature::Connectors)?;
     let connectors = state.store.connector_list(&principal.tenant_id).await?;
-    Ok(Json(json!({"connectors": connectors.iter().map(connector_json).collect::<Vec<_>>()})))
+    Ok(Json(
+        json!({"connectors": connectors.iter().map(connector_json).collect::<Vec<_>>()}),
+    ))
 }
 
 async fn connectors_create_v1(
@@ -4714,7 +5237,10 @@ async fn connectors_create_v1(
     let (principal, _guard) = admin_auth(&state, &headers, "connectors.create").await?;
     require_feature(&state, Feature::Connectors)?;
     if !crate::connectors::SUPPORTED_KINDS.contains(&body.kind.as_str()) {
-        return Err(AppError::bad_request(format!("unsupported connector kind {:?}", body.kind)));
+        return Err(AppError::bad_request(format!(
+            "unsupported connector kind {:?}",
+            body.kind
+        )));
     }
     state
         .store
@@ -4730,7 +5256,9 @@ async fn connectors_create_v1(
         .map_err(|err| AppError::bad_request(format!("config must be valid JSON: {err}")))?;
     let now = now_rfc3339();
     let record = crate::store::ConnectorRecord {
-        connector_id: body.connector_id.unwrap_or_else(|| format!("conn_{}", random_hex(10))),
+        connector_id: body
+            .connector_id
+            .unwrap_or_else(|| format!("conn_{}", random_hex(10))),
         tenant_id: principal.tenant_id.clone(),
         space_id: body.space_id,
         kind: body.kind,
@@ -4742,12 +5270,23 @@ async fn connectors_create_v1(
         created_at: now.clone(),
         updated_at: now,
     };
-    crate::connectors::from_record(&record).map_err(|err| AppError::bad_request(err.to_string()))?;
+    crate::connectors::from_record(&record)
+        .map_err(|err| AppError::bad_request(err.to_string()))?;
     state.store.connector_upsert(&record).await?;
     crate::audit::record(
-        &state.store, &principal.tenant_id, Some(&record.space_id), &principal.principal_id, "user",
-        "connector.create", "connector", &record.connector_id, "allow", 201, None,
-        client_ip(&headers).as_deref(), user_agent(&headers).as_deref(),
+        &state.store,
+        &principal.tenant_id,
+        Some(&record.space_id),
+        &principal.principal_id,
+        "user",
+        "connector.create",
+        "connector",
+        &record.connector_id,
+        "allow",
+        201,
+        None,
+        client_ip(&headers).as_deref(),
+        user_agent(&headers).as_deref(),
         json!({"kind": record.kind, "name": record.name}),
     )
     .await;
@@ -4787,9 +5326,17 @@ async fn connectors_patch_v1(
         };
     }
     record.updated_at = now_rfc3339();
-    crate::connectors::from_record(&record).map_err(|err| AppError::bad_request(err.to_string()))?;
+    crate::connectors::from_record(&record)
+        .map_err(|err| AppError::bad_request(err.to_string()))?;
     state.store.connector_upsert(&record).await?;
-    audit_admin_write(&state, &principal, "connector.update", "connector", &record.connector_id).await;
+    audit_admin_write(
+        &state,
+        &principal,
+        "connector.update",
+        "connector",
+        &record.connector_id,
+    )
+    .await;
     Ok(Json(json!({"connector": connector_json(&record)})))
 }
 
@@ -4800,11 +5347,23 @@ async fn connectors_delete_v1(
 ) -> Result<Json<Value>, AppError> {
     let (principal, _guard) = admin_auth(&state, &headers, "connectors.delete").await?;
     require_feature(&state, Feature::Connectors)?;
-    let removed = state.store.connector_delete(&principal.tenant_id, &connector_id).await?;
+    let removed = state
+        .store
+        .connector_delete(&principal.tenant_id, &connector_id)
+        .await?;
     if removed {
-        audit_admin_write(&state, &principal, "connector.delete", "connector", &connector_id).await;
+        audit_admin_write(
+            &state,
+            &principal,
+            "connector.delete",
+            "connector",
+            &connector_id,
+        )
+        .await;
     }
-    Ok(Json(json!({"connector_id": connector_id, "removed": removed})))
+    Ok(Json(
+        json!({"connector_id": connector_id, "removed": removed}),
+    ))
 }
 
 async fn connectors_test_v1(
@@ -4822,12 +5381,18 @@ async fn connectors_test_v1(
     let connector = match crate::connectors::from_record(&record) {
         Ok(connector) => connector,
         Err(err) => {
-            return Ok(Json(json!({"connector_id": connector_id, "ok": false, "status": "not_configured", "code": err.code(), "message": err.to_string()})));
+            return Ok(Json(
+                json!({"connector_id": connector_id, "ok": false, "status": "not_configured", "code": err.code(), "message": err.to_string()}),
+            ));
         }
     };
     match connector.test().await {
-        Ok(details) => Ok(Json(json!({"connector_id": connector_id, "ok": true, "status": "ok", "details": details}))),
-        Err(err) => Ok(Json(json!({"connector_id": connector_id, "ok": false, "status": "not_configured", "code": err.code(), "message": err.to_string()}))),
+        Ok(details) => Ok(Json(
+            json!({"connector_id": connector_id, "ok": true, "status": "ok", "details": details}),
+        )),
+        Err(err) => Ok(Json(
+            json!({"connector_id": connector_id, "ok": false, "status": "not_configured", "code": err.code(), "message": err.to_string()}),
+        )),
     }
 }
 
@@ -4855,9 +5420,19 @@ async fn connectors_sync_v1(
     };
     state.store.connector_job_create(&job).await?;
     crate::audit::record(
-        &state.store, &principal.tenant_id, Some(&record.space_id), &principal.principal_id, "user",
-        "connector.sync", "connector", &record.connector_id, "allow", 202, None,
-        client_ip(&headers).as_deref(), user_agent(&headers).as_deref(),
+        &state.store,
+        &principal.tenant_id,
+        Some(&record.space_id),
+        &principal.principal_id,
+        "user",
+        "connector.sync",
+        "connector",
+        &record.connector_id,
+        "allow",
+        202,
+        None,
+        client_ip(&headers).as_deref(),
+        user_agent(&headers).as_deref(),
         json!({"job_id": job.job_id}),
     )
     .await;
@@ -4868,7 +5443,11 @@ async fn connectors_sync_v1(
     tokio::spawn(async move {
         let _ = crate::connectors::run_sync(store, config, providers, record, job).await;
     });
-    Ok((StatusCode::ACCEPTED, Json(json!({"job_id": job_id, "status": "queued"}))).into_response())
+    Ok((
+        StatusCode::ACCEPTED,
+        Json(json!({"job_id": job_id, "status": "queued"})),
+    )
+        .into_response())
 }
 
 async fn connectors_jobs_v1(
@@ -4884,7 +5463,10 @@ async fn connectors_jobs_v1(
         .connector_get(&principal.tenant_id, &connector_id)
         .await?
         .ok_or_else(|| AppError::not_found("connector not found"))?;
-    let limit = query.get("limit").and_then(|value| value.parse().ok()).unwrap_or(50);
+    let limit = query
+        .get("limit")
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(50);
     let jobs = state.store.connector_job_list(&connector_id, limit).await?;
     Ok(Json(json!({"jobs": jobs})))
 }
@@ -4896,7 +5478,10 @@ async fn external_refs_v1(
 ) -> Result<Json<Value>, AppError> {
     let (principal, _guard) = admin_auth(&state, &headers, "external_refs.list").await?;
     require_feature(&state, Feature::Connectors)?;
-    let limit = query.get("limit").and_then(|value| value.parse().ok()).unwrap_or(200);
+    let limit = query
+        .get("limit")
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(200);
     let refs = state
         .store
         .external_ref_list(
@@ -4908,7 +5493,6 @@ async fn external_refs_v1(
         .await?;
     Ok(Json(json!({"external_refs": refs})))
 }
-
 
 pub(crate) fn parse_trusted_proxy(value: &str) -> Result<(std::net::IpAddr, u8), String> {
     let value = value.trim();
@@ -4934,16 +5518,26 @@ pub(crate) fn parse_trusted_proxy(value: &str) -> Result<(std::net::IpAddr, u8),
 
 pub(crate) fn ip_in_trusted_proxies(ip: std::net::IpAddr, proxies: &[String]) -> bool {
     proxies.iter().any(|proxy| {
-        let Ok((network, prefix)) = parse_trusted_proxy(proxy) else { return false };
+        let Ok((network, prefix)) = parse_trusted_proxy(proxy) else {
+            return false;
+        };
         match (ip, network) {
             (std::net::IpAddr::V4(ip), std::net::IpAddr::V4(network)) => {
-                let mask = if prefix == 0 { 0 } else { u32::MAX << (32 - prefix) };
+                let mask = if prefix == 0 {
+                    0
+                } else {
+                    u32::MAX << (32 - prefix)
+                };
                 (u32::from(ip) & mask) == (u32::from(network) & mask)
             }
             (std::net::IpAddr::V6(ip), std::net::IpAddr::V6(network)) => {
                 let ip = u128::from(ip);
                 let network = u128::from(network);
-                let mask = if prefix == 0 { 0 } else { u128::MAX << (128 - prefix) };
+                let mask = if prefix == 0 {
+                    0
+                } else {
+                    u128::MAX << (128 - prefix)
+                };
                 (ip & mask) == (network & mask)
             }
             _ => false,
@@ -4975,7 +5569,10 @@ fn sso_mapped_role(
                     UserRole::Admin => 2,
                     UserRole::User => 1,
                 };
-                if best.map(|current| rank(role) > rank(current)).unwrap_or(true) {
+                if best
+                    .map(|current| rank(role) > rank(current))
+                    .unwrap_or(true)
+                {
                     best = Some(role);
                 }
             }
@@ -4984,7 +5581,11 @@ fn sso_mapped_role(
     best
 }
 
-async fn sso_middleware(State(state): State<AppState>, mut request: Request, next: Next) -> Response {
+async fn sso_middleware(
+    State(state): State<AppState>,
+    mut request: Request,
+    next: Next,
+) -> Response {
     // Never accept a client-supplied copy of the internal identity marker.
     request.headers_mut().remove("x-lkb-sso-authenticated");
     if !state.config.sso.mode.eq_ignore_ascii_case("trusted_header") {
@@ -5007,19 +5608,42 @@ async fn sso_middleware(State(state): State<AppState>, mut request: Request, nex
     let ip_hint = client_ip(request.headers());
     if !trusted {
         crate::audit::record(
-            &state.store, &tenant, None, "anonymous", "anonymous", "sso.denied", "user",
-            username_header.as_deref().unwrap_or("unknown"), "denied", 401, None,
-            ip_hint.as_deref(), None, json!({"reason": "untrusted_peer"}),
+            &state.store,
+            &tenant,
+            None,
+            "anonymous",
+            "anonymous",
+            "sso.denied",
+            "user",
+            username_header.as_deref().unwrap_or("unknown"),
+            "denied",
+            401,
+            None,
+            ip_hint.as_deref(),
+            None,
+            json!({"reason": "untrusted_peer"}),
         )
         .await;
-        return AppError::unauthorized("SSO headers are only accepted from a trusted proxy").into_response();
+        return AppError::unauthorized("SSO headers are only accepted from a trusted proxy")
+            .into_response();
     }
     let username = match username_header.as_deref() {
         Some(value) if !value.trim().is_empty() => value.trim().to_string(),
         _ => {
             crate::audit::record(
-                &state.store, &tenant, None, "anonymous", "anonymous", "sso.denied", "user",
-                "unknown", "denied", 401, None, ip_hint.as_deref(), None,
+                &state.store,
+                &tenant,
+                None,
+                "anonymous",
+                "anonymous",
+                "sso.denied",
+                "user",
+                "unknown",
+                "denied",
+                401,
+                None,
+                ip_hint.as_deref(),
+                None,
                 json!({"reason": "missing_user"}),
             )
             .await;
@@ -5028,20 +5652,36 @@ async fn sso_middleware(State(state): State<AppState>, mut request: Request, nex
     };
     let email = email_header;
     if !state.config.sso.allowed_email_domains.is_empty() {
-        let domain = email
-            .as_deref()
-            .and_then(|email| email.rsplit_once('@').map(|(_, domain)| domain.to_ascii_lowercase()));
+        let domain = email.as_deref().and_then(|email| {
+            email
+                .rsplit_once('@')
+                .map(|(_, domain)| domain.to_ascii_lowercase())
+        });
         let allowed = domain
             .map(|domain| {
-                state.config.sso.allowed_email_domains.iter().any(|allowed| {
-                    allowed.trim().eq_ignore_ascii_case(domain.as_str())
-                })
+                state
+                    .config
+                    .sso
+                    .allowed_email_domains
+                    .iter()
+                    .any(|allowed| allowed.trim().eq_ignore_ascii_case(domain.as_str()))
             })
             .unwrap_or(false);
         if !allowed {
             crate::audit::record(
-                &state.store, &tenant, None, "anonymous", "anonymous", "sso.denied", "user",
-                &username, "denied", 403, None, ip_hint.as_deref(), None,
+                &state.store,
+                &tenant,
+                None,
+                "anonymous",
+                "anonymous",
+                "sso.denied",
+                "user",
+                &username,
+                "denied",
+                403,
+                None,
+                ip_hint.as_deref(),
+                None,
                 json!({"reason": "email_domain_not_allowed"}),
             )
             .await;
@@ -5050,30 +5690,64 @@ async fn sso_middleware(State(state): State<AppState>, mut request: Request, nex
     }
     let groups: Vec<String> = groups_header
         .as_deref()
-        .map(|value| value.split(',').map(str::trim).filter(|item| !item.is_empty()).map(str::to_string).collect())
+        .map(|value| {
+            value
+                .split(',')
+                .map(str::trim)
+                .filter(|item| !item.is_empty())
+                .map(str::to_string)
+                .collect()
+        })
         .unwrap_or_default();
     let mut created = false;
     let mut user = None;
     if let Some(email) = email.as_deref() {
-        user = state.store.get_user_by_email(&tenant, email).await.ok().flatten();
+        user = state
+            .store
+            .get_user_by_email(&tenant, email)
+            .await
+            .ok()
+            .flatten();
     }
     if user.is_none() {
-        user = state.store.get_user_by_external_id(&tenant, "sso", &username).await.ok().flatten();
+        user = state
+            .store
+            .get_user_by_external_id(&tenant, "sso", &username)
+            .await
+            .ok()
+            .flatten();
     }
     if user.is_none() {
-        user = state.store.get_user(&tenant, &username).await.ok().flatten();
+        user = state
+            .store
+            .get_user(&tenant, &username)
+            .await
+            .ok()
+            .flatten();
     }
     let mut user = match user {
         Some(user) => {
             if let (Some(existing), Some(incoming)) = (user.email.as_deref(), email.as_deref()) {
                 if !existing.eq_ignore_ascii_case(incoming) {
                     crate::audit::record(
-                        &state.store, &tenant, None, "anonymous", "anonymous", "sso.denied", "user",
-                        &username, "denied", 403, None, ip_hint.as_deref(), None,
+                        &state.store,
+                        &tenant,
+                        None,
+                        "anonymous",
+                        "anonymous",
+                        "sso.denied",
+                        "user",
+                        &username,
+                        "denied",
+                        403,
+                        None,
+                        ip_hint.as_deref(),
+                        None,
                         json!({"reason": "email_conflict"}),
                     )
                     .await;
-                    return AppError::forbidden("SSO identity conflicts with an existing user").into_response();
+                    return AppError::forbidden("SSO identity conflicts with an existing user")
+                        .into_response();
                 }
             }
             user
@@ -5081,8 +5755,19 @@ async fn sso_middleware(State(state): State<AppState>, mut request: Request, nex
         None => {
             if !state.config.sso.auto_provision {
                 crate::audit::record(
-                    &state.store, &tenant, None, "anonymous", "anonymous", "sso.denied", "user",
-                    &username, "denied", 401, None, ip_hint.as_deref(), None,
+                    &state.store,
+                    &tenant,
+                    None,
+                    "anonymous",
+                    "anonymous",
+                    "sso.denied",
+                    "user",
+                    &username,
+                    "denied",
+                    401,
+                    None,
+                    ip_hint.as_deref(),
+                    None,
                     json!({"reason": "auto_provision_disabled"}),
                 )
                 .await;
@@ -5112,8 +5797,19 @@ async fn sso_middleware(State(state): State<AppState>, mut request: Request, nex
             }
             created = true;
             crate::audit::record(
-                &state.store, &tenant, None, "anonymous", "anonymous", "sso.provision", "user",
-                &record.user_id, "allow", 201, None, ip_hint.as_deref(), None,
+                &state.store,
+                &tenant,
+                None,
+                "anonymous",
+                "anonymous",
+                "sso.provision",
+                "user",
+                &record.user_id,
+                "allow",
+                201,
+                None,
+                ip_hint.as_deref(),
+                None,
                 json!({"username": record.username, "role": role.as_str()}),
             )
             .await;
@@ -5122,8 +5818,19 @@ async fn sso_middleware(State(state): State<AppState>, mut request: Request, nex
     };
     if user.disabled {
         crate::audit::record(
-            &state.store, &tenant, None, "anonymous", "anonymous", "sso.denied", "user",
-            &user.user_id, "denied", 401, None, ip_hint.as_deref(), None,
+            &state.store,
+            &tenant,
+            None,
+            "anonymous",
+            "anonymous",
+            "sso.denied",
+            "user",
+            &user.user_id,
+            "denied",
+            401,
+            None,
+            ip_hint.as_deref(),
+            None,
             json!({"reason": "user_disabled"}),
         )
         .await;
@@ -5132,7 +5839,10 @@ async fn sso_middleware(State(state): State<AppState>, mut request: Request, nex
     if !created {
         if let Some(role) = sso_mapped_role(&state.config.sso, &groups) {
             if user.role != role {
-                let _ = state.store.set_user_role(&tenant, &user.user_id, role).await;
+                let _ = state
+                    .store
+                    .set_user_role(&tenant, &user.user_id, role)
+                    .await;
                 user.role = role;
             }
         }
@@ -5142,11 +5852,26 @@ async fn sso_middleware(State(state): State<AppState>, mut request: Request, nex
                 .link_sso_identity(&tenant, &user.user_id, email, &username, &now_rfc3339())
                 .await;
         }
-        let _ = state.store.touch_sso_login(&tenant, &user.user_id, &now_rfc3339()).await;
+        let _ = state
+            .store
+            .touch_sso_login(&tenant, &user.user_id, &now_rfc3339())
+            .await;
     }
     crate::audit::record(
-        &state.store, &tenant, None, &user.user_id, "user", "sso.login", "user", &user.user_id,
-        "allow", 200, None, ip_hint.as_deref(), None, json!({"username": user.username}),
+        &state.store,
+        &tenant,
+        None,
+        &user.user_id,
+        "user",
+        "sso.login",
+        "user",
+        &user.user_id,
+        "allow",
+        200,
+        None,
+        ip_hint.as_deref(),
+        None,
+        json!({"username": user.username}),
     )
     .await;
     if let Some(old) = session_hash(request.headers(), &state) {
@@ -5175,15 +5900,24 @@ async fn sso_middleware(State(state): State<AppState>, mut request: Request, nex
         return AppError::internal("cannot create SSO session").into_response();
     }
     if let Ok(value) = HeaderValue::from_str(&user.user_id) {
-        request
-            .headers_mut()
-            .insert(header::HeaderName::from_static("x-lkb-sso-authenticated"), value);
+        request.headers_mut().insert(
+            header::HeaderName::from_static("x-lkb-sso-authenticated"),
+            value,
+        );
     }
-    let secure = state.config.cookie_secure_for_host(host_header(request.headers()));
+    let secure = state
+        .config
+        .cookie_secure_for_host(host_header(request.headers()));
     let mut response = next.run(request).await;
     append_set_cookie(
         &mut response,
-        build_cookie(&state.config.auth.cookie_name, &raw_session, ttl_hours as i64 * 3600, true, secure),
+        build_cookie(
+            &state.config.auth.cookie_name,
+            &raw_session,
+            ttl_hours as i64 * 3600,
+            true,
+            secure,
+        ),
     );
     response
 }
@@ -5206,8 +5940,15 @@ async fn admin_users_v1(
     Query(query): Query<std::collections::HashMap<String, String>>,
 ) -> Result<Json<Value>, AppError> {
     let (principal, _guard) = admin_auth(&state, &headers, "admin.users.list").await?;
-    let offset = query.get("offset").and_then(|value| value.parse::<usize>().ok()).unwrap_or(0);
-    let limit = query.get("limit").and_then(|value| value.parse::<usize>().ok()).unwrap_or(100).min(500);
+    let offset = query
+        .get("offset")
+        .and_then(|value| value.parse::<usize>().ok())
+        .unwrap_or(0);
+    let limit = query
+        .get("limit")
+        .and_then(|value| value.parse::<usize>().ok())
+        .unwrap_or(100)
+        .min(500);
     let all = state.store.list_users(&principal.tenant_id).await?;
     let total = all.len();
     let users: Vec<Value> = all
@@ -5219,7 +5960,9 @@ async fn admin_users_v1(
             "role": user.role.as_str(), "disabled": user.disabled, "created_at": user.created_at,
         }))
         .collect();
-    Ok(Json(json!({"users": users, "total": total, "offset": offset, "limit": limit})))
+    Ok(Json(
+        json!({"users": users, "total": total, "offset": offset, "limit": limit}),
+    ))
 }
 
 async fn admin_user_patch_v1(
@@ -5229,15 +5972,29 @@ async fn admin_user_patch_v1(
     Json(body): Json<Value>,
 ) -> Result<Json<Value>, AppError> {
     let audit_target = user_id.clone();
-let (principal, _guard) = admin_auth(&state, &headers, "admin.users.patch").await?;
+    let (principal, _guard) = admin_auth(&state, &headers, "admin.users.patch").await?;
     if let Some(role) = body.get("role").and_then(Value::as_str) {
-        let role = crate::governance::UserRole::parse(role).map_err(|_| AppError::bad_request("invalid role"))?;
-        state.store.set_user_role(&principal.tenant_id, &user_id, role).await?;
+        let role = crate::governance::UserRole::parse(role)
+            .map_err(|_| AppError::bad_request("invalid role"))?;
+        state
+            .store
+            .set_user_role(&principal.tenant_id, &user_id, role)
+            .await?;
     }
     if let Some(disabled) = body.get("disabled").and_then(Value::as_bool) {
-        state.store.set_user_disabled(&principal.tenant_id, &user_id, disabled).await?;
+        state
+            .store
+            .set_user_disabled(&principal.tenant_id, &user_id, disabled)
+            .await?;
     }
-    audit_admin_write(&state, &principal, "user.admin.update", "user", &audit_target).await;
+    audit_admin_write(
+        &state,
+        &principal,
+        "user.admin.update",
+        "user",
+        &audit_target,
+    )
+    .await;
     Ok(Json(json!({"user_id": user_id, "updated": true})))
 }
 
@@ -5247,9 +6004,19 @@ async fn admin_user_disable_v1(
     headers: HeaderMap,
 ) -> Result<Json<Value>, AppError> {
     let audit_target = user_id.clone();
-let (principal, _guard) = admin_auth(&state, &headers, "admin.users.disable").await?;
-    state.store.set_user_disabled(&principal.tenant_id, &user_id, true).await?;
-    audit_admin_write(&state, &principal, "user.admin.disable", "user", &audit_target).await;
+    let (principal, _guard) = admin_auth(&state, &headers, "admin.users.disable").await?;
+    state
+        .store
+        .set_user_disabled(&principal.tenant_id, &user_id, true)
+        .await?;
+    audit_admin_write(
+        &state,
+        &principal,
+        "user.admin.disable",
+        "user",
+        &audit_target,
+    )
+    .await;
     Ok(Json(json!({"user_id": user_id, "disabled": true})))
 }
 
@@ -5296,12 +6063,16 @@ async fn admin_usage_aggregate_v1(
         alias: query.get("alias").cloned(),
         from: query.get("from").cloned(),
         to: query.get("to").cloned(),
-        limit: query.get("limit").and_then(|value| value.parse().ok()).unwrap_or(5000),
+        limit: query
+            .get("limit")
+            .and_then(|value| value.parse().ok())
+            .unwrap_or(5000),
     };
     let totals = state.store.aggregate_usage_events(&filter).await?;
     let events = state.store.list_usage_events(&filter).await?;
     let group_by = query.get("group_by").map(String::as_str).unwrap_or("user");
-    let mut groups: std::collections::BTreeMap<String, (i64, i64, i64, i64)> = std::collections::BTreeMap::new();
+    let mut groups: std::collections::BTreeMap<String, (i64, i64, i64, i64)> =
+        std::collections::BTreeMap::new();
     for event in &events {
         let key = match group_by {
             "space" => event.space_id.clone().unwrap_or_default(),
@@ -5316,17 +6087,28 @@ async fn admin_usage_aggregate_v1(
         entry.2 += event.output_tokens;
         entry.3 += event.cost_micros;
     }
-    let page_size = query.get("limit").and_then(|value| value.parse::<usize>().ok()).unwrap_or(100).min(500);
-    let offset = query.get("offset").and_then(|value| value.parse::<usize>().ok()).unwrap_or(0);
+    let page_size = query
+        .get("limit")
+        .and_then(|value| value.parse::<usize>().ok())
+        .unwrap_or(100)
+        .min(500);
+    let offset = query
+        .get("offset")
+        .and_then(|value| value.parse::<usize>().ok())
+        .unwrap_or(0);
     let total = groups.len();
     let items: Vec<Value> = groups
         .into_iter()
         .skip(offset)
         .take(page_size)
-        .map(|(key, (requests, input_tokens, output_tokens, cost_micros))| json!({
-            "key": key, "requests": requests, "input_tokens": input_tokens,
-            "output_tokens": output_tokens, "cost_micros": cost_micros,
-        }))
+        .map(
+            |(key, (requests, input_tokens, output_tokens, cost_micros))| {
+                json!({
+                    "key": key, "requests": requests, "input_tokens": input_tokens,
+                    "output_tokens": output_tokens, "cost_micros": cost_micros,
+                })
+            },
+        )
         .collect();
     Ok(Json(json!({
         "group_by": group_by, "totals": totals, "groups": items,
@@ -5340,7 +6122,8 @@ async fn list_audit_v1(
     Query(query): Query<AuditQuery>,
 ) -> Result<Json<Value>, AppError> {
     require_feature(&state, Feature::Audit)?;
-    let (principal, _, _limits) = v1_auth(&state, &headers, TokenScope::Admin, "audit.read", None).await?;
+    let (principal, _, _limits) =
+        v1_auth(&state, &headers, TokenScope::Admin, "audit.read", None).await?;
     let filter = AuditFilter {
         tenant_id: principal.tenant_id.clone(),
         actor_id: query.actor,
@@ -5375,7 +6158,6 @@ async fn list_audit_v1(
             .collect::<Vec<_>>(),
     })))
 }
-
 
 // ---------------------------------------------------------------------------
 // Model gateway / usage / quota admin API.
@@ -5542,24 +6324,50 @@ struct TokenQuotaBody {
     enabled: bool,
 }
 
-fn default_active() -> String { "active".to_string() }
-fn default_priority() -> i32 { 100 }
-fn default_weight() -> i32 { 1 }
-fn default_json_object() -> String { "{}".to_string() }
-fn default_capabilities() -> String { "[\"chat\"]".to_string() }
-fn default_period() -> String { "month".to_string() }
-fn default_currency() -> String { "USD".to_string() }
-fn default_hard() -> String { "hard".to_string() }
-fn default_block() -> String { "block".to_string() }
-fn default_true() -> bool { true }
+fn default_active() -> String {
+    "active".to_string()
+}
+fn default_priority() -> i32 {
+    100
+}
+fn default_weight() -> i32 {
+    1
+}
+fn default_json_object() -> String {
+    "{}".to_string()
+}
+fn default_capabilities() -> String {
+    "[\"chat\"]".to_string()
+}
+fn default_period() -> String {
+    "month".to_string()
+}
+fn default_currency() -> String {
+    "USD".to_string()
+}
+fn default_hard() -> String {
+    "hard".to_string()
+}
+fn default_block() -> String {
+    "block".to_string()
+}
+fn default_true() -> bool {
+    true
+}
 
 async fn admin_providers_v1(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> Result<Json<Value>, AppError> {
     let (_principal, _guard) = admin_auth(&state, &headers, "models.providers.list").await?;
-    let providers = state.store.list_providers(&state.config.storage.tenant_id).await?;
-    let models = state.store.list_provider_models(&state.config.storage.tenant_id).await?;
+    let providers = state
+        .store
+        .list_providers(&state.config.storage.tenant_id)
+        .await?;
+    let models = state
+        .store
+        .list_provider_models(&state.config.storage.tenant_id)
+        .await?;
     Ok(Json(json!({
         "providers": providers.iter().map(provider_json).collect::<Vec<_>>(),
         "models": models.iter().map(provider_model_json).collect::<Vec<_>>(),
@@ -5586,9 +6394,32 @@ async fn admin_provider_create_v1(
         created_at: now.clone(),
         updated_at: now,
     };
-    state.store.upsert_provider(&principal.tenant_id, &provider).await?;
-    crate::audit::record(&state.store, &principal.tenant_id, None, &principal.principal_id, "user", "model.provider.created", "provider", &provider.provider_id, "allow", 201, None, None, None, json!({})).await;
-    Ok((StatusCode::CREATED, Json(json!({"provider": provider_json(&provider)}))).into_response())
+    state
+        .store
+        .upsert_provider(&principal.tenant_id, &provider)
+        .await?;
+    crate::audit::record(
+        &state.store,
+        &principal.tenant_id,
+        None,
+        &principal.principal_id,
+        "user",
+        "model.provider.created",
+        "provider",
+        &provider.provider_id,
+        "allow",
+        201,
+        None,
+        None,
+        None,
+        json!({}),
+    )
+    .await;
+    Ok((
+        StatusCode::CREATED,
+        Json(json!({"provider": provider_json(&provider)})),
+    )
+        .into_response())
 }
 
 async fn admin_provider_patch_v1(
@@ -5598,27 +6429,44 @@ async fn admin_provider_patch_v1(
     Json(body): Json<ProviderBody>,
 ) -> Result<Json<Value>, AppError> {
     let audit_target = provider_id.clone();
-let (principal, _guard) = admin_auth(&state, &headers, "models.provider.update").await?;
+    let (principal, _guard) = admin_auth(&state, &headers, "models.provider.update").await?;
     if body.provider_id != provider_id {
         return Err(AppError::bad_request("provider_id mismatch"));
     }
-    let existing = state.store.get_provider(&principal.tenant_id, &provider_id).await?;
+    let existing = state
+        .store
+        .get_provider(&principal.tenant_id, &provider_id)
+        .await?;
     let now = now_rfc3339();
     let provider = ProviderRecord {
         provider_id,
         kind: body.kind,
         base_url: body.base_url,
-        api_key_env: body.api_key_env.or_else(|| existing.as_ref().and_then(|p| p.api_key_env.clone())),
+        api_key_env: body
+            .api_key_env
+            .or_else(|| existing.as_ref().and_then(|p| p.api_key_env.clone())),
         status: body.status,
         priority: body.priority,
         weight: body.weight,
         limits_json: body.limits_json,
         timeouts_json: body.timeouts_json,
-        created_at: existing.map(|p| p.created_at).unwrap_or_else(|| now.clone()),
+        created_at: existing
+            .map(|p| p.created_at)
+            .unwrap_or_else(|| now.clone()),
         updated_at: now,
     };
-    state.store.upsert_provider(&principal.tenant_id, &provider).await?;
-    audit_admin_write(&state, &principal, "provider.update", "provider", &audit_target).await;
+    state
+        .store
+        .upsert_provider(&principal.tenant_id, &provider)
+        .await?;
+    audit_admin_write(
+        &state,
+        &principal,
+        "provider.update",
+        "provider",
+        &audit_target,
+    )
+    .await;
     Ok(Json(json!({"provider": provider_json(&provider)})))
 }
 
@@ -5628,9 +6476,19 @@ async fn admin_provider_delete_v1(
     headers: HeaderMap,
 ) -> Result<Json<Value>, AppError> {
     let audit_target = provider_id.clone();
-let (principal, _guard) = admin_auth(&state, &headers, "models.provider.delete").await?;
-    let removed = state.store.delete_provider(&principal.tenant_id, &provider_id).await?;
-    audit_admin_write(&state, &principal, "provider.delete", "provider", &audit_target).await;
+    let (principal, _guard) = admin_auth(&state, &headers, "models.provider.delete").await?;
+    let removed = state
+        .store
+        .delete_provider(&principal.tenant_id, &provider_id)
+        .await?;
+    audit_admin_write(
+        &state,
+        &principal,
+        "provider.delete",
+        "provider",
+        &audit_target,
+    )
+    .await;
     Ok(Json(json!({"removed": removed})))
 }
 
@@ -5639,8 +6497,13 @@ async fn admin_provider_models_v1(
     headers: HeaderMap,
 ) -> Result<Json<Value>, AppError> {
     let (_principal, _guard) = admin_auth(&state, &headers, "models.model.list").await?;
-    let models = state.store.list_provider_models(&state.config.storage.tenant_id).await?;
-    Ok(Json(json!({"models": models.iter().map(provider_model_json).collect::<Vec<_>>()})))
+    let models = state
+        .store
+        .list_provider_models(&state.config.storage.tenant_id)
+        .await?;
+    Ok(Json(
+        json!({"models": models.iter().map(provider_model_json).collect::<Vec<_>>()}),
+    ))
 }
 
 async fn admin_provider_model_create_v1(
@@ -5661,9 +6524,23 @@ async fn admin_provider_model_create_v1(
         created_at: now.clone(),
         updated_at: now,
     };
-    state.store.upsert_provider_model(&principal.tenant_id, &model).await?;
-    audit_admin_write(&state, &principal, "provider_model.create", "provider_model", &model.provider_model_id).await;
-    Ok((StatusCode::CREATED, Json(json!({"model": provider_model_json(&model)}))).into_response())
+    state
+        .store
+        .upsert_provider_model(&principal.tenant_id, &model)
+        .await?;
+    audit_admin_write(
+        &state,
+        &principal,
+        "provider_model.create",
+        "provider_model",
+        &model.provider_model_id,
+    )
+    .await;
+    Ok((
+        StatusCode::CREATED,
+        Json(json!({"model": provider_model_json(&model)})),
+    )
+        .into_response())
 }
 
 async fn admin_aliases_v1(
@@ -5671,8 +6548,13 @@ async fn admin_aliases_v1(
     headers: HeaderMap,
 ) -> Result<Json<Value>, AppError> {
     let (_principal, _guard) = admin_auth(&state, &headers, "models.alias.list").await?;
-    let aliases = state.store.list_model_aliases(&state.config.storage.tenant_id).await?;
-    Ok(Json(json!({"aliases": aliases.iter().map(alias_json).collect::<Vec<_>>()})))
+    let aliases = state
+        .store
+        .list_model_aliases(&state.config.storage.tenant_id)
+        .await?;
+    Ok(Json(
+        json!({"aliases": aliases.iter().map(alias_json).collect::<Vec<_>>()}),
+    ))
 }
 
 async fn admin_alias_create_v1(
@@ -5693,9 +6575,23 @@ async fn admin_alias_create_v1(
         created_at: now.clone(),
         updated_at: now,
     };
-    state.store.upsert_model_alias(&principal.tenant_id, &alias).await?;
-    audit_admin_write(&state, &principal, "alias.create", "model_alias", &alias.public_id).await;
-    Ok((StatusCode::CREATED, Json(json!({"alias": alias_json(&alias)}))).into_response())
+    state
+        .store
+        .upsert_model_alias(&principal.tenant_id, &alias)
+        .await?;
+    audit_admin_write(
+        &state,
+        &principal,
+        "alias.create",
+        "model_alias",
+        &alias.public_id,
+    )
+    .await;
+    Ok((
+        StatusCode::CREATED,
+        Json(json!({"alias": alias_json(&alias)})),
+    )
+        .into_response())
 }
 
 async fn admin_alias_patch_v1(
@@ -5705,25 +6601,46 @@ async fn admin_alias_patch_v1(
     Json(body): Json<AliasBody>,
 ) -> Result<Json<Value>, AppError> {
     let audit_target = public_id.clone();
-let (principal, _guard) = admin_auth(&state, &headers, "models.alias.update").await?;
+    let (principal, _guard) = admin_auth(&state, &headers, "models.alias.update").await?;
     if body.public_id != public_id {
         return Err(AppError::bad_request("public_id mismatch"));
     }
-    let existing = state.store.get_model_alias(&principal.tenant_id, &public_id).await?;
+    let existing = state
+        .store
+        .get_model_alias(&principal.tenant_id, &public_id)
+        .await?;
     let now = now_rfc3339();
     let alias = ModelAliasRecord {
         public_id,
-        display_name: body.display_name.unwrap_or_else(|| existing.as_ref().map(|a| a.display_name.clone()).unwrap_or_else(|| "Model".to_string())),
+        display_name: body.display_name.unwrap_or_else(|| {
+            existing
+                .as_ref()
+                .map(|a| a.display_name.clone())
+                .unwrap_or_else(|| "Model".to_string())
+        }),
         capabilities_json: body.capabilities_json,
         status: body.status,
         access_policy_json: body.access_policy_json,
         price_json: body.price_json,
         version: existing.as_ref().map(|a| a.version + 1).unwrap_or(1),
-        created_at: existing.as_ref().map(|a| a.created_at.clone()).unwrap_or_else(|| now.clone()),
+        created_at: existing
+            .as_ref()
+            .map(|a| a.created_at.clone())
+            .unwrap_or_else(|| now.clone()),
         updated_at: now,
     };
-    state.store.upsert_model_alias(&principal.tenant_id, &alias).await?;
-    audit_admin_write(&state, &principal, "alias.update", "model_alias", &audit_target).await;
+    state
+        .store
+        .upsert_model_alias(&principal.tenant_id, &alias)
+        .await?;
+    audit_admin_write(
+        &state,
+        &principal,
+        "alias.update",
+        "model_alias",
+        &audit_target,
+    )
+    .await;
     Ok(Json(json!({"alias": alias_json(&alias)})))
 }
 
@@ -5733,9 +6650,19 @@ async fn admin_alias_delete_v1(
     headers: HeaderMap,
 ) -> Result<Json<Value>, AppError> {
     let audit_target = public_id.clone();
-let (principal, _guard) = admin_auth(&state, &headers, "models.alias.delete").await?;
-    let removed = state.store.delete_model_alias(&principal.tenant_id, &public_id).await?;
-    audit_admin_write(&state, &principal, "alias.delete", "model_alias", &audit_target).await;
+    let (principal, _guard) = admin_auth(&state, &headers, "models.alias.delete").await?;
+    let removed = state
+        .store
+        .delete_model_alias(&principal.tenant_id, &public_id)
+        .await?;
+    audit_admin_write(
+        &state,
+        &principal,
+        "alias.delete",
+        "model_alias",
+        &audit_target,
+    )
+    .await;
     Ok(Json(json!({"removed": removed})))
 }
 
@@ -5746,8 +6673,13 @@ async fn admin_routes_v1(
 ) -> Result<Json<Value>, AppError> {
     let (_principal, _guard) = admin_auth(&state, &headers, "models.route.list").await?;
     let alias = query.get("alias").map(|value| value.as_str());
-    let routes = state.store.list_routes(&state.config.storage.tenant_id, alias).await?;
-    Ok(Json(json!({"routes": routes.iter().map(route_json).collect::<Vec<_>>()})))
+    let routes = state
+        .store
+        .list_routes(&state.config.storage.tenant_id, alias)
+        .await?;
+    Ok(Json(
+        json!({"routes": routes.iter().map(route_json).collect::<Vec<_>>()}),
+    ))
 }
 
 async fn admin_route_create_v1(
@@ -5770,9 +6702,23 @@ async fn admin_route_create_v1(
         created_at: now.clone(),
         updated_at: now,
     };
-    state.store.upsert_route(&principal.tenant_id, &route).await?;
-    audit_admin_write(&state, &principal, "route.create", "model_route", &route.route_id).await;
-    Ok((StatusCode::CREATED, Json(json!({"route": route_json(&route)}))).into_response())
+    state
+        .store
+        .upsert_route(&principal.tenant_id, &route)
+        .await?;
+    audit_admin_write(
+        &state,
+        &principal,
+        "route.create",
+        "model_route",
+        &route.route_id,
+    )
+    .await;
+    Ok((
+        StatusCode::CREATED,
+        Json(json!({"route": route_json(&route)})),
+    )
+        .into_response())
 }
 
 async fn admin_route_patch_v1(
@@ -5782,12 +6728,16 @@ async fn admin_route_patch_v1(
     Json(body): Json<RouteBody>,
 ) -> Result<Json<Value>, AppError> {
     let audit_target = route_id.clone();
-let (principal, _guard) = admin_auth(&state, &headers, "models.route.update").await?;
+    let (principal, _guard) = admin_auth(&state, &headers, "models.route.update").await?;
     if body.route_id != route_id {
         return Err(AppError::bad_request("route_id mismatch"));
     }
-    let existing = state.store.list_routes(&principal.tenant_id, Some(&body.alias_public_id)).await?
-        .into_iter().find(|route| route.route_id == route_id);
+    let existing = state
+        .store
+        .list_routes(&principal.tenant_id, Some(&body.alias_public_id))
+        .await?
+        .into_iter()
+        .find(|route| route.route_id == route_id);
     let now = now_rfc3339();
     let route = RouteRecord {
         route_id,
@@ -5795,15 +6745,34 @@ let (principal, _guard) = admin_auth(&state, &headers, "models.route.update").aw
         provider_model_id: body.provider_model_id,
         weight: body.weight,
         priority: body.priority,
-        health: existing.as_ref().map(|r| r.health.clone()).unwrap_or_else(|| "healthy".to_string()),
-        circuit_state: existing.as_ref().map(|r| r.circuit_state.clone()).unwrap_or_else(|| "closed".to_string()),
+        health: existing
+            .as_ref()
+            .map(|r| r.health.clone())
+            .unwrap_or_else(|| "healthy".to_string()),
+        circuit_state: existing
+            .as_ref()
+            .map(|r| r.circuit_state.clone())
+            .unwrap_or_else(|| "closed".to_string()),
         last_error_at: existing.as_ref().and_then(|r| r.last_error_at.clone()),
         circuit_open_until: existing.as_ref().and_then(|r| r.circuit_open_until.clone()),
-        created_at: existing.as_ref().map(|r| r.created_at.clone()).unwrap_or_else(|| now.clone()),
+        created_at: existing
+            .as_ref()
+            .map(|r| r.created_at.clone())
+            .unwrap_or_else(|| now.clone()),
         updated_at: now,
     };
-    state.store.upsert_route(&principal.tenant_id, &route).await?;
-    audit_admin_write(&state, &principal, "route.update", "model_route", &audit_target).await;
+    state
+        .store
+        .upsert_route(&principal.tenant_id, &route)
+        .await?;
+    audit_admin_write(
+        &state,
+        &principal,
+        "route.update",
+        "model_route",
+        &audit_target,
+    )
+    .await;
     Ok(Json(json!({"route": route_json(&route)})))
 }
 
@@ -5813,9 +6782,19 @@ async fn admin_route_delete_v1(
     headers: HeaderMap,
 ) -> Result<Json<Value>, AppError> {
     let audit_target = route_id.clone();
-let (principal, _guard) = admin_auth(&state, &headers, "models.route.delete").await?;
-    let removed = state.store.delete_route(&principal.tenant_id, &route_id).await?;
-    audit_admin_write(&state, &principal, "route.delete", "model_route", &audit_target).await;
+    let (principal, _guard) = admin_auth(&state, &headers, "models.route.delete").await?;
+    let removed = state
+        .store
+        .delete_route(&principal.tenant_id, &route_id)
+        .await?;
+    audit_admin_write(
+        &state,
+        &principal,
+        "route.delete",
+        "model_route",
+        &audit_target,
+    )
+    .await;
     Ok(Json(json!({"removed": removed})))
 }
 
@@ -5832,7 +6811,10 @@ async fn admin_usage_v1(
         alias: query.get("alias").cloned(),
         from: query.get("from").cloned(),
         to: query.get("to").cloned(),
-        limit: query.get("limit").and_then(|value| value.parse().ok()).unwrap_or(1000),
+        limit: query
+            .get("limit")
+            .and_then(|value| value.parse().ok())
+            .unwrap_or(1000),
     };
     let events = state.store.list_usage_events(&filter).await?;
     let aggregate = state.store.aggregate_usage_events(&filter).await?;
@@ -5870,7 +6852,10 @@ async fn admin_quotas_v1(
 ) -> Result<Json<Value>, AppError> {
     let (principal, _guard) = admin_auth(&state, &headers, "models.quota.list").await?;
     let quotas = state.store.list_token_quotas(&principal.tenant_id).await?;
-    let counters = state.store.list_quota_counters(&principal.tenant_id).await?;
+    let counters = state
+        .store
+        .list_quota_counters(&principal.tenant_id)
+        .await?;
     Ok(Json(json!({
         "quotas": quotas.iter().map(quota_json_token).collect::<Vec<_>>(),
         "counters": counters,
@@ -5883,12 +6868,19 @@ async fn admin_quota_create_v1(
     Json(body): Json<TokenQuotaBody>,
 ) -> Result<Response, AppError> {
     let (principal, _guard) = admin_auth(&state, &headers, "models.quota.create").await?;
-    if body.limit_tokens.is_none() && body.limit_requests.is_none() && body.limit_cost_micros.is_none() {
-        return Err(AppError::bad_request("at least one quota limit is required"));
+    if body.limit_tokens.is_none()
+        && body.limit_requests.is_none()
+        && body.limit_cost_micros.is_none()
+    {
+        return Err(AppError::bad_request(
+            "at least one quota limit is required",
+        ));
     }
     let now = now_rfc3339();
     let quota = TokenQuotaRecord {
-        quota_id: body.quota_id.unwrap_or_else(|| format!("tq_{}", random_hex(8))),
+        quota_id: body
+            .quota_id
+            .unwrap_or_else(|| format!("tq_{}", random_hex(8))),
         tenant_id: principal.tenant_id.clone(),
         scope_type: body.scope_type,
         scope_id: body.scope_id,
@@ -5904,8 +6896,28 @@ async fn admin_quota_create_v1(
         updated_at: now,
     };
     state.store.upsert_token_quota(&quota).await?;
-    crate::audit::record(&state.store, &principal.tenant_id, None, &principal.principal_id, "user", "quota.model.updated", "token_quota", &quota.quota_id, "allow", 201, None, None, None, json!({})).await;
-    Ok((StatusCode::CREATED, Json(json!({"quota": quota_json_token(&quota)}))).into_response())
+    crate::audit::record(
+        &state.store,
+        &principal.tenant_id,
+        None,
+        &principal.principal_id,
+        "user",
+        "quota.model.updated",
+        "token_quota",
+        &quota.quota_id,
+        "allow",
+        201,
+        None,
+        None,
+        None,
+        json!({}),
+    )
+    .await;
+    Ok((
+        StatusCode::CREATED,
+        Json(json!({"quota": quota_json_token(&quota)})),
+    )
+        .into_response())
 }
 
 async fn admin_quota_delete_v1(
@@ -5914,9 +6926,19 @@ async fn admin_quota_delete_v1(
     headers: HeaderMap,
 ) -> Result<Json<Value>, AppError> {
     let audit_target = quota_id.clone();
-let (principal, _guard) = admin_auth(&state, &headers, "models.quota.delete").await?;
-    let removed = state.store.delete_token_quota(&principal.tenant_id, &quota_id).await?;
-    audit_admin_write(&state, &principal, "quota.delete", "token_quota", &audit_target).await;
+    let (principal, _guard) = admin_auth(&state, &headers, "models.quota.delete").await?;
+    let removed = state
+        .store
+        .delete_token_quota(&principal.tenant_id, &quota_id)
+        .await?;
+    audit_admin_write(
+        &state,
+        &principal,
+        "quota.delete",
+        "token_quota",
+        &audit_target,
+    )
+    .await;
     Ok(Json(json!({"removed": removed})))
 }
 
@@ -5929,7 +6951,9 @@ struct GatewayChatBody {
     #[serde(default)]
     temperature: f64,
 }
-fn default_max_output() -> i64 { 1024 }
+fn default_max_output() -> i64 {
+    1024
+}
 
 async fn gateway_chat_v1(
     State(state): State<AppState>,
@@ -5970,7 +6994,6 @@ async fn gateway_chat_v1(
         "latency_ms": response.latency_ms,
     })))
 }
-
 
 #[derive(Debug, Deserialize)]
 struct QueryRequest {
@@ -6022,8 +7045,15 @@ async fn page_summary_v1(
         .await
         .map(|(principal, _session, guard)| (principal, guard))?;
     let _limits = _limits;
-    require_space_role(&state, &principal, &space, SpaceRole::Viewer, "page.summary", &headers)
-        .await?;
+    require_space_role(
+        &state,
+        &principal,
+        &space,
+        SpaceRole::Viewer,
+        "page.summary",
+        &headers,
+    )
+    .await?;
     let lang = lang_arg(query.lang);
     let policy = policy_for(principal.clone())?;
     let view = state
@@ -6076,7 +7106,9 @@ async fn query_v1(
     headers: HeaderMap,
     Json(request): Json<QueryRequest>,
 ) -> Result<Json<Value>, AppError> {
-    run_query(State(state), headers, Json(request), None).await.map(Json)
+    run_query(State(state), headers, Json(request), None)
+        .await
+        .map(Json)
 }
 
 fn sse_frame(event: &str, data: &Value) -> Bytes {
@@ -6098,13 +7130,15 @@ async fn run_query(
     let (principal, session, _limits) =
         v1_auth(&state, &headers, TokenScope::Read, "query", None).await?;
     v1_session_write_guard(&state, &headers, session)?;
-    state
-        .limits
-        .check_query(&request.query, 8)?;
+    state.limits.check_query(&request.query, 8)?;
     let mode = query_mode(request.mode.as_deref())?;
     let space = match request.space {
         Some(space) => {
-            if !principal.allowed_space_ids.iter().any(|allowed| allowed == &space) {
+            if !principal
+                .allowed_space_ids
+                .iter()
+                .any(|allowed| allowed == &space)
+            {
                 return Err(AppError::forbidden("space is outside the principal scope"));
             }
             space
@@ -6165,28 +7199,35 @@ async fn run_query(
     let request_id = v1_request_id();
     let user_message_id = format!("msg_{}", random_hex(10));
     let assistant_message_id = format!("msg_{}", random_hex(10));
-    emit_stream(&stream, "meta", &json!({
-        "conversation_id": conversation.conversation_id,
-        "message_id": assistant_message_id,
-        "mode": mode,
-        "rewritten_query": effective_query,
-    })).await;
+    emit_stream(
+        &stream,
+        "meta",
+        &json!({
+            "conversation_id": conversation.conversation_id,
+            "message_id": assistant_message_id,
+            "mode": mode,
+            "rewritten_query": effective_query,
+        }),
+    )
+    .await;
     let mut tuning = SearchTuning::from_retrieval(&state.config.retrieval);
     tuning.lang = policy.lang.clone();
     tuning.billing_local_ledger = state.config.billing.engine.eq_ignore_ascii_case("local");
     let results = if mode == "answer" {
         None
     } else {
-        Some(search_with_tuning(
-            &state.store,
-            &state.providers,
-            &policy,
-            &effective_query,
-            SearchMode::Auto,
-            10,
-            &tuning,
+        Some(
+            search_with_tuning(
+                &state.store,
+                &state.providers,
+                &policy,
+                &effective_query,
+                SearchMode::Auto,
+                10,
+                &tuning,
+            )
+            .await?,
         )
-        .await?)
     };
     emit_stream(&stream, "results", &json!(&results)).await;
     let answer = if mode == "search" {
@@ -6197,7 +7238,11 @@ async fn run_query(
             let sse_tx = stream_tx.clone();
             let forwarder = tokio::spawn(async move {
                 while let Some(delta) = delta_rx.recv().await {
-                    if sse_tx.send(sse_frame("token", &json!({"content": delta}))).await.is_err() {
+                    if sse_tx
+                        .send(sse_frame("token", &json!({"content": delta})))
+                        .await
+                        .is_err()
+                    {
                         break;
                     }
                 }
@@ -6207,7 +7252,11 @@ async fn run_query(
                 &state.providers,
                 &policy,
                 &effective_query,
-                &AnswerOptions { mode: SearchMode::Auto, limit: 8, tuning },
+                &AnswerOptions {
+                    mode: SearchMode::Auto,
+                    limit: 8,
+                    tuning,
+                },
                 delta_tx,
                 state.config.billing.engine.eq_ignore_ascii_case("local"),
             )
@@ -6220,7 +7269,11 @@ async fn run_query(
                 &state.providers,
                 &policy,
                 &effective_query,
-                &AnswerOptions { mode: SearchMode::Auto, limit: 8, tuning },
+                &AnswerOptions {
+                    mode: SearchMode::Auto,
+                    limit: 8,
+                    tuning,
+                },
                 state.config.billing.engine.eq_ignore_ascii_case("local"),
             )
             .await?
@@ -6235,10 +7288,25 @@ async fn run_query(
     };
     if let Some(answer) = &answer {
         for citation in &answer.citations {
-            emit_stream(&stream, "citation", &serde_json::to_value(citation).unwrap_or(Value::Null)).await;
+            emit_stream(
+                &stream,
+                "citation",
+                &serde_json::to_value(citation).unwrap_or(Value::Null),
+            )
+            .await;
         }
-        emit_stream(&stream, "usage", &serde_json::to_value(&answer.usage).unwrap_or(Value::Null)).await;
-        emit_stream(&stream, "degraded", &serde_json::to_value(&answer.degraded).unwrap_or(Value::Null)).await;
+        emit_stream(
+            &stream,
+            "usage",
+            &serde_json::to_value(&answer.usage).unwrap_or(Value::Null),
+        )
+        .await;
+        emit_stream(
+            &stream,
+            "degraded",
+            &serde_json::to_value(&answer.degraded).unwrap_or(Value::Null),
+        )
+        .await;
     }
     state
         .store
@@ -6253,8 +7321,16 @@ async fn run_query(
             degraded_json: None,
             request_id: request_id.clone(),
             mode: mode.to_string(),
-            rewritten_query: if effective_query != request.query { Some(effective_query.clone()) } else { None },
-            conversation_context_hash: if context_hash.is_empty() { None } else { Some(context_hash.clone()) },
+            rewritten_query: if effective_query != request.query {
+                Some(effective_query.clone())
+            } else {
+                None
+            },
+            conversation_context_hash: if context_hash.is_empty() {
+                None
+            } else {
+                Some(context_hash.clone())
+            },
             created_at: now_rfc3339(),
         })
         .await?;
@@ -6279,26 +7355,22 @@ async fn run_query(
                     &results
                         .hits
                         .iter()
-                        .map(|hit| json!({
-                            "doc_id": hit.doc_id,
-                            "chunk_id": hit.chunk_id,
-                            "path": hit.path,
-                            "line_start": hit.line_start,
-                            "line_end": hit.line_end,
-                            "quote": crate::util::truncate_chars(&hit.quote, 500),
-                        }))
+                        .map(|hit| {
+                            json!({
+                                "doc_id": hit.doc_id,
+                                "chunk_id": hit.chunk_id,
+                                "path": hit.path,
+                                "line_start": hit.line_start,
+                                "line_end": hit.line_end,
+                                "quote": crate::util::truncate_chars(&hit.quote, 500),
+                            })
+                        })
                         .collect::<Vec<_>>(),
                 )
                 .unwrap_or_else(|_| "[]".to_string())
             })
             .unwrap_or_else(|| "[]".to_string());
-        (
-            hit,
-            citations,
-            None,
-            "null".to_string(),
-            "[]".to_string(),
-        )
+        (hit, citations, None, "null".to_string(), "[]".to_string())
     };
     state
         .store
@@ -6313,8 +7385,16 @@ async fn run_query(
             degraded_json: Some(degraded),
             request_id: request_id.clone(),
             mode: mode.to_string(),
-            rewritten_query: if effective_query != request.query { Some(effective_query.clone()) } else { None },
-            conversation_context_hash: if context_hash.is_empty() { None } else { Some(context_hash.clone()) },
+            rewritten_query: if effective_query != request.query {
+                Some(effective_query.clone())
+            } else {
+                None
+            },
+            conversation_context_hash: if context_hash.is_empty() {
+                None
+            } else {
+                Some(context_hash.clone())
+            },
             created_at: now_rfc3339(),
         })
         .await?;
@@ -6342,13 +7422,17 @@ async fn run_query(
         "results": results,
         "answer": answer_json,
     });
-    emit_stream(&stream, "done", &json!({
-        "conversation_id": value["conversation_id"],
-        "message_id": value["message_id"],
-    })).await;
+    emit_stream(
+        &stream,
+        "done",
+        &json!({
+            "conversation_id": value["conversation_id"],
+            "message_id": value["message_id"],
+        }),
+    )
+    .await;
     Ok(value)
 }
-
 
 async fn query_stream_v1(
     State(state): State<AppState>,
@@ -6358,9 +7442,14 @@ async fn query_stream_v1(
     let (tx, rx) = mpsc::channel::<Bytes>(64);
     let task_tx = tx.clone();
     tokio::spawn(async move {
-        if let Err(err) = run_query(State(state), headers, Json(request), Some(task_tx.clone())).await {
+        if let Err(err) =
+            run_query(State(state), headers, Json(request), Some(task_tx.clone())).await
+        {
             let _ = task_tx
-                .send(sse_frame("error", &json!({"code": err.code(), "message": err.message()})))
+                .send(sse_frame(
+                    "error",
+                    &json!({"code": err.code(), "message": err.message()}),
+                ))
                 .await;
         }
         drop(task_tx);
@@ -6369,7 +7458,9 @@ async fn query_stream_v1(
         .status(StatusCode::OK)
         .header(header::CONTENT_TYPE, "text/event-stream")
         .header(header::CACHE_CONTROL, "no-cache")
-        .body(Body::from_stream(ReceiverStream::new(rx).map(|bytes| Ok::<_, std::convert::Infallible>(bytes))))
+        .body(Body::from_stream(
+            ReceiverStream::new(rx).map(Ok::<_, std::convert::Infallible>),
+        ))
         .map_err(|err| AppError::internal(format!("stream response failed: {err}")))?;
     Ok(response)
 }
@@ -6379,10 +7470,19 @@ async fn list_conversations_v1(
     headers: HeaderMap,
     Query(query): Query<std::collections::HashMap<String, String>>,
 ) -> Result<Json<Value>, AppError> {
-    let (principal, _limits) = v1_auth(&state, &headers, TokenScope::Read, "conversation.list", None)
-        .await
-        .map(|(principal, _session, guard)| (principal, guard))?;
-    let limit = query.get("limit").and_then(|value| value.parse().ok()).unwrap_or(50);
+    let (principal, _limits) = v1_auth(
+        &state,
+        &headers,
+        TokenScope::Read,
+        "conversation.list",
+        None,
+    )
+    .await
+    .map(|(principal, _session, guard)| (principal, guard))?;
+    let limit = query
+        .get("limit")
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(50);
     let cursor = query.get("cursor");
     let external = query.get("external_session_id");
     let mut conversations = state
@@ -6390,18 +7490,24 @@ async fn list_conversations_v1(
         .list_conversations(&principal.tenant_id, &principal.principal_id, 500)
         .await?;
     if let Some(external) = external {
-        conversations.retain(|conversation| conversation.external_session_id.as_deref() == Some(external.as_str()));
+        conversations.retain(|conversation| {
+            conversation.external_session_id.as_deref() == Some(external.as_str())
+        });
     }
     if let Some(cursor) = cursor {
         conversations.retain(|conversation| conversation.updated_at.as_str() < cursor.as_str());
     }
     let next_cursor = if conversations.len() > limit as usize {
-        conversations.get(limit as usize - 1).map(|conversation| conversation.updated_at.clone())
+        conversations
+            .get(limit as usize - 1)
+            .map(|conversation| conversation.updated_at.clone())
     } else {
         None
     };
     conversations.truncate(limit as usize);
-    Ok(Json(json!({"conversations": conversations, "next_cursor": next_cursor})))
+    Ok(Json(
+        json!({"conversations": conversations, "next_cursor": next_cursor}),
+    ))
 }
 
 async fn create_conversation_v1(
@@ -6409,14 +7515,28 @@ async fn create_conversation_v1(
     headers: HeaderMap,
     Json(request): Json<ConversationCreate>,
 ) -> Result<Response, AppError> {
-    let (principal, session, _limits) =
-        v1_auth(&state, &headers, TokenScope::Read, "conversation.create", None).await?;
+    let (principal, session, _limits) = v1_auth(
+        &state,
+        &headers,
+        TokenScope::Read,
+        "conversation.create",
+        None,
+    )
+    .await?;
     v1_session_write_guard(&state, &headers, session)?;
     let space = request
         .space
         .or_else(|| principal.allowed_space_ids.first().cloned())
         .ok_or_else(|| AppError::forbidden("no space available"))?;
-    require_space_role(&state, &principal, &space, SpaceRole::Viewer, "conversation.create", &headers).await?;
+    require_space_role(
+        &state,
+        &principal,
+        &space,
+        SpaceRole::Viewer,
+        "conversation.create",
+        &headers,
+    )
+    .await?;
     let now = now_rfc3339();
     let conversation = ConversationRecord {
         conversation_id: format!("conv_{}", random_hex(10)),
@@ -6430,9 +7550,12 @@ async fn create_conversation_v1(
         updated_at: now,
     };
     state.store.create_conversation(&conversation).await?;
-    Ok((StatusCode::CREATED, Json(json!({"conversation": conversation}))).into_response())
+    Ok((
+        StatusCode::CREATED,
+        Json(json!({"conversation": conversation})),
+    )
+        .into_response())
 }
-
 
 #[derive(Debug, Deserialize)]
 struct ExternalSessionRequest {
@@ -6445,8 +7568,14 @@ async fn bind_external_session_v1(
     headers: HeaderMap,
     Json(request): Json<ExternalSessionRequest>,
 ) -> Result<Json<Value>, AppError> {
-    let (principal, session, _limits) =
-        v1_auth(&state, &headers, TokenScope::Read, "conversation.external_session", None).await?;
+    let (principal, session, _limits) = v1_auth(
+        &state,
+        &headers,
+        TokenScope::Read,
+        "conversation.external_session",
+        None,
+    )
+    .await?;
     v1_session_write_guard(&state, &headers, session)?;
     let conversation = state
         .store
@@ -6464,7 +7593,9 @@ async fn bind_external_session_v1(
             &request.external_session_id,
         )
         .await?;
-    Ok(Json(json!({"conversation_id": conversation_id, "external_session_id": request.external_session_id})))
+    Ok(Json(
+        json!({"conversation_id": conversation_id, "external_session_id": request.external_session_id}),
+    ))
 }
 
 async fn get_conversation_v1(
@@ -6472,9 +7603,10 @@ async fn get_conversation_v1(
     AxumPath(conversation_id): AxumPath<String>,
     headers: HeaderMap,
 ) -> Result<Json<Value>, AppError> {
-    let (principal, _limits) = v1_auth(&state, &headers, TokenScope::Read, "conversation.get", None)
-        .await
-        .map(|(principal, _session, guard)| (principal, guard))?;
+    let (principal, _limits) =
+        v1_auth(&state, &headers, TokenScope::Read, "conversation.get", None)
+            .await
+            .map(|(principal, _session, guard)| (principal, guard))?;
     let conversation = state
         .store
         .get_conversation(&principal.tenant_id, &conversation_id)
@@ -6484,7 +7616,9 @@ async fn get_conversation_v1(
         return Err(AppError::forbidden("conversation belongs to another owner"));
     }
     let messages = state.store.list_messages(&conversation_id, 1000).await?;
-    Ok(Json(json!({"conversation": conversation, "messages": messages})))
+    Ok(Json(
+        json!({"conversation": conversation, "messages": messages}),
+    ))
 }
 
 async fn delete_conversation_v1(
@@ -6492,8 +7626,14 @@ async fn delete_conversation_v1(
     AxumPath(conversation_id): AxumPath<String>,
     headers: HeaderMap,
 ) -> Result<Json<Value>, AppError> {
-    let (principal, session, _limits) =
-        v1_auth(&state, &headers, TokenScope::Read, "conversation.delete", None).await?;
+    let (principal, session, _limits) = v1_auth(
+        &state,
+        &headers,
+        TokenScope::Read,
+        "conversation.delete",
+        None,
+    )
+    .await?;
     v1_session_write_guard(&state, &headers, session)?;
     let conversation = state
         .store
@@ -6505,9 +7645,16 @@ async fn delete_conversation_v1(
     }
     state
         .store
-        .update_conversation(&principal.tenant_id, &conversation_id, None, Some("deleted"))
+        .update_conversation(
+            &principal.tenant_id,
+            &conversation_id,
+            None,
+            Some("deleted"),
+        )
         .await?;
-    Ok(Json(json!({"conversation_id": conversation_id, "status": "deleted"})))
+    Ok(Json(
+        json!({"conversation_id": conversation_id, "status": "deleted"}),
+    ))
 }
 
 #[cfg(test)]

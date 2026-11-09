@@ -1,7 +1,7 @@
 use axum::body::Body;
 use axum::http::{header, Request, StatusCode};
 use lkb::config::{Config, DeploymentMode, FeatureOverrides, ProfileName};
-use lkb::governance::{UserRole};
+use lkb::governance::UserRole;
 use lkb::i18n;
 use lkb::providers::ProviderSet;
 use lkb::store;
@@ -49,8 +49,10 @@ fn invalid_solo_billing_and_external_without_required_features_are_rejected() {
     solo.features.billing = Some(true);
     assert!(solo.validate().is_err());
 
-    let mut enterprise = Config::default();
-    enterprise.profile = Some(ProfileName::Enterprise);
+    let mut enterprise = Config {
+        profile: Some(ProfileName::Enterprise),
+        ..Default::default()
+    };
     enterprise.storage.backend = lkb::config::Backend::Postgres;
     enterprise.storage.url_env = "LKB_TEST_P0F_DATABASE_URL".to_string();
     std::env::set_var("LKB_TEST_P0F_DATABASE_URL", "postgres://example/db");
@@ -90,7 +92,9 @@ async fn feature_disabled_and_payment_not_configured_are_stable_codes() {
         .unwrap();
     assert_eq!(audit.status(), StatusCode::FORBIDDEN);
     let json: serde_json::Value = serde_json::from_slice(
-        &axum::body::to_bytes(audit.into_body(), 1_000_000).await.unwrap(),
+        &axum::body::to_bytes(audit.into_body(), 1_000_000)
+            .await
+            .unwrap(),
     )
     .unwrap();
     assert_eq!(json["error"], "feature_disabled");
@@ -118,7 +122,9 @@ async fn feature_disabled_and_payment_not_configured_are_stable_codes() {
         .unwrap();
     assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
     let json: serde_json::Value = serde_json::from_slice(
-        &axum::body::to_bytes(response.into_body(), 1_000_000).await.unwrap(),
+        &axum::body::to_bytes(response.into_body(), 1_000_000)
+            .await
+            .unwrap(),
     )
     .unwrap();
     assert_eq!(json["error"], "payment_not_configured");
@@ -128,7 +134,7 @@ async fn feature_disabled_and_payment_not_configured_are_stable_codes() {
         lkb::payment::provider_from_config(&payment),
         Err(lkb::payment::PaymentError::NotConfigured)
     ));
-    assert_eq!(lkb::payment::is_configured(&payment), false);
+    assert!(!lkb::payment::is_configured(&payment));
 }
 
 #[test]
@@ -177,7 +183,9 @@ async fn localized_unauthorized(locale: &str) -> serde_json::Value {
         locale
     );
     serde_json::from_slice(
-        &axum::body::to_bytes(response.into_body(), 1_000_000).await.unwrap(),
+        &axum::body::to_bytes(response.into_body(), 1_000_000)
+            .await
+            .unwrap(),
     )
     .unwrap()
 }
@@ -264,7 +272,9 @@ async fn token_role_session_still_works_with_feature_endpoint() {
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
     let json: serde_json::Value = serde_json::from_slice(
-        &axum::body::to_bytes(response.into_body(), 1_000_000).await.unwrap(),
+        &axum::body::to_bytes(response.into_body(), 1_000_000)
+            .await
+            .unwrap(),
     )
     .unwrap();
     assert_eq!(json["mode"], "solo");

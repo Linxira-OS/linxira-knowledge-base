@@ -89,8 +89,7 @@ fn is_block_tag(name: &str) -> bool {
 }
 
 fn starts_with(chars: &[char], index: usize, target: &[char]) -> bool {
-    index + target.len() <= chars.len()
-        && chars[index..index + target.len()] == *target
+    index + target.len() <= chars.len() && chars[index..index + target.len()] == *target
 }
 
 fn find_char(chars: &[char], start: usize, target: char) -> Option<usize> {
@@ -101,9 +100,8 @@ fn find_sequence(chars: &[char], start: usize, target: &[char]) -> Option<usize>
     if target.is_empty() || start >= chars.len() {
         return None;
     }
-    (start..=chars.len().saturating_sub(target.len())).find(|index| {
-        chars[*index..*index + target.len()] == *target
-    })
+    (start..=chars.len().saturating_sub(target.len()))
+        .find(|index| chars[*index..*index + target.len()] == *target)
 }
 
 fn find_sequence_ci(chars: &[char], start: usize, target: &str) -> Option<usize> {

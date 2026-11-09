@@ -73,7 +73,16 @@ pub async fn build_answer_stream_with_ledger(
     tx: mpsc::Sender<String>,
     local_ledger: bool,
 ) -> Result<Answer, StoreError> {
-    build_answer_inner(store, providers, policy, query, options, Some(tx), local_ledger).await
+    build_answer_inner(
+        store,
+        providers,
+        policy,
+        query,
+        options,
+        Some(tx),
+        local_ledger,
+    )
+    .await
 }
 
 async fn build_answer_inner(
@@ -154,8 +163,14 @@ Citation numbers are 1-based source ids. If the sources do not answer the questi
         role: "user".to_string(),
         alias: "default".to_string(),
         messages: vec![
-            crate::gateway::ChatMessage { role: "system".into(), content: system.into() },
-            crate::gateway::ChatMessage { role: "user".into(), content: user },
+            crate::gateway::ChatMessage {
+                role: "system".into(),
+                content: system.into(),
+            },
+            crate::gateway::ChatMessage {
+                role: "user".into(),
+                content: user,
+            },
         ],
         max_output_tokens: 1024,
         temperature: 0.0,
@@ -184,22 +199,22 @@ Citation numbers are 1-based source ids. If the sources do not answer the questi
                 ));
             }
             match parse_llm_answer(&result.content, cited.len()) {
-            Ok(parsed) if !parsed.citations.is_empty() => {
-                mode = AnswerMode::Generative;
-                selected_indices = Some(parsed.citations.clone());
-                answer_text = Some(parsed.answer);
-                answer_model = Some(result.model);
-                answer_usage = Some(crate::contract::AnswerUsage {
-                    input_tokens: result.usage.input_tokens,
-                    output_tokens: result.usage.output_tokens,
-                    cached_tokens: result.usage.cached_tokens,
-                    token_source: result.usage.token_source,
-                    cost_micros: result.usage.cost_micros,
-                    currency: result.usage.currency,
-                });
-            }
-            Ok(_) => degraded.push(Degraded::citation_alignment_failed()),
-            Err(_) => degraded.push(Degraded::citation_alignment_failed()),
+                Ok(parsed) if !parsed.citations.is_empty() => {
+                    mode = AnswerMode::Generative;
+                    selected_indices = Some(parsed.citations.clone());
+                    answer_text = Some(parsed.answer);
+                    answer_model = Some(result.model);
+                    answer_usage = Some(crate::contract::AnswerUsage {
+                        input_tokens: result.usage.input_tokens,
+                        output_tokens: result.usage.output_tokens,
+                        cached_tokens: result.usage.cached_tokens,
+                        token_source: result.usage.token_source,
+                        cost_micros: result.usage.cost_micros,
+                        currency: result.usage.currency,
+                    });
+                }
+                Ok(_) => degraded.push(Degraded::citation_alignment_failed()),
+                Err(_) => degraded.push(Degraded::citation_alignment_failed()),
             }
         }
         Err(err) => {
@@ -240,12 +255,7 @@ Citation numbers are 1-based source ids. If the sources do not answer the questi
         (Some(_), None) => 0.05,
         _ => 0.0,
     };
-    let confidence = Confidence::heuristic(
-        citations.len(),
-        top_margin,
-        &degraded,
-        conflicts.len(),
-    );
+    let confidence = Confidence::heuristic(citations.len(), top_margin, &degraded, conflicts.len());
     sort_degraded(&mut degraded);
 
     Ok(Answer {
@@ -350,11 +360,8 @@ mod tests {
 
     #[test]
     fn llm_answer_requires_valid_citations() {
-        let parsed = parse_llm_answer(
-            "```json\n{\"answer\":\"ok\",\"citations\":[1,2,2]}\n```",
-            3,
-        )
-        .unwrap();
+        let parsed =
+            parse_llm_answer("```json\n{\"answer\":\"ok\",\"citations\":[1,2,2]}\n```", 3).unwrap();
         assert_eq!(parsed.citations, vec![1, 2]);
         assert!(parse_llm_answer("{\"answer\":\"ok\",\"citations\":[4]}", 3).is_err());
         assert!(parse_llm_answer("not json", 3).is_err());

@@ -146,10 +146,7 @@ where
         let mut visitor = JsonVisitor::default();
         event.record(&mut visitor);
         let mut map = visitor.fields;
-        map.insert(
-            "timestamp".to_string(),
-            json!(crate::util::now_rfc3339()),
-        );
+        map.insert("timestamp".to_string(), json!(crate::util::now_rfc3339()));
         map.insert(
             "level".to_string(),
             json!(event.metadata().level().as_str().to_ascii_lowercase()),

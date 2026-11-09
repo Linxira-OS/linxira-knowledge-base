@@ -284,7 +284,12 @@ impl Confidence {
         }
     }
 
-    pub fn heuristic(hit_count: usize, top_margin: f64, degraded: &[Degraded], conflicts: usize) -> Self {
+    pub fn heuristic(
+        hit_count: usize,
+        top_margin: f64,
+        degraded: &[Degraded],
+        conflicts: usize,
+    ) -> Self {
         let mut basis = Vec::new();
         let mut score = if hit_count == 0 { 0.0 } else { 0.45 };
         if hit_count > 0 {

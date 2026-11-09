@@ -97,8 +97,7 @@ pub trait PaymentProvider: Send + Sync {
         &self,
         request: &CheckoutRequest,
     ) -> Result<CheckoutSession, PaymentError>;
-    async fn verify_webhook(&self, request: &WebhookRequest)
-        -> Result<PaymentEvent, PaymentError>;
+    async fn verify_webhook(&self, request: &WebhookRequest) -> Result<PaymentEvent, PaymentError>;
     async fn refund(&self, request: &RefundRequest) -> Result<PaymentEvent, PaymentError>;
     async fn subscription_sync(
         &self,
@@ -127,7 +126,6 @@ pub fn provider_for_billing(
         _ => Err(PaymentError::Unavailable),
     }
 }
-
 
 /// Stripe Checkout + webhook signature verification. Card data never reaches
 /// this kernel: only session ids and webhook events are handled.
@@ -164,7 +162,10 @@ pub fn sign_stripe_webhook(secret: &str, body: &[u8], timestamp: i64) -> String 
     let mut signed = timestamp.to_string().into_bytes();
     signed.push(b'.');
     signed.extend_from_slice(body);
-    format!("t={timestamp},v1={}", hmac_sha256_hex(secret.as_bytes(), &signed))
+    format!(
+        "t={timestamp},v1={}",
+        hmac_sha256_hex(secret.as_bytes(), &signed)
+    )
 }
 
 fn hmac_sha256_hex(secret: &[u8], payload: &[u8]) -> String {
@@ -193,7 +194,11 @@ impl PaymentProvider for StripeProvider {
     }
 
     fn mode(&self) -> &str {
-        if self.secret.is_some() { "live" } else { "mock" }
+        if self.secret.is_some() {
+            "live"
+        } else {
+            "mock"
+        }
     }
 
     async fn create_checkout(
@@ -208,13 +213,28 @@ impl PaymentProvider for StripeProvider {
                 .bearer_auth(secret)
                 .form(&[
                     ("mode", "payment".to_string()),
-                    ("success_url", "https://example.invalid/billing/success".to_string()),
-                    ("cancel_url", "https://example.invalid/billing/cancel".to_string()),
+                    (
+                        "success_url",
+                        "https://example.invalid/billing/success".to_string(),
+                    ),
+                    (
+                        "cancel_url",
+                        "https://example.invalid/billing/cancel".to_string(),
+                    ),
                     ("client_reference_id", request.tenant_id.clone()),
                     ("line_items[0][quantity]", "1".to_string()),
-                    ("line_items[0][price_data][currency]", request.currency.to_lowercase()),
-                    ("line_items[0][price_data][unit_amount]", request.amount_minor.to_string()),
-                    ("line_items[0][price_data][product_data][name]", request.plan.clone()),
+                    (
+                        "line_items[0][price_data][currency]",
+                        request.currency.to_lowercase(),
+                    ),
+                    (
+                        "line_items[0][price_data][unit_amount]",
+                        request.amount_minor.to_string(),
+                    ),
+                    (
+                        "line_items[0][price_data][product_data][name]",
+                        request.plan.clone(),
+                    ),
                     ("metadata[tenant_id]", request.tenant_id.clone()),
                     ("metadata[plan]", request.plan.clone()),
                 ])
@@ -226,8 +246,15 @@ impl PaymentProvider for StripeProvider {
             if !status.is_success() {
                 return Err(PaymentError::Invalid(format!("stripe returned {status}")));
             }
-            let id = value.get("id").and_then(|item| item.as_str()).unwrap_or(&session_id).to_string();
-            let url = value.get("url").and_then(|item| item.as_str()).map(str::to_string);
+            let id = value
+                .get("id")
+                .and_then(|item| item.as_str())
+                .unwrap_or(&session_id)
+                .to_string();
+            let url = value
+                .get("url")
+                .and_then(|item| item.as_str())
+                .map(str::to_string);
             return Ok(CheckoutSession {
                 provider: "stripe".to_string(),
                 session_id: id,
@@ -257,18 +284,24 @@ impl PaymentProvider for StripeProvider {
         let mut timestamp = None;
         let mut expected = None;
         for part in signature.split(',') {
-            let Some((key, value)) = part.split_once('=') else { continue };
+            let Some((key, value)) = part.split_once('=') else {
+                continue;
+            };
             match key.trim() {
                 "t" => timestamp = value.trim().parse::<i64>().ok(),
                 "v1" => expected = Some(value.trim().to_string()),
                 _ => {}
             }
         }
-        let timestamp = timestamp.ok_or_else(|| PaymentError::Invalid("missing signature timestamp".to_string()))?;
-        let expected = expected.ok_or_else(|| PaymentError::Invalid("missing v1 signature".to_string()))?;
+        let timestamp = timestamp
+            .ok_or_else(|| PaymentError::Invalid("missing signature timestamp".to_string()))?;
+        let expected =
+            expected.ok_or_else(|| PaymentError::Invalid("missing v1 signature".to_string()))?;
         let now = chrono::Utc::now().timestamp();
         if (now - timestamp).abs() > self.tolerance_seconds as i64 {
-            return Err(PaymentError::Invalid("signature timestamp outside tolerance".to_string()));
+            return Err(PaymentError::Invalid(
+                "signature timestamp outside tolerance".to_string(),
+            ));
         }
         let mut signed = timestamp.to_string().into_bytes();
         signed.push(b'.');
@@ -287,15 +320,26 @@ impl PaymentProvider for StripeProvider {
             .get("type")
             .and_then(|item| item.as_str())
             .unwrap_or("unknown");
-        let object = value.get("data").and_then(|item| item.get("object")).cloned().unwrap_or(serde_json::Value::Null);
+        let object = value
+            .get("data")
+            .and_then(|item| item.get("object"))
+            .cloned()
+            .unwrap_or(serde_json::Value::Null);
         let tenant_id = object
             .get("metadata")
             .and_then(|item| item.get("tenant_id"))
             .and_then(|item| item.as_str())
-            .or_else(|| object.get("client_reference_id").and_then(|item| item.as_str()))
+            .or_else(|| {
+                object
+                    .get("client_reference_id")
+                    .and_then(|item| item.as_str())
+            })
             .map(str::to_string);
         let amount_minor = object.get("amount_total").and_then(|item| item.as_i64());
-        let currency = object.get("currency").and_then(|item| item.as_str()).map(str::to_string);
+        let currency = object
+            .get("currency")
+            .and_then(|item| item.as_str())
+            .map(str::to_string);
         Ok(PaymentEvent {
             provider: "stripe".to_string(),
             event_id: event_id.to_string(),
@@ -303,7 +347,10 @@ impl PaymentProvider for StripeProvider {
             tenant_id,
             amount_minor,
             currency,
-            provider_ref: object.get("id").and_then(|item| item.as_str()).map(str::to_string),
+            provider_ref: object
+                .get("id")
+                .and_then(|item| item.as_str())
+                .map(str::to_string),
         })
     }
 
@@ -361,11 +408,26 @@ impl PaymentProvider for ManualProvider {
         Ok(PaymentEvent {
             provider: self.name.to_string(),
             event_id: event_id.to_string(),
-            event_type: value.get("type").and_then(|item| item.as_str()).unwrap_or("unknown").to_string(),
-            tenant_id: value.pointer("/data/object/metadata/tenant_id").and_then(|item| item.as_str()).map(str::to_string),
-            amount_minor: value.pointer("/data/object/amount").and_then(|item| item.as_i64()),
-            currency: value.pointer("/data/object/currency").and_then(|item| item.as_str()).map(str::to_string),
-            provider_ref: value.pointer("/data/object/id").and_then(|item| item.as_str()).map(str::to_string),
+            event_type: value
+                .get("type")
+                .and_then(|item| item.as_str())
+                .unwrap_or("unknown")
+                .to_string(),
+            tenant_id: value
+                .pointer("/data/object/metadata/tenant_id")
+                .and_then(|item| item.as_str())
+                .map(str::to_string),
+            amount_minor: value
+                .pointer("/data/object/amount")
+                .and_then(|item| item.as_i64()),
+            currency: value
+                .pointer("/data/object/currency")
+                .and_then(|item| item.as_str())
+                .map(str::to_string),
+            provider_ref: value
+                .pointer("/data/object/id")
+                .and_then(|item| item.as_str())
+                .map(str::to_string),
         })
     }
 
@@ -380,8 +442,6 @@ impl PaymentProvider for ManualProvider {
         Err(PaymentError::Unavailable)
     }
 }
-
-
 
 pub fn is_configured(config: &PaymentConfig) -> bool {
     !config.provider.trim().is_empty() && !config.provider.eq_ignore_ascii_case("none")

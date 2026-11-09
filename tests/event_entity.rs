@@ -11,8 +11,10 @@ use std::path::Path;
 use std::sync::Arc;
 
 fn test_config(path: &Path) -> Config {
-    let mut config = Config::default();
-    config.profile = Some(ProfileName::Solo);
+    let mut config = Config {
+        profile: Some(ProfileName::Solo),
+        ..Default::default()
+    };
     config.storage.backend = Backend::Sqlite;
     config.storage.sqlite_path = path.to_path_buf();
     config.storage.tenant_id = SOLO_TENANT.to_string();
@@ -87,12 +89,13 @@ async fn event_mode_hits_and_two_hop_expands() {
     .unwrap();
     assert_eq!(depth_one.mode_used, SearchMode::Event);
     assert!(
+        depth_one.hits.iter().any(|hit| hit.path.contains("alpha")),
+        "hits: {:?}",
         depth_one
             .hits
             .iter()
-            .any(|hit| hit.path.contains("alpha")),
-        "hits: {:?}",
-        depth_one.hits.iter().map(|hit| &hit.path).collect::<Vec<_>>()
+            .map(|hit| &hit.path)
+            .collect::<Vec<_>>()
     );
     assert!(depth_one.hits.iter().all(|hit| hit.event_id.is_some()));
 
@@ -114,7 +117,11 @@ async fn event_mode_hits_and_two_hop_expands() {
     assert!(
         depth_two.hits.iter().any(|hit| hit.path.contains("beta")),
         "depth2 hits: {:?}",
-        depth_two.hits.iter().map(|hit| &hit.path).collect::<Vec<_>>()
+        depth_two
+            .hits
+            .iter()
+            .map(|hit| &hit.path)
+            .collect::<Vec<_>>()
     );
 
     let auto = search(
@@ -179,16 +186,9 @@ async fn event_governance_filters_acl_tenant_and_expiry() {
         vec![SOLO_SPACE.into()],
         Vec::new(),
     ));
-    let alice_hits = search(
-        &store,
-        &providers,
-        &alice,
-        "Secret",
-        SearchMode::Event,
-        5,
-    )
-    .await
-    .unwrap();
+    let alice_hits = search(&store, &providers, &alice, "Secret", SearchMode::Event, 5)
+        .await
+        .unwrap();
     assert!(!alice_hits.hits.is_empty(), "alice should see the event");
 
     let bob = policy_for(Principal::local_user(
@@ -197,16 +197,9 @@ async fn event_governance_filters_acl_tenant_and_expiry() {
         vec![SOLO_SPACE.into()],
         Vec::new(),
     ));
-    let bob_hits = search(
-        &store,
-        &providers,
-        &bob,
-        "Secret",
-        SearchMode::Event,
-        5,
-    )
-    .await
-    .unwrap();
+    let bob_hits = search(&store, &providers, &bob, "Secret", SearchMode::Event, 5)
+        .await
+        .unwrap();
     assert!(bob_hits.hits.is_empty(), "bob must not see alice's event");
 
     let other_tenant = policy_for(Principal {

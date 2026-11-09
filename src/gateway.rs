@@ -8,12 +8,12 @@ use crate::store::{
     ModelAliasRecord, ProviderModelRecord, ProviderRecord, RouteRecord, Store, UsageEventRecord,
 };
 use axum::http::StatusCode;
+use rand::Rng;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use tokio::sync::mpsc;
-use rand::Rng;
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::mpsc;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatMessage {
@@ -133,12 +133,25 @@ fn cost(tokens: i64, per_million: i64) -> i64 {
     }
 }
 
-fn access_allowed(alias: &ModelAliasRecord, principal: &Principal, space: Option<&str>, role: &str) -> bool {
+fn access_allowed(
+    alias: &ModelAliasRecord,
+    principal: &Principal,
+    space: Option<&str>,
+    role: &str,
+) -> bool {
     let value: Value = serde_json::from_str(&alias.access_policy_json).unwrap_or(Value::Null);
-    if value.as_object().map(|object| object.is_empty()).unwrap_or(true) {
+    if value
+        .as_object()
+        .map(|object| object.is_empty())
+        .unwrap_or(true)
+    {
         return true;
     }
-    if value.get("allow_all").and_then(Value::as_bool).unwrap_or(false) {
+    if value
+        .get("allow_all")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+    {
         return true;
     }
     let contains = |key: &str, needle: &str| {
@@ -160,7 +173,10 @@ fn access_allowed(alias: &ModelAliasRecord, principal: &Principal, space: Option
 }
 
 fn estimate_input(messages: &[ChatMessage]) -> i64 {
-    let chars: usize = messages.iter().map(|message| message.content.chars().count()).sum();
+    let chars: usize = messages
+        .iter()
+        .map(|message| message.content.chars().count())
+        .sum();
     (chars as i64 / 4).max(1)
 }
 
@@ -173,16 +189,28 @@ fn capabilities_match(alias_json: &str, model_json: &str) -> bool {
     alias.iter().any(|capability| model.contains(capability))
 }
 
-fn weighted_pick(candidates: Vec<(RouteRecord, ProviderModelRecord, ProviderRecord)>) -> Vec<(RouteRecord, ProviderModelRecord, ProviderRecord)> {
+fn weighted_pick(
+    candidates: Vec<(RouteRecord, ProviderModelRecord, ProviderRecord)>,
+) -> Vec<(RouteRecord, ProviderModelRecord, ProviderRecord)> {
     if candidates.len() <= 1 {
         return candidates;
     }
     let first_key = (candidates[0].0.priority, candidates[0].2.priority);
-    let split = candidates.iter().position(|(route, _, provider)| (route.priority, provider.priority) != first_key).unwrap_or(candidates.len());
+    let split = candidates
+        .iter()
+        .position(|(route, _, provider)| (route.priority, provider.priority) != first_key)
+        .unwrap_or(candidates.len());
     let mut group = candidates[..split].to_vec();
     let rest = candidates[split..].to_vec();
-    let total: u32 = group.iter().map(|(route, _, _)| route.weight.max(1) as u32).sum();
-    let mut pick = if total == 0 { 0 } else { rand::thread_rng().gen_range(0..total) };
+    let total: u32 = group
+        .iter()
+        .map(|(route, _, _)| route.weight.max(1) as u32)
+        .sum();
+    let mut pick = if total == 0 {
+        0
+    } else {
+        rand::thread_rng().gen_range(0..total)
+    };
     let mut index = 0;
     for (position, (route, _, _)) in group.iter().enumerate() {
         let weight = route.weight.max(1) as u32;
@@ -252,7 +280,10 @@ impl Gateway {
             }
         }
         let response = builder.send().await.map_err(|err| {
-            (StatusCode::GATEWAY_TIMEOUT, format!("provider request failed: {err}"))
+            (
+                StatusCode::GATEWAY_TIMEOUT,
+                format!("provider request failed: {err}"),
+            )
         })?;
         let status = response.status();
         let value: Value = response.json().await.unwrap_or(Value::Null);
@@ -300,12 +331,21 @@ impl Gateway {
             }
         }
         let mut response = builder.send().await.map_err(|err| {
-            (StatusCode::GATEWAY_TIMEOUT, format!("provider request failed: {err}"))
+            (
+                StatusCode::GATEWAY_TIMEOUT,
+                format!("provider request failed: {err}"),
+            )
         })?;
         let status = response.status();
         if !status.is_success() {
             let text = response.text().await.unwrap_or_default();
-            return Err((status, format!("provider returned an error: {}", crate::util::truncate_chars(&text, 200))));
+            return Err((
+                status,
+                format!(
+                    "provider returned an error: {}",
+                    crate::util::truncate_chars(&text, 200)
+                ),
+            ));
         }
         let content_type = response
             .headers()
@@ -320,19 +360,29 @@ impl Gateway {
         if content_type.contains("text/event-stream") {
             streamed = true;
             while let Some(chunk) = response.chunk().await.map_err(|err| {
-                (StatusCode::GATEWAY_TIMEOUT, format!("provider stream failed: {err}"))
+                (
+                    StatusCode::GATEWAY_TIMEOUT,
+                    format!("provider stream failed: {err}"),
+                )
             })? {
                 buffer.push_str(&String::from_utf8_lossy(&chunk));
                 while let Some(index) = buffer.find('\n') {
                     let line = buffer[..index].trim().to_string();
                     buffer.drain(..=index);
-                    let Some(data) = line.strip_prefix("data:") else { continue };
+                    let Some(data) = line.strip_prefix("data:") else {
+                        continue;
+                    };
                     let data = data.trim();
                     if data == "[DONE]" || data.is_empty() {
                         continue;
                     }
-                    let Ok(value) = serde_json::from_str::<Value>(data) else { continue };
-                    if let Some(delta) = value.pointer("/choices/0/delta/content").and_then(Value::as_str) {
+                    let Ok(value) = serde_json::from_str::<Value>(data) else {
+                        continue;
+                    };
+                    if let Some(delta) = value
+                        .pointer("/choices/0/delta/content")
+                        .and_then(Value::as_str)
+                    {
                         if !delta.is_empty() {
                             content.push_str(delta);
                             if tx.send(delta.to_string()).await.is_err() {
@@ -349,9 +399,16 @@ impl Gateway {
             let text = response.text().await.unwrap_or_default();
             let value: Value = serde_json::from_str(&text).unwrap_or(Value::Null);
             if value.get("choices").is_none() {
-                return Err((StatusCode::BAD_GATEWAY, "provider returned an unsupported stream".to_string()));
+                return Err((
+                    StatusCode::BAD_GATEWAY,
+                    "provider returned an unsupported stream".to_string(),
+                ));
             }
-            content = value.pointer("/choices/0/message/content").and_then(Value::as_str).unwrap_or("").to_string();
+            content = value
+                .pointer("/choices/0/message/content")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_string();
             usage = value.get("usage").cloned().unwrap_or(Value::Null);
             if !content.is_empty() {
                 let _ = tx.send(content.clone()).await;
@@ -381,23 +438,54 @@ impl Gateway {
         if alias.status != "active" {
             return Err(unavailable("model alias is disabled"));
         }
-        if !access_allowed(&alias, &request.principal, request.space_id.as_deref(), &request.role) {
+        if !access_allowed(
+            &alias,
+            &request.principal,
+            request.space_id.as_deref(),
+            &request.role,
+        ) {
             return Err(forbidden());
         }
-        let routes = self.store.list_routes(&request.principal.tenant_id, Some(&alias.public_id)).await.map_err(|err| unavailable(err.to_string()))?;
-        let models = self.store.list_provider_models(&request.principal.tenant_id).await.map_err(|err| unavailable(err.to_string()))?;
-        let providers = self.store.list_providers(&request.principal.tenant_id).await.map_err(|err| unavailable(err.to_string()))?;
+        let routes = self
+            .store
+            .list_routes(&request.principal.tenant_id, Some(&alias.public_id))
+            .await
+            .map_err(|err| unavailable(err.to_string()))?;
+        let models = self
+            .store
+            .list_provider_models(&request.principal.tenant_id)
+            .await
+            .map_err(|err| unavailable(err.to_string()))?;
+        let providers = self
+            .store
+            .list_providers(&request.principal.tenant_id)
+            .await
+            .map_err(|err| unavailable(err.to_string()))?;
         let now = crate::util::now_rfc3339();
         let mut candidates: Vec<(RouteRecord, ProviderModelRecord, ProviderRecord)> = Vec::new();
         for route in routes {
-            if route.health == "open" || route.circuit_state == "open" {
-                if route.circuit_open_until.as_deref().map(|until| until > now.as_str()).unwrap_or(false) {
-                    continue;
-                }
+            if (route.health == "open" || route.circuit_state == "open")
+                && route
+                    .circuit_open_until
+                    .as_deref()
+                    .map(|until| until > now.as_str())
+                    .unwrap_or(false)
+            {
+                continue;
             }
-            let Some(model) = models.iter().find(|model| model.provider_model_id == route.provider_model_id && model.status == "active") else { continue };
-            if !capabilities_match(&alias.capabilities_json, &model.capabilities_json) { continue; }
-            let Some(provider) = providers.iter().find(|provider| provider.provider_id == model.provider_id && provider.status == "active") else { continue };
+            let Some(model) = models.iter().find(|model| {
+                model.provider_model_id == route.provider_model_id && model.status == "active"
+            }) else {
+                continue;
+            };
+            if !capabilities_match(&alias.capabilities_json, &model.capabilities_json) {
+                continue;
+            }
+            let Some(provider) = providers.iter().find(|provider| {
+                provider.provider_id == model.provider_id && provider.status == "active"
+            }) else {
+                continue;
+            };
             candidates.push((route, model.clone(), provider.clone()));
         }
         candidates.sort_by_key(|(route, _, provider)| (route.priority, provider.priority));
@@ -407,9 +495,21 @@ impl Gateway {
         }
         let input_estimate = estimate_input(&request.messages);
         let (input_price, output_price, currency) = price_micros(&alias.price_json);
-        let estimated_cost = cost(input_estimate + request.max_output_tokens, input_price.max(output_price));
-        let billing_wallets = self.store.billing_list_wallets(&request.principal.tenant_id).await.unwrap_or_default();
-        let billing_entitlement = self.store.billing_get_entitlement(&request.principal.tenant_id).await.ok().flatten();
+        let estimated_cost = cost(
+            input_estimate + request.max_output_tokens,
+            input_price.max(output_price),
+        );
+        let billing_wallets = self
+            .store
+            .billing_list_wallets(&request.principal.tenant_id)
+            .await
+            .unwrap_or_default();
+        let billing_entitlement = self
+            .store
+            .billing_get_entitlement(&request.principal.tenant_id)
+            .await
+            .ok()
+            .flatten();
         let billing_active = !billing_wallets.is_empty() || billing_entitlement.is_some();
         if billing_active {
             if let Some(entitlement) = &billing_entitlement {
@@ -421,7 +521,10 @@ impl Gateway {
                 .as_ref()
                 .map(|entitlement| (entitlement.included_tokens - entitlement.used_tokens).max(0))
                 .unwrap_or(0);
-            let wallet_balance = billing_wallets.first().map(|wallet| wallet.balance_micros).unwrap_or(0);
+            let wallet_balance = billing_wallets
+                .first()
+                .map(|wallet| wallet.balance_micros)
+                .unwrap_or(0);
             if included_remaining <= 0 && wallet_balance < estimated_cost {
                 return Err(payment_required());
             }
@@ -440,19 +543,48 @@ impl Gateway {
             },
         )
         .await
-        .map_err(|err| GatewayError { status: err.status, code: err.code, message: err.message, retry_after: err.retry_after })?;
+        .map_err(|err| GatewayError {
+            status: err.status,
+            code: err.code,
+            message: err.message,
+            retry_after: err.retry_after,
+        })?;
 
         let mut last_error = unavailable("all model routes failed");
         for (route, model, provider) in candidates {
-            match self.call_provider_stream(&provider, &model, request, &tx).await {
+            match self
+                .call_provider_stream(&provider, &model, request, &tx)
+                .await
+            {
                 Ok((content, value, streamed)) => {
-                    let _ = self.store.update_route_health(&request.principal.tenant_id, &route.route_id, "healthy", "closed", None, None).await;
-                    let prompt = value.pointer("/usage/prompt_tokens").and_then(Value::as_i64);
-                    let completion = value.pointer("/usage/completion_tokens").and_then(Value::as_i64);
-                    let cached = value.pointer("/usage/prompt_tokens_details/cached_tokens").and_then(Value::as_i64).unwrap_or(0);
+                    let _ = self
+                        .store
+                        .update_route_health(
+                            &request.principal.tenant_id,
+                            &route.route_id,
+                            "healthy",
+                            "closed",
+                            None,
+                            None,
+                        )
+                        .await;
+                    let prompt = value
+                        .pointer("/usage/prompt_tokens")
+                        .and_then(Value::as_i64);
+                    let completion = value
+                        .pointer("/usage/completion_tokens")
+                        .and_then(Value::as_i64);
+                    let cached = value
+                        .pointer("/usage/prompt_tokens_details/cached_tokens")
+                        .and_then(Value::as_i64)
+                        .unwrap_or(0);
                     let (input_tokens, output_tokens, token_source) = match (prompt, completion) {
                         (Some(input), Some(output)) => (input, output, "provider"),
-                        _ => (input_estimate, (content.chars().count() as i64 / 4).max(1), "estimated"),
+                        _ => (
+                            input_estimate,
+                            (content.chars().count() as i64 / 4).max(1),
+                            "estimated",
+                        ),
                     };
                     let (provider_input, provider_output, _) = price_micros(&model.pricing_json);
                     let usage = GatewayUsage {
@@ -460,58 +592,17 @@ impl Gateway {
                         output_tokens,
                         cached_tokens: cached,
                         token_source: token_source.to_string(),
-                        cost_micros: cost(input_tokens, input_price) + cost(output_tokens, output_price),
+                        cost_micros: cost(input_tokens, input_price)
+                            + cost(output_tokens, output_price),
                         currency: currency.clone(),
                     };
-                    let provider_cost = cost(input_tokens, provider_input) + cost(output_tokens, provider_output);
+                    let provider_cost =
+                        cost(input_tokens, provider_input) + cost(output_tokens, provider_output);
                     let usage_event_id = format!("ue_{}", crate::util::random_hex(12));
-                    let _ = self.store.insert_usage_event(&UsageEventRecord {
-                        usage_event_id: usage_event_id.clone(),
-                        request_id: request.request_id.clone(),
-                        tenant_id: request.principal.tenant_id.clone(),
-                        space_id: request.space_id.clone(),
-                        user_id: request.principal.principal_id.clone(),
-                        role: request.role.clone(),
-                        source: request.source.clone(),
-                        rewritten_query: request.rewritten_query.clone(),
-                        external_usage_id: None,
-                        alias: alias.public_id.clone(),
-                        provider_model_id: model.provider_model_id.clone(),
-                        input_tokens,
-                        output_tokens,
-                        cached_tokens: cached,
-                        token_source: token_source.to_string(),
-                        cost_micros: usage.cost_micros,
-                        currency: currency.clone(),
-                        provider_cost_micros: provider_cost,
-                        latency_ms: started.elapsed().as_millis() as i64,
-                        status: "success".to_string(),
-                        cache_hit: false,
-                        at: crate::util::now_rfc3339(),
-                    }).await;
-                    if billing_active && self.local_ledger {
-                        let billing = crate::billing::Billing::new(self.store.clone(), crate::config::BillingConfig::default());
-                        let billed_tokens = usage.input_tokens + usage.output_tokens;
-                        if let Err(err) = billing.charge_usage(&request.principal.tenant_id, usage.cost_micros, billed_tokens, &usage_event_id).await {
-                            tracing::warn!(error = %err, "usage charge failed");
-                        }
-                    }
-                    crate::token_quota::commit(&self.store, &request.principal.tenant_id, &request.request_id, input_tokens + output_tokens, usage.cost_micros).await;
-                    return Ok(GatewayResponse {
-                        model: alias.public_id,
-                        content,
-                        usage,
-                        provider_cost_micros: provider_cost,
-                        latency_ms: started.elapsed().as_millis() as i64,
-                        usage_event_id: Some(usage_event_id),
-                        degraded_codes: if streamed { Vec::new() } else { vec!["stream_fallback".to_string()] },
-                    });
-                }
-                Err((status, message)) => {
-                    if message == "client_disconnected" {
-                        crate::token_quota::release(&self.store, &request.principal.tenant_id, &request.request_id).await;
-                        let _ = self.store.insert_usage_event(&UsageEventRecord {
-                            usage_event_id: format!("ue_{}", crate::util::random_hex(12)),
+                    let _ = self
+                        .store
+                        .insert_usage_event(&UsageEventRecord {
+                            usage_event_id: usage_event_id.clone(),
                             request_id: request.request_id.clone(),
                             tenant_id: request.principal.tenant_id.clone(),
                             space_id: request.space_id.clone(),
@@ -522,45 +613,159 @@ impl Gateway {
                             external_usage_id: None,
                             alias: alias.public_id.clone(),
                             provider_model_id: model.provider_model_id.clone(),
-                            input_tokens: 0,
-                            output_tokens: 0,
-                            cached_tokens: 0,
-                            token_source: "estimated".to_string(),
-                            cost_micros: 0,
+                            input_tokens,
+                            output_tokens,
+                            cached_tokens: cached,
+                            token_source: token_source.to_string(),
+                            cost_micros: usage.cost_micros,
                             currency: currency.clone(),
-                            provider_cost_micros: 0,
+                            provider_cost_micros: provider_cost,
                             latency_ms: started.elapsed().as_millis() as i64,
-                            status: "cancelled".to_string(),
+                            status: "success".to_string(),
                             cache_hit: false,
                             at: crate::util::now_rfc3339(),
-                        }).await;
-                        return Err(GatewayError { status: StatusCode::GONE, code: "client_disconnected", message, retry_after: None });
+                        })
+                        .await;
+                    if billing_active && self.local_ledger {
+                        let billing = crate::billing::Billing::new(
+                            self.store.clone(),
+                            crate::config::BillingConfig::default(),
+                        );
+                        let billed_tokens = usage.input_tokens + usage.output_tokens;
+                        if let Err(err) = billing
+                            .charge_usage(
+                                &request.principal.tenant_id,
+                                usage.cost_micros,
+                                billed_tokens,
+                                &usage_event_id,
+                            )
+                            .await
+                        {
+                            tracing::warn!(error = %err, "usage charge failed");
+                        }
                     }
-                    let retryable = status == StatusCode::TOO_MANY_REQUESTS || status.is_server_error() || status == StatusCode::GATEWAY_TIMEOUT;
-                    let open_until = (chrono::Utc::now() + chrono::Duration::seconds(30)).to_rfc3339();
-                    let _ = self.store.update_route_health(
+                    crate::token_quota::commit(
+                        &self.store,
                         &request.principal.tenant_id,
-                        &route.route_id,
-                        if retryable { "open" } else { "degraded" },
-                        if retryable { "open" } else { "closed" },
-                        Some(&now),
-                        if retryable { Some(open_until.as_str()) } else { None },
-                    ).await;
+                        &request.request_id,
+                        input_tokens + output_tokens,
+                        usage.cost_micros,
+                    )
+                    .await;
+                    return Ok(GatewayResponse {
+                        model: alias.public_id,
+                        content,
+                        usage,
+                        provider_cost_micros: provider_cost,
+                        latency_ms: started.elapsed().as_millis() as i64,
+                        usage_event_id: Some(usage_event_id),
+                        degraded_codes: if streamed {
+                            Vec::new()
+                        } else {
+                            vec!["stream_fallback".to_string()]
+                        },
+                    });
+                }
+                Err((status, message)) => {
+                    if message == "client_disconnected" {
+                        crate::token_quota::release(
+                            &self.store,
+                            &request.principal.tenant_id,
+                            &request.request_id,
+                        )
+                        .await;
+                        let _ = self
+                            .store
+                            .insert_usage_event(&UsageEventRecord {
+                                usage_event_id: format!("ue_{}", crate::util::random_hex(12)),
+                                request_id: request.request_id.clone(),
+                                tenant_id: request.principal.tenant_id.clone(),
+                                space_id: request.space_id.clone(),
+                                user_id: request.principal.principal_id.clone(),
+                                role: request.role.clone(),
+                                source: request.source.clone(),
+                                rewritten_query: request.rewritten_query.clone(),
+                                external_usage_id: None,
+                                alias: alias.public_id.clone(),
+                                provider_model_id: model.provider_model_id.clone(),
+                                input_tokens: 0,
+                                output_tokens: 0,
+                                cached_tokens: 0,
+                                token_source: "estimated".to_string(),
+                                cost_micros: 0,
+                                currency: currency.clone(),
+                                provider_cost_micros: 0,
+                                latency_ms: started.elapsed().as_millis() as i64,
+                                status: "cancelled".to_string(),
+                                cache_hit: false,
+                                at: crate::util::now_rfc3339(),
+                            })
+                            .await;
+                        return Err(GatewayError {
+                            status: StatusCode::GONE,
+                            code: "client_disconnected",
+                            message,
+                            retry_after: None,
+                        });
+                    }
+                    let retryable = status == StatusCode::TOO_MANY_REQUESTS
+                        || status.is_server_error()
+                        || status == StatusCode::GATEWAY_TIMEOUT;
+                    let open_until =
+                        (chrono::Utc::now() + chrono::Duration::seconds(30)).to_rfc3339();
+                    let _ = self
+                        .store
+                        .update_route_health(
+                            &request.principal.tenant_id,
+                            &route.route_id,
+                            if retryable { "open" } else { "degraded" },
+                            if retryable { "open" } else { "closed" },
+                            Some(&now),
+                            if retryable {
+                                Some(open_until.as_str())
+                            } else {
+                                None
+                            },
+                        )
+                        .await;
                     if retryable {
                         last_error = GatewayError {
-                            status: if status == StatusCode::TOO_MANY_REQUESTS { StatusCode::TOO_MANY_REQUESTS } else { StatusCode::SERVICE_UNAVAILABLE },
-                            code: if status == StatusCode::TOO_MANY_REQUESTS { "model_rate_limited" } else { "model_timeout" },
+                            status: if status == StatusCode::TOO_MANY_REQUESTS {
+                                StatusCode::TOO_MANY_REQUESTS
+                            } else {
+                                StatusCode::SERVICE_UNAVAILABLE
+                            },
+                            code: if status == StatusCode::TOO_MANY_REQUESTS {
+                                "model_rate_limited"
+                            } else {
+                                "model_timeout"
+                            },
                             message,
                             retry_after: Some(30),
                         };
                         continue;
                     }
-                    crate::token_quota::release(&self.store, &request.principal.tenant_id, &request.request_id).await;
-                    return Err(GatewayError { status: StatusCode::BAD_REQUEST, code: "model_invalid_request", message, retry_after: None });
+                    crate::token_quota::release(
+                        &self.store,
+                        &request.principal.tenant_id,
+                        &request.request_id,
+                    )
+                    .await;
+                    return Err(GatewayError {
+                        status: StatusCode::BAD_REQUEST,
+                        code: "model_invalid_request",
+                        message,
+                        retry_after: None,
+                    });
                 }
             }
         }
-        crate::token_quota::release(&self.store, &request.principal.tenant_id, &request.request_id).await;
+        crate::token_quota::release(
+            &self.store,
+            &request.principal.tenant_id,
+            &request.request_id,
+        )
+        .await;
         Err(last_error)
     }
 
@@ -575,7 +780,12 @@ impl Gateway {
         if alias.status != "active" {
             return Err(unavailable("model alias is disabled"));
         }
-        if !access_allowed(&alias, &request.principal, request.space_id.as_deref(), &request.role) {
+        if !access_allowed(
+            &alias,
+            &request.principal,
+            request.space_id.as_deref(),
+            &request.role,
+        ) {
             return Err(forbidden());
         }
 
@@ -584,26 +794,41 @@ impl Gateway {
             .list_routes(&request.principal.tenant_id, Some(&alias.public_id))
             .await
             .map_err(|err| unavailable(err.to_string()))?;
-        let models = self.store.list_provider_models(&request.principal.tenant_id).await.map_err(|err| unavailable(err.to_string()))?;
-        let providers = self.store.list_providers(&request.principal.tenant_id).await.map_err(|err| unavailable(err.to_string()))?;
+        let models = self
+            .store
+            .list_provider_models(&request.principal.tenant_id)
+            .await
+            .map_err(|err| unavailable(err.to_string()))?;
+        let providers = self
+            .store
+            .list_providers(&request.principal.tenant_id)
+            .await
+            .map_err(|err| unavailable(err.to_string()))?;
         let now = crate::util::now_rfc3339();
         let mut candidates: Vec<(RouteRecord, ProviderModelRecord, ProviderRecord)> = Vec::new();
         for route in routes {
-            if route.health == "open" || route.circuit_state == "open" {
-                if route
+            if (route.health == "open" || route.circuit_state == "open")
+                && route
                     .circuit_open_until
                     .as_deref()
                     .map(|until| until > now.as_str())
                     .unwrap_or(false)
-                {
-                    continue;
-                }
+            {
+                continue;
             }
-            let Some(model) = models.iter().find(|model| model.provider_model_id == route.provider_model_id && model.status == "active") else { continue };
+            let Some(model) = models.iter().find(|model| {
+                model.provider_model_id == route.provider_model_id && model.status == "active"
+            }) else {
+                continue;
+            };
             if !capabilities_match(&alias.capabilities_json, &model.capabilities_json) {
                 continue;
             }
-            let Some(provider) = providers.iter().find(|provider| provider.provider_id == model.provider_id && provider.status == "active") else { continue };
+            let Some(provider) = providers.iter().find(|provider| {
+                provider.provider_id == model.provider_id && provider.status == "active"
+            }) else {
+                continue;
+            };
             candidates.push((route, model.clone(), provider.clone()));
         }
         candidates.sort_by_key(|(route, _, provider)| (route.priority, provider.priority));
@@ -614,9 +839,21 @@ impl Gateway {
 
         let input_estimate = estimate_input(&request.messages);
         let (input_price, output_price, currency) = price_micros(&alias.price_json);
-        let estimated_cost = cost(input_estimate + request.max_output_tokens, input_price.max(output_price));
-        let billing_wallets = self.store.billing_list_wallets(&request.principal.tenant_id).await.unwrap_or_default();
-        let billing_entitlement = self.store.billing_get_entitlement(&request.principal.tenant_id).await.ok().flatten();
+        let estimated_cost = cost(
+            input_estimate + request.max_output_tokens,
+            input_price.max(output_price),
+        );
+        let billing_wallets = self
+            .store
+            .billing_list_wallets(&request.principal.tenant_id)
+            .await
+            .unwrap_or_default();
+        let billing_entitlement = self
+            .store
+            .billing_get_entitlement(&request.principal.tenant_id)
+            .await
+            .ok()
+            .flatten();
         let billing_active = !billing_wallets.is_empty() || billing_entitlement.is_some();
         if billing_active {
             if let Some(entitlement) = &billing_entitlement {
@@ -628,7 +865,10 @@ impl Gateway {
                 .as_ref()
                 .map(|entitlement| (entitlement.included_tokens - entitlement.used_tokens).max(0))
                 .unwrap_or(0);
-            let wallet_balance = billing_wallets.first().map(|wallet| wallet.balance_micros).unwrap_or(0);
+            let wallet_balance = billing_wallets
+                .first()
+                .map(|wallet| wallet.balance_micros)
+                .unwrap_or(0);
             if included_remaining <= 0 && wallet_balance < estimated_cost {
                 return Err(payment_required());
             }
@@ -659,8 +899,11 @@ impl Gateway {
             let (content, value) = match self.call_provider(&provider, &model, request).await {
                 Ok(result) => result,
                 Err((status, message)) => {
-                    let retryable = status == StatusCode::TOO_MANY_REQUESTS || status.is_server_error() || status == StatusCode::GATEWAY_TIMEOUT;
-                    let open_until = (chrono::Utc::now() + chrono::Duration::seconds(30)).to_rfc3339();
+                    let retryable = status == StatusCode::TOO_MANY_REQUESTS
+                        || status.is_server_error()
+                        || status == StatusCode::GATEWAY_TIMEOUT;
+                    let open_until =
+                        (chrono::Utc::now() + chrono::Duration::seconds(30)).to_rfc3339();
                     let _ = self
                         .store
                         .update_route_health(
@@ -669,34 +912,60 @@ impl Gateway {
                             if retryable { "open" } else { "degraded" },
                             if retryable { "open" } else { "closed" },
                             Some(&now),
-                            if retryable { Some(open_until.as_str()) } else { None },
+                            if retryable {
+                                Some(open_until.as_str())
+                            } else {
+                                None
+                            },
                         )
                         .await;
                     if retryable {
                         last_error = GatewayError {
-                            status: if status == StatusCode::TOO_MANY_REQUESTS { StatusCode::TOO_MANY_REQUESTS } else { StatusCode::SERVICE_UNAVAILABLE },
-                            code: if status == StatusCode::TOO_MANY_REQUESTS { "model_rate_limited" } else { "model_timeout" },
+                            status: if status == StatusCode::TOO_MANY_REQUESTS {
+                                StatusCode::TOO_MANY_REQUESTS
+                            } else {
+                                StatusCode::SERVICE_UNAVAILABLE
+                            },
+                            code: if status == StatusCode::TOO_MANY_REQUESTS {
+                                "model_rate_limited"
+                            } else {
+                                "model_timeout"
+                            },
                             message,
                             retry_after: Some(30),
                         };
                         continue;
                     }
-                    crate::token_quota::release(&self.store, &request.principal.tenant_id, &request.request_id).await;
-                    return Err(if status == StatusCode::FORBIDDEN || status == StatusCode::UNAUTHORIZED {
-                        forbidden()
-                    } else {
-                        GatewayError {
-                            status: StatusCode::BAD_REQUEST,
-                            code: "model_invalid_request",
-                            message,
-                            retry_after: None,
-                        }
-                    });
+                    crate::token_quota::release(
+                        &self.store,
+                        &request.principal.tenant_id,
+                        &request.request_id,
+                    )
+                    .await;
+                    return Err(
+                        if status == StatusCode::FORBIDDEN || status == StatusCode::UNAUTHORIZED {
+                            forbidden()
+                        } else {
+                            GatewayError {
+                                status: StatusCode::BAD_REQUEST,
+                                code: "model_invalid_request",
+                                message,
+                                retry_after: None,
+                            }
+                        },
+                    );
                 }
             };
             let _ = self
                 .store
-                .update_route_health(&request.principal.tenant_id, &route.route_id, "healthy", "closed", None, None)
+                .update_route_health(
+                    &request.principal.tenant_id,
+                    &route.route_id,
+                    "healthy",
+                    "closed",
+                    None,
+                    None,
+                )
                 .await;
 
             let prompt = value
@@ -726,7 +995,8 @@ impl Gateway {
                 cost_micros: cost(input_tokens, input_price) + cost(output_tokens, output_price),
                 currency: currency.clone(),
             };
-            let provider_cost = cost(input_tokens, provider_input) + cost(output_tokens, provider_output);
+            let provider_cost =
+                cost(input_tokens, provider_input) + cost(output_tokens, provider_output);
             let usage_event_id = format!("ue_{}", crate::util::random_hex(12));
             let _ = self
                 .store
@@ -756,9 +1026,20 @@ impl Gateway {
                 })
                 .await;
             if billing_active && self.local_ledger {
-                let billing = crate::billing::Billing::new(self.store.clone(), crate::config::BillingConfig::default());
+                let billing = crate::billing::Billing::new(
+                    self.store.clone(),
+                    crate::config::BillingConfig::default(),
+                );
                 let billed_tokens = usage.input_tokens + usage.output_tokens;
-                if let Err(err) = billing.charge_usage(&request.principal.tenant_id, usage.cost_micros, billed_tokens, &usage_event_id).await {
+                if let Err(err) = billing
+                    .charge_usage(
+                        &request.principal.tenant_id,
+                        usage.cost_micros,
+                        billed_tokens,
+                        &usage_event_id,
+                    )
+                    .await
+                {
                     tracing::warn!(error = %err, "usage charge failed");
                 }
             }
@@ -780,29 +1061,39 @@ impl Gateway {
                 degraded_codes: Vec::new(),
             });
         }
-        crate::token_quota::release(&self.store, &request.principal.tenant_id, &request.request_id).await;
-        let _ = self.store.insert_usage_event(&UsageEventRecord {
-            usage_event_id: format!("ue_{}", crate::util::random_hex(12)),
-            request_id: request.request_id.clone(),
-            tenant_id: request.principal.tenant_id.clone(),
-            space_id: request.space_id.clone(),
-            user_id: request.principal.principal_id.clone(),
-            role: request.role.clone(),
-            source: "kb".to_string(),
-            external_usage_id: None,
-            alias: alias.public_id.clone(),
-            provider_model_id: "unavailable".to_string(),
-            input_tokens: 0, output_tokens: 0, cached_tokens: 0,
-            token_source: "estimated".to_string(),
-            cost_micros: 0,
-            currency,
-            provider_cost_micros: 0,
-            latency_ms: started.elapsed().as_millis() as i64,
-            status: "error".to_string(),
-            cache_hit: false,
-            rewritten_query: request.rewritten_query.clone(),
-            at: crate::util::now_rfc3339(),
-        }).await;
+        crate::token_quota::release(
+            &self.store,
+            &request.principal.tenant_id,
+            &request.request_id,
+        )
+        .await;
+        let _ = self
+            .store
+            .insert_usage_event(&UsageEventRecord {
+                usage_event_id: format!("ue_{}", crate::util::random_hex(12)),
+                request_id: request.request_id.clone(),
+                tenant_id: request.principal.tenant_id.clone(),
+                space_id: request.space_id.clone(),
+                user_id: request.principal.principal_id.clone(),
+                role: request.role.clone(),
+                source: "kb".to_string(),
+                external_usage_id: None,
+                alias: alias.public_id.clone(),
+                provider_model_id: "unavailable".to_string(),
+                input_tokens: 0,
+                output_tokens: 0,
+                cached_tokens: 0,
+                token_source: "estimated".to_string(),
+                cost_micros: 0,
+                currency,
+                provider_cost_micros: 0,
+                latency_ms: started.elapsed().as_millis() as i64,
+                status: "error".to_string(),
+                cache_hit: false,
+                rewritten_query: request.rewritten_query.clone(),
+                at: crate::util::now_rfc3339(),
+            })
+            .await;
         Err(last_error)
     }
 }

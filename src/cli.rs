@@ -296,8 +296,12 @@ enum SpaceCommand {
         visibility: String,
     },
     List,
-    Members { space_id: String },
-    Usage { space_id: String },
+    Members {
+        space_id: String,
+    },
+    Usage {
+        space_id: String,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -367,11 +371,7 @@ pub async fn run() -> anyhow::Result<()> {
             crate::summary::spawn_worker(state.store.clone(), state.config.clone());
             crate::web::serve(state, &config.server.bind).await
         }
-        Commands::Seed {
-            space,
-            lang,
-            json,
-        } => {
+        Commands::Seed { space, lang, json } => {
             let store = open_store(&config).await?;
             let options = crate::seed::SeedOptions {
                 space_id: space.unwrap_or_else(|| config.seed.space.clone()),
@@ -399,8 +399,7 @@ pub async fn run() -> anyhow::Result<()> {
             let providers = ProviderSet::from_config(&config.models);
             let acl = match acl_json {
                 Some(value) => Some(
-                    crate::governance::Acl::from_user_input(&value)
-                        .map_err(anyhow::Error::msg)?,
+                    crate::governance::Acl::from_user_input(&value).map_err(anyhow::Error::msg)?,
                 ),
                 None => None,
             };
@@ -488,19 +487,17 @@ pub async fn run() -> anyhow::Result<()> {
             tuning.lang = lang_arg(lang);
             tuning.billing_local_ledger = config.billing.engine.eq_ignore_ascii_case("local");
             let response = crate::search::search_with_tuning(
-                &store,
-                &providers,
-                &policy,
-                &query,
-                mode,
-                k,
-                &tuning,
+                &store, &providers, &policy, &query, mode, k, &tuning,
             )
             .await?;
             if json {
                 println!("{}", serde_json::to_string_pretty(&response)?);
             } else {
-                println!("mode: {} (used {})", response.mode_requested.as_str(), response.mode_used.as_str());
+                println!(
+                    "mode: {} (used {})",
+                    response.mode_requested.as_str(),
+                    response.mode_used.as_str()
+                );
                 println!("engine: {}", response.keyword_engine);
                 if !response.degraded.is_empty() {
                     println!("degraded:");
@@ -564,7 +561,10 @@ pub async fn run() -> anyhow::Result<()> {
                 println!("{}", serde_json::to_string_pretty(&answer)?);
             } else {
                 println!("mode: {:?}", answer.mode);
-                println!("confidence: {:.3} ({:?})", answer.confidence.score, answer.confidence.band);
+                println!(
+                    "confidence: {:.3} ({:?})",
+                    answer.confidence.score, answer.confidence.band
+                );
                 match &answer.answer {
                     Some(text) => println!("\n{text}"),
                     None => println!("\n未找到可用证据。"),
@@ -611,16 +611,9 @@ pub async fn run() -> anyhow::Result<()> {
             let mut tuning = SearchTuning::from_retrieval(&config.retrieval);
             tuning.lang = lang_arg(lang);
             tuning.billing_local_ledger = config.billing.engine.eq_ignore_ascii_case("local");
-            let report = crate::eval::evaluate(
-                &store,
-                &providers,
-                &policy,
-                &dataset,
-                k,
-                mode,
-                &tuning,
-            )
-            .await?;
+            let report =
+                crate::eval::evaluate(&store, &providers, &policy, &dataset, k, mode, &tuning)
+                    .await?;
             if json {
                 println!("{}", serde_json::to_string_pretty(&report)?);
             } else {
@@ -677,9 +670,10 @@ pub async fn run() -> anyhow::Result<()> {
             Ok(())
         }
         Commands::User {
-            command: UserCommand::Role {
-                command: UserRoleCommand::Set { username, role },
-            },
+            command:
+                UserCommand::Role {
+                    command: UserRoleCommand::Set { username, role },
+                },
         } => {
             let role = crate::governance::UserRole::parse(&role).map_err(anyhow::Error::msg)?;
             let store = open_store(&config).await?;
@@ -708,13 +702,14 @@ pub async fn run() -> anyhow::Result<()> {
             Ok(())
         }
         Commands::Token {
-            command: TokenCommand::Create {
-                username,
-                scope,
-                label,
-                kind,
-                expires_days,
-            },
+            command:
+                TokenCommand::Create {
+                    username,
+                    scope,
+                    label,
+                    kind,
+                    expires_days,
+                },
         } => {
             let store = open_store(&config).await?;
             let user = store
@@ -802,12 +797,7 @@ pub async fn run() -> anyhow::Result<()> {
             for page in pages {
                 println!(
                     "{}/{}/{}  v{}  {}  {}",
-                    page.space_id,
-                    page.lang,
-                    page.slug,
-                    page.version,
-                    page.title,
-                    page.updated_at
+                    page.space_id, page.lang, page.slug, page.version, page.title, page.updated_at
                 );
             }
             Ok(())
@@ -844,16 +834,20 @@ pub async fn run() -> anyhow::Result<()> {
         }
 
         Commands::Auth {
-            command: AuthCommand::Login {
-                token,
-                device,
-                json,
-            },
+            command:
+                AuthCommand::Login {
+                    token,
+                    device,
+                    json,
+                },
         } => {
             if device && token.is_none() {
                 bail!(
                     "not_implemented: {}",
-                    crate::i18n::t(&crate::i18n::current_locale(), "cli.auth.device_not_implemented")
+                    crate::i18n::t(
+                        &crate::i18n::current_locale(),
+                        "cli.auth.device_not_implemented"
+                    )
                 );
             }
             let token = token
@@ -959,18 +953,38 @@ pub async fn run() -> anyhow::Result<()> {
                     let processed = crate::summary::process_pending(&store, &config, limit).await;
                     let after = store.list_summary_jobs("queued", limit).await?;
                     if json {
-                        println!("{}", serde_json::json!({"queued_before": before.len(), "processed": processed, "queued_after": after.len()}));
+                        println!(
+                            "{}",
+                            serde_json::json!({"queued_before": before.len(), "processed": processed, "queued_after": after.len()})
+                        );
                     } else {
-                        println!("queued_before={} processed={} queued_after={}", before.len(), processed, after.len());
+                        println!(
+                            "queued_before={} processed={} queued_after={}",
+                            before.len(),
+                            processed,
+                            after.len()
+                        );
                     }
                 }
-                SummaryCommand::List { status, limit, json } => {
+                SummaryCommand::List {
+                    status,
+                    limit,
+                    json,
+                } => {
                     let jobs = store.list_summary_jobs(&status, limit).await?;
                     if json {
                         println!("{}", serde_json::to_string_pretty(&jobs)?);
                     } else {
                         for job in jobs {
-                            println!("{} doc={} revision={} status={} attempts={} error={:?}", job.job_id, job.doc_id, job.revision_id, job.status, job.attempts, job.error);
+                            println!(
+                                "{} doc={} revision={} status={} attempts={} error={:?}",
+                                job.job_id,
+                                job.doc_id,
+                                job.revision_id,
+                                job.status,
+                                job.attempts,
+                                job.error
+                            );
                         }
                     }
                 }
@@ -986,45 +1000,90 @@ pub async fn run() -> anyhow::Result<()> {
             match command {
                 ModelsCommand::List => {
                     for alias in store.list_model_aliases(&config.storage.tenant_id).await? {
-                        println!("{}  {}  status={}  version={}", alias.public_id, alias.display_name, alias.status, alias.version);
+                        println!(
+                            "{}  {}  status={}  version={}",
+                            alias.public_id, alias.display_name, alias.status, alias.version
+                        );
                     }
                 }
                 ModelsCommand::Show { alias } => {
-                    let alias = store.get_model_alias(&config.storage.tenant_id, &alias).await?
+                    let alias = store
+                        .get_model_alias(&config.storage.tenant_id, &alias)
+                        .await?
                         .ok_or_else(|| anyhow::anyhow!("model alias not found"))?;
                     println!("{}", serde_json::to_string_pretty(&alias)?);
                 }
                 ModelsCommand::Routes { alias } => {
-                    for route in store.list_routes(&config.storage.tenant_id, Some(&alias)).await? {
-                        println!("{}  model={}  priority={} weight={} health={} circuit={}", route.route_id, route.provider_model_id, route.priority, route.weight, route.health, route.circuit_state);
+                    for route in store
+                        .list_routes(&config.storage.tenant_id, Some(&alias))
+                        .await?
+                    {
+                        println!(
+                            "{}  model={}  priority={} weight={} health={} circuit={}",
+                            route.route_id,
+                            route.provider_model_id,
+                            route.priority,
+                            route.weight,
+                            route.health,
+                            route.circuit_state
+                        );
                     }
                 }
             }
             Ok(())
         }
-        Commands::Usage { user, space, alias, from, to, json } => {
+        Commands::Usage {
+            user,
+            space,
+            alias,
+            from,
+            to,
+            json,
+        } => {
             let store = open_store(&config).await?;
             let principal = resolve_principal(&config, &store, cli.token.as_deref()).await?;
             if !principal.tenant_role.is_admin() {
                 bail!("tenant admin required");
             }
-            let events = store.list_usage_events(&crate::store::UsageFilter {
-                tenant_id: config.storage.tenant_id.clone(),
-                space_id: space,
-                user_id: user,
-                alias,
-                from,
-                to,
-                limit: 1000,
-            }).await?;
+            let events = store
+                .list_usage_events(&crate::store::UsageFilter {
+                    tenant_id: config.storage.tenant_id.clone(),
+                    space_id: space,
+                    user_id: user,
+                    alias,
+                    from,
+                    to,
+                    limit: 1000,
+                })
+                .await?;
             if json {
                 println!("{}", serde_json::to_string_pretty(&events)?);
             } else {
-                let mut input = 0i64; let mut output = 0i64; let mut cost = 0i64;
-                for event in &events { input += event.input_tokens; output += event.output_tokens; cost += event.cost_micros; }
-                println!("requests={} input_tokens={} output_tokens={} cost_micros={}", events.len(), input, output, cost);
+                let mut input = 0i64;
+                let mut output = 0i64;
+                let mut cost = 0i64;
+                for event in &events {
+                    input += event.input_tokens;
+                    output += event.output_tokens;
+                    cost += event.cost_micros;
+                }
+                println!(
+                    "requests={} input_tokens={} output_tokens={} cost_micros={}",
+                    events.len(),
+                    input,
+                    output,
+                    cost
+                );
                 for event in events {
-                    println!("{} alias={} input={} output={} cost={} status={}", event.request_id, event.alias, event.input_tokens, event.output_tokens, event.cost_micros, event.status);
+                    println!(
+                        "{} alias={} input={} output={} cost={} status={}",
+                        event.request_id,
+                        event.alias,
+                        event.input_tokens,
+                        event.output_tokens,
+                        event.cost_micros,
+                        event.status
+                    );
                 }
             }
             Ok(())
@@ -1038,13 +1097,25 @@ pub async fn run() -> anyhow::Result<()> {
             let quotas = store.list_token_quotas(&config.storage.tenant_id).await?;
             let counters = store.list_quota_counters(&config.storage.tenant_id).await?;
             if json {
-                println!("{}", serde_json::to_string_pretty(&serde_json::json!({"quotas": quotas, "counters": counters}))?);
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(
+                        &serde_json::json!({"quotas": quotas, "counters": counters})
+                    )?
+                );
             } else {
                 for quota in quotas {
                     println!("{} {}:{} period={} tokens={:?} requests={:?} cost={:?} enforcement={} enabled={}", quota.quota_id, quota.scope_type, quota.scope_id, quota.period, quota.limit_tokens, quota.limit_requests, quota.limit_cost_micros, quota.enforcement, quota.enabled);
                 }
                 for counter in counters {
-                    println!("counter {}:{} period={} used_tokens={} reserved_tokens={}", counter.scope_type, counter.scope_id, counter.period_start, counter.used_tokens, counter.reserved_tokens);
+                    println!(
+                        "counter {}:{} period={} used_tokens={} reserved_tokens={}",
+                        counter.scope_type,
+                        counter.scope_id,
+                        counter.period_start,
+                        counter.used_tokens,
+                        counter.reserved_tokens
+                    );
                 }
             }
             Ok(())
@@ -1066,11 +1137,12 @@ pub async fn run() -> anyhow::Result<()> {
             Ok(())
         }
         Commands::Billing {
-            command: BillingCommand::Checkout {
-                plan,
-                amount_minor,
-                currency,
-            },
+            command:
+                BillingCommand::Checkout {
+                    plan,
+                    amount_minor,
+                    currency,
+                },
         } => {
             if !config.feature_enabled(crate::config::Feature::Billing) {
                 bail!(
@@ -1088,7 +1160,9 @@ pub async fn run() -> anyhow::Result<()> {
                     crate::i18n::t(&crate::i18n::current_locale(), "payment.not_configured")
                 );
             }
-            bail!("payment_provider_unavailable: payment adapter is not implemented in this release");
+            bail!(
+                "payment_provider_unavailable: payment adapter is not implemented in this release"
+            );
         }
         Commands::Group {
             command: GroupCommand::Create { name, description },
@@ -1149,11 +1223,12 @@ pub async fn run() -> anyhow::Result<()> {
             Ok(())
         }
         Commands::Group {
-            command: GroupCommand::AddMember {
-                group_id,
-                principal_id,
-                role,
-            },
+            command:
+                GroupCommand::AddMember {
+                    group_id,
+                    principal_id,
+                    role,
+                },
         } => {
             let store = open_store(&config).await?;
             let principal = resolve_principal(&config, &store, cli.token.as_deref()).await?;
@@ -1189,19 +1264,25 @@ pub async fn run() -> anyhow::Result<()> {
                     created_at: now_rfc3339(),
                 })
                 .await?;
-            println!("group member added: {group_id} -> {principal_id} role={}", role.as_str());
+            println!(
+                "group member added: {group_id} -> {principal_id} role={}",
+                role.as_str()
+            );
             Ok(())
         }
         Commands::Group {
-            command: GroupCommand::RemoveMember {
-                group_id,
-                principal_id,
-            },
+            command:
+                GroupCommand::RemoveMember {
+                    group_id,
+                    principal_id,
+                },
         } => {
             let store = open_store(&config).await?;
             let principal = resolve_principal(&config, &store, cli.token.as_deref()).await?;
             if !principal.tenant_role.is_admin() {
-                let member = store.get_group_member(&group_id, &principal.principal_id).await?;
+                let member = store
+                    .get_group_member(&group_id, &principal.principal_id)
+                    .await?;
                 if !member
                     .map(|member| member.role == GroupRole::GroupAdmin)
                     .unwrap_or(false)
@@ -1221,11 +1302,12 @@ pub async fn run() -> anyhow::Result<()> {
             Ok(())
         }
         Commands::Space {
-            command: SpaceCommand::Create {
-                space_id,
-                name,
-                visibility,
-            },
+            command:
+                SpaceCommand::Create {
+                    space_id,
+                    name,
+                    visibility,
+                },
         } => {
             let store = open_store(&config).await?;
             let principal = resolve_principal(&config, &store, cli.token.as_deref()).await?;
@@ -1277,7 +1359,10 @@ pub async fn run() -> anyhow::Result<()> {
                 &config.spaces,
             )
             .await?;
-            println!("space created: {} ({}) owner={}", space.name, space_id, principal.principal_id);
+            println!(
+                "space created: {} ({}) owner={}",
+                space.name, space_id, principal.principal_id
+            );
             Ok(())
         }
         Commands::Space {
@@ -1372,7 +1457,10 @@ pub async fn run() -> anyhow::Result<()> {
                 if quota.scope_type == QuotaScope::Space && quota.scope_id == space_id {
                     println!(
                         "quota storage={:?} documents={:?} chunks={:?} members={:?} enforcement={}",
-                        quota.storage_bytes, quota.documents, quota.chunks, quota.members,
+                        quota.storage_bytes,
+                        quota.documents,
+                        quota.chunks,
+                        quota.members,
                         quota.enforcement
                     );
                 }
@@ -1455,7 +1543,9 @@ pub(crate) async fn resolve_principal(
         };
         principal.allowed_space_ids = crate::access::allowed_space_ids(store, &principal).await?;
         if principal.allowed_space_ids.is_empty() {
-            principal.allowed_space_ids.push(config.storage.default_space.clone());
+            principal
+                .allowed_space_ids
+                .push(config.storage.default_space.clone());
         }
         return Ok(principal);
     }
@@ -1465,15 +1555,19 @@ pub(crate) async fn resolve_principal(
     {
         let mut principal = Principal::solo();
         principal.tenant_id = config.storage.tenant_id.clone();
-        principal.allowed_space_ids =
-            crate::access::allowed_space_ids(store, &principal).await?;
+        principal.allowed_space_ids = crate::access::allowed_space_ids(store, &principal).await?;
         if principal.allowed_space_ids.is_empty() {
-            principal.allowed_space_ids.push(config.storage.default_space.clone());
+            principal
+                .allowed_space_ids
+                .push(config.storage.default_space.clone());
         }
         return Ok(principal);
     }
 
-    bail!("profile {:?} requires --token or LKB_API_TOKEN for CLI queries", config.profile_name())
+    bail!(
+        "profile {:?} requires --token or LKB_API_TOKEN for CLI queries",
+        config.profile_name()
+    )
 }
 
 fn read_password() -> anyhow::Result<String> {
@@ -1486,9 +1580,7 @@ fn read_password() -> anyhow::Result<String> {
     std::io::stderr().flush()?;
     let mut buffer = String::new();
     std::io::stdin().read_line(&mut buffer)?;
-    Ok(buffer
-        .trim_end_matches(|c| c == '\r' || c == '\n')
-        .to_string())
+    Ok(buffer.trim_end_matches(['\r', '\n']).to_string())
 }
 
 #[allow(dead_code)]
@@ -1499,17 +1591,6 @@ fn print_user(user: &UserRecord) {
 #[allow(dead_code)]
 fn store_error_message(err: StoreError) -> String {
     err.to_string()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn token_scope_round_trips() {
-        assert_eq!(TokenScope::parse("admin").unwrap().as_str(), "admin");
-        assert!(TokenScope::parse("root").is_err());
-    }
 }
 
 fn cli_command_name(command: &Commands) -> &'static str {
@@ -1549,8 +1630,13 @@ fn api_config_path() -> PathBuf {
             return PathBuf::from(appdata).join("lkb").join("config.toml");
         }
     }
-    let home = std::env::var("HOME").or_else(|_| std::env::var("USERPROFILE")).unwrap_or_default();
-    PathBuf::from(home).join(".config").join("lkb").join("config.toml")
+    let home = std::env::var("HOME")
+        .or_else(|_| std::env::var("USERPROFILE"))
+        .unwrap_or_default();
+    PathBuf::from(home)
+        .join(".config")
+        .join("lkb")
+        .join("config.toml")
 }
 
 fn load_api_config() -> anyhow::Result<ApiConfigFile> {
@@ -1570,8 +1656,8 @@ fn save_api_config(config: &ApiConfigFile) -> anyhow::Result<()> {
     let text = toml::to_string(config)?;
     #[cfg(unix)]
     {
-        use std::os::unix::fs::OpenOptionsExt;
         use std::io::Write;
+        use std::os::unix::fs::OpenOptionsExt;
         let mut file = std::fs::OpenOptions::new()
             .create(true)
             .truncate(true)
@@ -1594,4 +1680,15 @@ fn save_api_config(config: &ApiConfigFile) -> anyhow::Result<()> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn token_scope_round_trips() {
+        assert_eq!(TokenScope::parse("admin").unwrap().as_str(), "admin");
+        assert!(TokenScope::parse("root").is_err());
+    }
 }

@@ -41,7 +41,9 @@ impl BillingError {
         use axum::http::StatusCode;
         match self {
             BillingError::NotEnabled => StatusCode::FORBIDDEN,
-            BillingError::Insufficient | BillingError::PaymentRequired => StatusCode::PAYMENT_REQUIRED,
+            BillingError::Insufficient | BillingError::PaymentRequired => {
+                StatusCode::PAYMENT_REQUIRED
+            }
             BillingError::Invalid(_) => StatusCode::BAD_REQUEST,
             BillingError::Store(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
@@ -72,7 +74,9 @@ impl SubscriptionStatus {
             "past_due" => Ok(Self::PastDue),
             "suspended" => Ok(Self::Suspended),
             "cancelled" => Ok(Self::Cancelled),
-            other => Err(BillingError::Invalid(format!("unknown subscription status {other:?}"))),
+            other => Err(BillingError::Invalid(format!(
+                "unknown subscription status {other:?}"
+            ))),
         }
     }
 
@@ -112,6 +116,15 @@ pub struct Billing {
     config: BillingConfig,
 }
 
+struct LedgerEntryInput<'a> {
+    account: &'a str,
+    direction: &'a str,
+    amount_micros: i64,
+    idempotency_key: &'a str,
+    request_id: Option<&'a str>,
+    metadata: serde_json::Value,
+}
+
 impl Billing {
     pub fn new(store: Arc<dyn Store>, config: BillingConfig) -> Self {
         Self { store, config }
@@ -122,10 +135,20 @@ impl Billing {
     }
 
     async fn ensure_wallet(&self, tenant_id: &str) -> Result<WalletRecord, BillingError> {
-        if let Some(wallet) = self.store.billing_get_wallet(tenant_id, &self.config.currency).await? {
+        if let Some(wallet) = self
+            .store
+            .billing_get_wallet(tenant_id, &self.config.currency)
+            .await?
+        {
             return Ok(wallet);
         }
-        if let Some(wallet) = self.store.billing_list_wallets(tenant_id).await?.into_iter().next() {
+        if let Some(wallet) = self
+            .store
+            .billing_list_wallets(tenant_id)
+            .await?
+            .into_iter()
+            .next()
+        {
             return Ok(wallet);
         }
         let wallet = WalletRecord {
@@ -147,28 +170,19 @@ impl Billing {
         self.ensure_wallet(tenant_id).await
     }
 
-    fn entries(
-        &self,
-        wallet: &WalletRecord,
-        account: &str,
-        direction: &str,
-        amount_micros: i64,
-        idempotency_key: &str,
-        request_id: Option<&str>,
-        metadata: serde_json::Value,
-    ) -> LedgerEntryRecord {
+    fn entries(&self, wallet: &WalletRecord, input: LedgerEntryInput<'_>) -> LedgerEntryRecord {
         LedgerEntryRecord {
             entry_id: format!("leq_{}", crate::util::random_hex(12)),
             group_id: format!("grp_{}", crate::util::random_hex(12)),
             wallet_id: wallet.wallet_id.clone(),
             tenant_id: wallet.tenant_id.clone(),
-            account: account.to_string(),
-            direction: direction.to_string(),
-            amount_micros,
+            account: input.account.to_string(),
+            direction: input.direction.to_string(),
+            amount_micros: input.amount_micros,
             currency: wallet.currency.clone(),
-            idempotency_key: idempotency_key.to_string(),
-            request_id: request_id.map(str::to_string),
-            metadata_json: metadata.to_string(),
+            idempotency_key: input.idempotency_key.to_string(),
+            request_id: input.request_id.map(str::to_string),
+            metadata_json: input.metadata.to_string(),
             created_at: crate::util::now_rfc3339(),
         }
     }
@@ -181,7 +195,8 @@ impl Billing {
         request_id: Option<&str>,
         metadata: serde_json::Value,
     ) -> Result<LedgerTxResult, BillingError> {
-        self.post_balanced_forced(wallet, legs, idempotency_key, request_id, metadata, false).await
+        self.post_balanced_forced(wallet, legs, idempotency_key, request_id, metadata, false)
+            .await
     }
 
     async fn post_balanced_forced(
@@ -193,27 +208,45 @@ impl Billing {
         metadata: serde_json::Value,
         force_negative: bool,
     ) -> Result<LedgerTxResult, BillingError> {
-        let debit: i64 = legs.iter().filter(|(_, direction, _)| *direction == "debit").map(|(_, _, amount)| *amount).sum();
-        let credit: i64 = legs.iter().filter(|(_, direction, _)| *direction == "credit").map(|(_, _, amount)| *amount).sum();
+        let debit: i64 = legs
+            .iter()
+            .filter(|(_, direction, _)| *direction == "debit")
+            .map(|(_, _, amount)| *amount)
+            .sum();
+        let credit: i64 = legs
+            .iter()
+            .filter(|(_, direction, _)| *direction == "credit")
+            .map(|(_, _, amount)| *amount)
+            .sum();
         if debit != credit {
-            return Err(BillingError::Invalid("ledger legs must balance".to_string()));
+            return Err(BillingError::Invalid(
+                "ledger legs must balance".to_string(),
+            ));
         }
         let mut entries = Vec::new();
         for (index, (account, direction, amount)) in legs.iter().enumerate() {
             entries.push(self.entries(
                 wallet,
-                account,
-                direction,
-                *amount,
-                &format!("{idempotency_key}:{index}"),
-                request_id,
-                metadata.clone(),
+                LedgerEntryInput {
+                    account,
+                    direction,
+                    amount_micros: *amount,
+                    idempotency_key: &format!("{idempotency_key}:{index}"),
+                    request_id,
+                    metadata: metadata.clone(),
+                },
             ));
         }
         let balance_delta: i64 = entries
             .iter()
             .filter(|entry| entry.account == "wallet")
-            .map(|entry| if entry.direction == "credit" { entry.amount_micros } else { -entry.amount_micros })
+            .map(|entry| {
+                if entry.direction == "credit" {
+                    entry.amount_micros
+                } else {
+                    -entry.amount_micros
+                }
+            })
             .sum();
         let allow_negative = force_negative || balance_delta >= 0;
         let result = self
@@ -235,7 +268,9 @@ impl Billing {
         idempotency_key: &str,
     ) -> Result<TopupRecord, BillingError> {
         if amount_micros <= 0 {
-            return Err(BillingError::Invalid("amount_micros must be positive".to_string()));
+            return Err(BillingError::Invalid(
+                "amount_micros must be positive".to_string(),
+            ));
         }
         if let Some(existing) = self
             .store
@@ -284,7 +319,9 @@ impl Billing {
             LedgerTxResult::Applied { .. } | LedgerTxResult::Duplicate => "paid",
             _ => "pending",
         };
-        self.store.billing_set_topup_status(&topup.topup_id, status).await?;
+        self.store
+            .billing_set_topup_status(&topup.topup_id, status)
+            .await?;
         let invoice = InvoiceRecord {
             invoice_id: format!("inv_{}", crate::util::random_hex(12)),
             tenant_id: tenant_id.to_string(),
@@ -369,7 +406,9 @@ impl Billing {
         idempotency_key: &str,
     ) -> Result<(), BillingError> {
         if amount_micros <= 0 {
-            return Err(BillingError::Invalid("refund amount must be positive".to_string()));
+            return Err(BillingError::Invalid(
+                "refund amount must be positive".to_string(),
+            ));
         }
         let wallet = self.ensure_wallet(tenant_id).await?;
         match self
@@ -399,7 +438,9 @@ impl Billing {
         idempotency_key: &str,
     ) -> Result<(), BillingError> {
         if amount_micros <= 0 {
-            return Err(BillingError::Invalid("refund amount must be positive".to_string()));
+            return Err(BillingError::Invalid(
+                "refund amount must be positive".to_string(),
+            ));
         }
         let wallet = self.ensure_wallet(tenant_id).await?;
         match self
@@ -421,7 +462,11 @@ impl Billing {
     }
 
     pub async fn entitlement(&self, tenant_id: &str) -> Option<EntitlementRecord> {
-        self.store.billing_get_entitlement(tenant_id).await.ok().flatten()
+        self.store
+            .billing_get_entitlement(tenant_id)
+            .await
+            .ok()
+            .flatten()
     }
 
     async fn snapshot_entitlement(&self, tenant_id: &str) -> Result<(), BillingError> {
@@ -434,7 +479,10 @@ impl Billing {
         let existing = self.store.billing_get_entitlement(tenant_id).await?;
         let entitlement = EntitlementRecord {
             tenant_id: tenant_id.to_string(),
-            plan_id: plan.as_ref().map(|plan| plan.plan_id.clone()).or(subscription.as_ref().map(|item| item.plan_id.clone())),
+            plan_id: plan
+                .as_ref()
+                .map(|plan| plan.plan_id.clone())
+                .or(subscription.as_ref().map(|item| item.plan_id.clone())),
             status: subscription
                 .as_ref()
                 .map(|item| item.status.clone())
@@ -443,8 +491,12 @@ impl Billing {
             included_tokens: plan.as_ref().map(|plan| plan.included_tokens).unwrap_or(0),
             used_tokens: existing.as_ref().map(|item| item.used_tokens).unwrap_or(0),
             currency: wallet.currency.clone(),
-            period_start: subscription.as_ref().and_then(|item| item.current_period_start.clone()),
-            period_end: subscription.as_ref().and_then(|item| item.current_period_end.clone()),
+            period_start: subscription
+                .as_ref()
+                .and_then(|item| item.current_period_start.clone()),
+            period_end: subscription
+                .as_ref()
+                .and_then(|item| item.current_period_end.clone()),
             updated_at: crate::util::now_rfc3339(),
         };
         self.store.billing_upsert_entitlement(&entitlement).await?;
@@ -498,18 +550,26 @@ impl Billing {
             plan_id: plan.plan_id.clone(),
             status: status.to_string(),
             trial_ends_at: if trial_days > 0 {
-                Some((now + chrono::Duration::days(trial_days as i64)).to_rfc3339_opts(chrono::SecondsFormat::Secs, true))
+                Some(
+                    (now + chrono::Duration::days(trial_days as i64))
+                        .to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+                )
             } else {
                 None
             },
             current_period_start: Some(now.to_rfc3339_opts(chrono::SecondsFormat::Secs, true)),
-            current_period_end: Some((now + chrono::Duration::days(30)).to_rfc3339_opts(chrono::SecondsFormat::Secs, true)),
+            current_period_end: Some(
+                (now + chrono::Duration::days(30))
+                    .to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+            ),
             past_due_at: None,
             suspended_at: None,
             cancelled_at: None,
             updated_at: crate::util::now_rfc3339(),
         };
-        self.store.billing_upsert_subscription(&subscription).await?;
+        self.store
+            .billing_upsert_subscription(&subscription)
+            .await?;
         self.snapshot_entitlement(tenant_id).await?;
         Ok(subscription)
     }
@@ -541,7 +601,9 @@ impl Billing {
             _ => {}
         }
         subscription.updated_at = now;
-        self.store.billing_upsert_subscription(&subscription).await?;
+        self.store
+            .billing_upsert_subscription(&subscription)
+            .await?;
         self.snapshot_entitlement(tenant_id).await?;
         Ok(subscription)
     }
@@ -558,7 +620,12 @@ pub struct ExternalBillingEngine {
 pub trait BillingEngine: Send + Sync {
     fn name(&self) -> &str;
     fn writes_ledger(&self) -> bool;
-    async fn on_usage(&self, tenant_id: &str, usage_event_id: &str, cost_micros: i64) -> Result<(), BillingError>;
+    async fn on_usage(
+        &self,
+        tenant_id: &str,
+        usage_event_id: &str,
+        cost_micros: i64,
+    ) -> Result<(), BillingError>;
     async fn entitlement(&self, tenant_id: &str) -> Option<EntitlementRecord>;
 }
 
@@ -572,8 +639,14 @@ impl BillingEngine for Billing {
         true
     }
 
-    async fn on_usage(&self, tenant_id: &str, usage_event_id: &str, cost_micros: i64) -> Result<(), BillingError> {
-        self.charge_usage(tenant_id, cost_micros, 0, usage_event_id).await
+    async fn on_usage(
+        &self,
+        tenant_id: &str,
+        usage_event_id: &str,
+        cost_micros: i64,
+    ) -> Result<(), BillingError> {
+        self.charge_usage(tenant_id, cost_micros, 0, usage_event_id)
+            .await
     }
 
     async fn entitlement(&self, tenant_id: &str) -> Option<EntitlementRecord> {
@@ -591,7 +664,12 @@ impl BillingEngine for ExternalBillingEngine {
         false
     }
 
-    async fn on_usage(&self, tenant_id: &str, usage_event_id: &str, cost_micros: i64) -> Result<(), BillingError> {
+    async fn on_usage(
+        &self,
+        tenant_id: &str,
+        usage_event_id: &str,
+        cost_micros: i64,
+    ) -> Result<(), BillingError> {
         tracing::info!(
             engine = self.name.as_str(),
             tenant = tenant_id,
@@ -603,7 +681,11 @@ impl BillingEngine for ExternalBillingEngine {
     }
 
     async fn entitlement(&self, tenant_id: &str) -> Option<EntitlementRecord> {
-        self.store.billing_get_entitlement(tenant_id).await.ok().flatten()
+        self.store
+            .billing_get_entitlement(tenant_id)
+            .await
+            .ok()
+            .flatten()
     }
 }
 
@@ -612,11 +694,17 @@ pub fn engine_from_config(store: Arc<dyn Store>, config: &Config) -> Arc<dyn Bil
     if engine == "local" || engine.is_empty() {
         Arc::new(Billing::new(store, config.billing.clone()))
     } else {
-        Arc::new(ExternalBillingEngine { name: engine, store })
+        Arc::new(ExternalBillingEngine {
+            name: engine,
+            store,
+        })
     }
 }
 
-pub async fn seed_default_plans(store: &Arc<dyn Store>, currency: &str) -> Result<(), BillingError> {
+pub async fn seed_default_plans(
+    store: &Arc<dyn Store>,
+    currency: &str,
+) -> Result<(), BillingError> {
     let now = crate::util::now_rfc3339();
     let plans = [
         ("free", "Free", 0_i64, 1_000_000_i64),

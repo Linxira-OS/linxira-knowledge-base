@@ -24,7 +24,10 @@ pub fn parse(content: &str) -> Frontmatter {
     }
 
     let mut frontmatter = Frontmatter::default();
-    let mut cursor = content.find('\n').map(|index| index + 1).unwrap_or(content.len());
+    let mut cursor = content
+        .find('\n')
+        .map(|index| index + 1)
+        .unwrap_or(content.len());
     let mut body_start = None;
     while cursor < content.len() {
         let line_end = content[cursor..]
@@ -58,7 +61,7 @@ pub fn parse(content: &str) -> Frontmatter {
     match body_start {
         Some(start) => {
             frontmatter.body = content[start..]
-                .trim_start_matches(|c| c == '\r' || c == '\n')
+                .trim_start_matches(['\r', '\n'])
                 .to_string()
         }
         None => frontmatter.body = content.to_string(),
@@ -106,7 +109,9 @@ mod tests {
 
     #[test]
     fn quoted_values_are_unquoted() {
-        let parsed = parse("---\ntitle: \"A: B\"\nslug: x\nlang: en\norder: 2\nsummary: \"s: t\"\n---\nbody");
+        let parsed = parse(
+            "---\ntitle: \"A: B\"\nslug: x\nlang: en\norder: 2\nsummary: \"s: t\"\n---\nbody",
+        );
         assert_eq!(parsed.title.as_deref(), Some("A: B"));
         assert_eq!(parsed.summary.as_deref(), Some("s: t"));
     }

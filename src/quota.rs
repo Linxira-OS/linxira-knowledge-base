@@ -203,11 +203,7 @@ pub async fn check_space_quota(
         .unwrap_or_else(|| StorageUsage::zero(tenant, &space.space_id, &now));
 
     let mut scopes: Vec<(QuotaScope, String, StorageUsage)> = vec![
-        (
-            QuotaScope::Tenant,
-            tenant.to_string(),
-            aggregate_all(&map),
-        ),
+        (QuotaScope::Tenant, tenant.to_string(), aggregate_all(&map)),
         (
             QuotaScope::Space,
             space.space_id.clone(),
@@ -332,12 +328,7 @@ pub async fn check_space_creation(
         })
         .count() as i64;
     if max_per_user > 0 && owned >= max_per_user as i64 {
-        return Err(count_error(
-            false,
-            "spaces",
-            max_per_user as i64,
-            owned + 1,
-        ));
+        return Err(count_error(false, "spaces", max_per_user as i64, owned + 1));
     }
     let now = crate::util::now_rfc3339();
     let scope = if owner_type == "group" {
@@ -345,19 +336,24 @@ pub async fn check_space_creation(
     } else {
         QuotaScope::User
     };
-    if let Some((limit, enforcement)) =
-        limit_for(store, tenant_id, scope, owner_id, "spaces", &now)
-            .await
-            .map_err(to_quota_error)?
+    if let Some((limit, enforcement)) = limit_for(store, tenant_id, scope, owner_id, "spaces", &now)
+        .await
+        .map_err(to_quota_error)?
     {
         if enforcement == "hard" && owned + 1 > limit {
             return Err(count_error(false, "spaces", limit, owned + 1));
         }
     }
-    if let Some((limit, enforcement)) =
-        limit_for(store, tenant_id, QuotaScope::Tenant, tenant_id, "spaces", &now)
-            .await
-            .map_err(to_quota_error)?
+    if let Some((limit, enforcement)) = limit_for(
+        store,
+        tenant_id,
+        QuotaScope::Tenant,
+        tenant_id,
+        "spaces",
+        &now,
+    )
+    .await
+    .map_err(to_quota_error)?
     {
         let used = spaces.iter().filter(|s| s.status != "deleted").count() as i64;
         if enforcement == "hard" && used + 1 > limit {

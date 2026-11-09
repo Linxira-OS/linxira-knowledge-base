@@ -131,7 +131,11 @@ fn postgres_sql_placeholder_bind_count_guard() {
         checked >= 100,
         "expected to audit at least 100 literal queries, checked {checked}"
     );
-    assert!(issues.is_empty(), "SQL placeholder/bind mismatches:\n{}", issues.join("\n"));
+    assert!(
+        issues.is_empty(),
+        "SQL placeholder/bind mismatches:\n{}",
+        issues.join("\n")
+    );
     assert!(
         source.contains("rewritten_query, at) VALUES ($1,"),
         "usage_events insert must keep rewritten_query in the PostgreSQL column list"
@@ -143,7 +147,10 @@ fn guard_detects_placeholder_bind_mismatch() {
     let bad = r#"sqlx::query("INSERT INTO t (a,b,c) VALUES ($1,$2,$3)").bind(a).bind(b).execute(&pool).await?;"#;
     let (checked, issues) = audit_literal_queries(bad);
     assert_eq!(checked, 1);
-    assert!(!issues.is_empty(), "guard must flag 3 placeholders with 2 binds");
+    assert!(
+        !issues.is_empty(),
+        "guard must flag 3 placeholders with 2 binds"
+    );
     let good = r#"sqlx::query("SELECT * FROM t WHERE a=$1 AND b=$2").bind(a).bind(b).fetch_all(&pool).await?;"#;
     let (checked, issues) = audit_literal_queries(good);
     assert_eq!(checked, 1);

@@ -62,16 +62,8 @@ pub async fn evaluate(
     let mut recall_sum = 0.0f64;
     let mut mrr_sum = 0.0f64;
     for question in &questions {
-        let response = search_with_tuning(
-            store,
-            providers,
-            policy,
-            &question.query,
-            mode,
-            k,
-            tuning,
-        )
-        .await?;
+        let response =
+            search_with_tuning(store, providers, policy, &question.query, mode, k, tuning).await?;
         let mut first_rank = None;
         let mut retrieved_paths = Vec::new();
         for (index, hit) in response.hits.iter().enumerate() {
@@ -81,9 +73,7 @@ pub async fn evaluate(
             }
         }
         let recall = if first_rank.is_some() { 1.0 } else { 0.0 };
-        let reciprocal_rank = first_rank
-            .map(|rank| 1.0 / rank as f64)
-            .unwrap_or(0.0);
+        let reciprocal_rank = first_rank.map(|rank| 1.0 / rank as f64).unwrap_or(0.0);
         recall_sum += recall;
         mrr_sum += reciprocal_rank;
         per_query.push(EvalQueryResult {
@@ -109,7 +99,10 @@ fn matches_expected(hit: &crate::store::SearchHit, question: &EvalQuestion) -> b
     let path = normalize_path(&hit.path);
     for expected in &question.expected_paths {
         let expected = normalize_path(expected);
-        if path == expected || path.ends_with(&format!("/{expected}")) || expected.ends_with(&format!("/{path}")) {
+        if path == expected
+            || path.ends_with(&format!("/{expected}"))
+            || expected.ends_with(&format!("/{path}"))
+        {
             return true;
         }
     }

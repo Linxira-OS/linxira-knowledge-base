@@ -98,7 +98,10 @@ impl Limits {
         }
         let day = chrono::Utc::now().format("%Y-%m-%d").to_string();
         let mut counters = self.counters.lock().expect("limits poisoned");
-        let entry = counters.daily.entry(key.to_string()).or_insert((day.clone(), 0));
+        let entry = counters
+            .daily
+            .entry(key.to_string())
+            .or_insert((day.clone(), 0));
         if entry.0 != day {
             *entry = (day, 0);
         }
@@ -131,7 +134,7 @@ impl Limits {
 
     pub fn check_ip(&self, ip_hash: &str) -> Result<(), AppError> {
         self.check_qps(&format!("ip:{ip_hash}"), self.config.qps_ip)
-            .map_err(|retry| rate_error(retry))
+            .map_err(rate_error)
     }
 
     pub fn enforce(
@@ -175,7 +178,10 @@ impl Limits {
             acquired.push(key.to_string());
         }
         if let Some(space) = space {
-            if self.acquire(&format!("space:{space}"), self.config.max_concurrency_space).is_err() {
+            if self
+                .acquire(&format!("space:{space}"), self.config.max_concurrency_space)
+                .is_err()
+            {
                 let _ = self.guard(acquired);
                 return Err(queue_error(self.config.retry_after_seconds));
             }

@@ -1,8 +1,8 @@
 use crate::util::{is_loopback_host, mask_database_url, parse_bool, split_bind_host};
 use anyhow::{bail, Context};
 use serde::{Deserialize, Serialize};
-use std::env;
 use std::collections::BTreeMap;
+use std::env;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -86,7 +86,7 @@ impl AuthMode {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Config {
     pub profile: Option<ProfileName>,
@@ -107,31 +107,6 @@ pub struct Config {
     pub billing: BillingConfig,
     pub summary: SummaryConfig,
     pub query: QueryConfig,
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            profile: None,
-            server: ServerConfig::default(),
-            auth: AuthConfig::default(),
-            sso: SsoConfig::default(),
-            storage: StorageConfig::default(),
-            models: ModelsConfig::default(),
-            retrieval: RetrievalConfig::default(),
-            seed: SeedConfig::default(),
-            spaces: SpacesConfig::default(),
-            groups: GroupsConfig::default(),
-            limits: LimitsConfig::default(),
-            deployment: DeploymentConfig::default(),
-            features: FeatureOverrides::default(),
-            i18n: I18nConfig::default(),
-            payment: PaymentConfig::default(),
-            billing: BillingConfig::default(),
-            summary: SummaryConfig::default(),
-            query: QueryConfig::default(),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -257,20 +232,11 @@ impl DeploymentMode {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct DeploymentConfig {
     pub mode: Option<DeploymentMode>,
     pub commercial: bool,
-}
-
-impl Default for DeploymentConfig {
-    fn default() -> Self {
-        Self {
-            mode: None,
-            commercial: false,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -663,24 +629,13 @@ impl Default for StorageConfig {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ModelsConfig {
     pub llm: ModelConfig,
     pub embedding: ModelConfig,
     pub judge: ModelConfig,
     pub extractor: ModelConfig,
-}
-
-impl Default for ModelsConfig {
-    fn default() -> Self {
-        Self {
-            llm: ModelConfig::default(),
-            embedding: ModelConfig::default(),
-            judge: ModelConfig::default(),
-            extractor: ModelConfig::default(),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -773,19 +728,25 @@ impl ModelConfig {
 
     pub fn api_key_state(&self) -> &'static str {
         match self.api_key_env.as_deref() {
-            Some(name) if env::var(name).map(|v| !v.trim().is_empty()).unwrap_or(false) => "set",
+            Some(name)
+                if env::var(name)
+                    .map(|v| !v.trim().is_empty())
+                    .unwrap_or(false) =>
+            {
+                "set"
+            }
             Some(_) => "missing",
             None => "not configured",
         }
     }
 
     pub fn base_url_or_default(&self) -> Option<String> {
-        self.base_url
-            .clone()
-            .or_else(|| match self.provider.trim().to_ascii_lowercase().as_str() {
+        self.base_url.clone().or_else(
+            || match self.provider.trim().to_ascii_lowercase().as_str() {
                 "openai" => Some("https://api.openai.com/v1".to_string()),
                 _ => None,
-            })
+            },
+        )
     }
 }
 
@@ -925,7 +886,9 @@ impl Config {
     /// Startup warnings that should be logged even though the config is valid.
     pub fn sso_warnings(&self) -> Vec<String> {
         let mut warnings = Vec::new();
-        if self.sso.mode.eq_ignore_ascii_case("trusted_header") && self.sso.trusted_proxies.is_empty() {
+        if self.sso.mode.eq_ignore_ascii_case("trusted_header")
+            && self.sso.trusted_proxies.is_empty()
+        {
             warnings.push(
                 "SSO trusted_header is enabled but trusted_proxies is empty; SSO will deny all peers"
                     .to_string(),
@@ -1022,7 +985,10 @@ impl Config {
         }
         let sso_mode = self.sso.mode.trim().to_ascii_lowercase();
         if !matches!(sso_mode.as_str(), "off" | "trusted_header") {
-            bail!("sso.mode must be off or trusted_header, got {:?}", self.sso.mode);
+            bail!(
+                "sso.mode must be off or trusted_header, got {:?}",
+                self.sso.mode
+            );
         }
         if self.sso.user_header.trim().is_empty()
             || self.sso.email_header.trim().is_empty()
@@ -1066,7 +1032,9 @@ impl Config {
         }
         if let Some(secret_env) = &self.payment.secret_env {
             if secret_env.trim().is_empty() || secret_env.contains('=') {
-                bail!("payment.secret_env must be an environment variable name, not a secret value");
+                bail!(
+                    "payment.secret_env must be an environment variable name, not a secret value"
+                );
             }
         }
 
@@ -1104,9 +1072,7 @@ impl Config {
         {
             bail!("seed.space must be a non-empty single path segment");
         }
-        if self.storage.backend == Backend::Postgres
-            && self.database_url().is_none()
-        {
+        if self.storage.backend == Backend::Postgres && self.database_url().is_none() {
             bail!(
                 "storage backend is postgres but environment variable {} is not set",
                 self.storage.url_env
@@ -1117,9 +1083,7 @@ impl Config {
             mode.as_str(),
             "bm25" | "keyword" | "bm25_judge" | "event" | "event_entity" | "hybrid" | "auto"
         ) {
-            bail!(
-                "retrieval.mode must be bm25, bm25_judge, event, event_entity, hybrid, or auto"
-            );
+            bail!("retrieval.mode must be bm25, bm25_judge, event, event_entity, hybrid, or auto");
         }
         if !(1..=2).contains(&self.retrieval.event_depth) {
             bail!("retrieval.event_depth must be 1 or 2");
@@ -1172,7 +1136,10 @@ impl Config {
         out.push_str(&format!("server.bind = {}\n", self.server.bind));
         out.push_str(&format!("auth.mode = {}\n", self.auth.mode.as_str()));
         out.push_str(&format!("auth.cookie_name = {}\n", self.auth.cookie_name));
-        out.push_str(&format!("auth.cookie_secure = {}\n", self.auth.cookie_secure));
+        out.push_str(&format!(
+            "auth.cookie_secure = {}\n",
+            self.auth.cookie_secure
+        ));
         out.push_str(&format!(
             "auth.session_ttl_hours = {}\n",
             self.auth.session_ttl_hours

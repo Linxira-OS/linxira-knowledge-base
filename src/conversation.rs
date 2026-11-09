@@ -36,20 +36,33 @@ pub async fn rewrite_query(
         space_id: None,
         role: "user".to_string(),
         alias: config.query.rewrite_alias.clone(),
-        messages: vec![ChatMessage { role: "user".into(), content: prompt }],
+        messages: vec![ChatMessage {
+            role: "user".into(),
+            content: prompt,
+        }],
         max_output_tokens: 128,
         temperature: 0.0,
         source: "kb".to_string(),
         rewritten_query: None,
     };
-    match Gateway::new(store.clone()).with_local_ledger(config.billing.engine.eq_ignore_ascii_case("local")).chat(&request).await {
+    match Gateway::new(store.clone())
+        .with_local_ledger(config.billing.engine.eq_ignore_ascii_case("local"))
+        .chat(&request)
+        .await
+    {
         Ok(response) => {
             let rewritten = response.content.trim().to_string();
             if rewritten.is_empty() {
-                (query.to_string(), context_hash, Some("conversation_rewrite_failed".to_string()))
+                (
+                    query.to_string(),
+                    context_hash,
+                    Some("conversation_rewrite_failed".to_string()),
+                )
             } else {
                 if let Some(usage_event_id) = response.usage_event_id.as_deref() {
-                    let _ = store.set_usage_rewritten_query(usage_event_id, &rewritten).await;
+                    let _ = store
+                        .set_usage_rewritten_query(usage_event_id, &rewritten)
+                        .await;
                 }
                 (rewritten, context_hash, None)
             }

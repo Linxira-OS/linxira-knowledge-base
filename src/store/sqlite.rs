@@ -312,10 +312,7 @@ fn statement_has_sql(statement: &str) -> bool {
     })
 }
 
-async fn execute_script(
-    connection: &mut SqliteConnection,
-    sql: &str,
-) -> Result<(), sqlx::Error> {
+async fn execute_script(connection: &mut SqliteConnection, sql: &str) -> Result<(), sqlx::Error> {
     for statement in sql.split(';') {
         if !statement_has_sql(statement) {
             continue;
@@ -407,7 +404,8 @@ fn group_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<GroupRecord, sqlx::Er
         description: row.try_get("description")?,
         created_by: row.try_get("created_by")?,
         status: row.try_get("status")?,
-        created_at: row.try_get("created_at")
+        created_at: row
+            .try_get("created_at")
             .or_else(|_| row.try_get("group_created_at"))?,
         updated_at: row.try_get("updated_at")?,
     })
@@ -497,53 +495,216 @@ fn user_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<UserRecord, sqlx::Erro
         disabled: row.try_get::<i64, _>("disabled")? != 0,
         email: row.try_get("email")?,
         external_id: row.try_get("external_id")?,
-        source: row.try_get::<Option<String>, _>("source")?.unwrap_or_else(|| "local".to_string()),
+        source: row
+            .try_get::<Option<String>, _>("source")?
+            .unwrap_or_else(|| "local".to_string()),
         last_sso_at: row.try_get("last_sso_at")?,
-        role: UserRole::parse(&row.try_get::<String, _>("role")?)
-            .map_err(|err| sqlx::Error::Decode(Box::new(std::io::Error::new(
+        role: UserRole::parse(&row.try_get::<String, _>("role")?).map_err(|err| {
+            sqlx::Error::Decode(Box::new(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
                 err,
-            ))))?,
+            )))
+        })?,
     })
 }
 
-
 fn provider_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<ProviderRecord, sqlx::Error> {
-    Ok(ProviderRecord { provider_id: row.try_get("provider_id")?, kind: row.try_get("kind")?, base_url: row.try_get("base_url")?, api_key_env: row.try_get("api_key_env")?, status: row.try_get("status")?, priority: row.try_get::<i64,_>("priority")? as i32, weight: row.try_get::<i64,_>("weight")? as i32, limits_json: row.try_get("limits_json")?, timeouts_json: row.try_get("timeouts_json")?, created_at: row.try_get("created_at")?, updated_at: row.try_get("updated_at")? })
+    Ok(ProviderRecord {
+        provider_id: row.try_get("provider_id")?,
+        kind: row.try_get("kind")?,
+        base_url: row.try_get("base_url")?,
+        api_key_env: row.try_get("api_key_env")?,
+        status: row.try_get("status")?,
+        priority: row.try_get::<i64, _>("priority")? as i32,
+        weight: row.try_get::<i64, _>("weight")? as i32,
+        limits_json: row.try_get("limits_json")?,
+        timeouts_json: row.try_get("timeouts_json")?,
+        created_at: row.try_get("created_at")?,
+        updated_at: row.try_get("updated_at")?,
+    })
 }
-fn provider_model_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<ProviderModelRecord, sqlx::Error> {
-    Ok(ProviderModelRecord { provider_model_id: row.try_get("provider_model_id")?, provider_id: row.try_get("provider_id")?, upstream_model: row.try_get("upstream_model")?, context_window: row.try_get("context_window")?, pricing_json: row.try_get("pricing_json")?, capabilities_json: row.try_get("capabilities_json")?, status: row.try_get("status")?, created_at: row.try_get("created_at")?, updated_at: row.try_get("updated_at")? })
+fn provider_model_from_row(
+    row: &sqlx::sqlite::SqliteRow,
+) -> Result<ProviderModelRecord, sqlx::Error> {
+    Ok(ProviderModelRecord {
+        provider_model_id: row.try_get("provider_model_id")?,
+        provider_id: row.try_get("provider_id")?,
+        upstream_model: row.try_get("upstream_model")?,
+        context_window: row.try_get("context_window")?,
+        pricing_json: row.try_get("pricing_json")?,
+        capabilities_json: row.try_get("capabilities_json")?,
+        status: row.try_get("status")?,
+        created_at: row.try_get("created_at")?,
+        updated_at: row.try_get("updated_at")?,
+    })
 }
 fn alias_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<ModelAliasRecord, sqlx::Error> {
-    Ok(ModelAliasRecord { public_id: row.try_get("public_id")?, display_name: row.try_get("display_name")?, capabilities_json: row.try_get("capabilities_json")?, status: row.try_get("status")?, access_policy_json: row.try_get("access_policy_json")?, price_json: row.try_get("price_json")?, version: row.try_get::<i64,_>("version")? as u32, created_at: row.try_get("created_at")?, updated_at: row.try_get("updated_at")? })
+    Ok(ModelAliasRecord {
+        public_id: row.try_get("public_id")?,
+        display_name: row.try_get("display_name")?,
+        capabilities_json: row.try_get("capabilities_json")?,
+        status: row.try_get("status")?,
+        access_policy_json: row.try_get("access_policy_json")?,
+        price_json: row.try_get("price_json")?,
+        version: row.try_get::<i64, _>("version")? as u32,
+        created_at: row.try_get("created_at")?,
+        updated_at: row.try_get("updated_at")?,
+    })
 }
 fn route_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<RouteRecord, sqlx::Error> {
-    Ok(RouteRecord { route_id: row.try_get("route_id")?, alias_public_id: row.try_get("alias_public_id")?, provider_model_id: row.try_get("provider_model_id")?, weight: row.try_get::<i64,_>("weight")? as i32, priority: row.try_get::<i64,_>("priority")? as i32, health: row.try_get("health")?, circuit_state: row.try_get("circuit_state")?, last_error_at: row.try_get("last_error_at")?, circuit_open_until: row.try_get("circuit_open_until")?, created_at: row.try_get("created_at")?, updated_at: row.try_get("updated_at")? })
+    Ok(RouteRecord {
+        route_id: row.try_get("route_id")?,
+        alias_public_id: row.try_get("alias_public_id")?,
+        provider_model_id: row.try_get("provider_model_id")?,
+        weight: row.try_get::<i64, _>("weight")? as i32,
+        priority: row.try_get::<i64, _>("priority")? as i32,
+        health: row.try_get("health")?,
+        circuit_state: row.try_get("circuit_state")?,
+        last_error_at: row.try_get("last_error_at")?,
+        circuit_open_until: row.try_get("circuit_open_until")?,
+        created_at: row.try_get("created_at")?,
+        updated_at: row.try_get("updated_at")?,
+    })
 }
 fn usage_from_row_gateway(row: &sqlx::sqlite::SqliteRow) -> Result<UsageEventRecord, sqlx::Error> {
-    Ok(UsageEventRecord { usage_event_id: row.try_get("usage_event_id")?, request_id: row.try_get("request_id")?, tenant_id: row.try_get("tenant_id")?, space_id: row.try_get("space_id")?, user_id: row.try_get("user_id")?, role: row.try_get("role")?, source: row.try_get("source")?, external_usage_id: row.try_get("external_usage_id")?, alias: row.try_get("alias")?, provider_model_id: row.try_get("provider_model_id")?, input_tokens: row.try_get("input_tokens")?, output_tokens: row.try_get("output_tokens")?, cached_tokens: row.try_get("cached_tokens")?, token_source: row.try_get("token_source")?, cost_micros: row.try_get("cost_micros")?, currency: row.try_get("currency")?, provider_cost_micros: row.try_get("provider_cost_micros")?, latency_ms: row.try_get("latency_ms")?, status: row.try_get("status")?, cache_hit: row.try_get::<i64,_>("cache_hit")? != 0, rewritten_query: row.try_get("rewritten_query")?, at: row.try_get("at")? })
+    Ok(UsageEventRecord {
+        usage_event_id: row.try_get("usage_event_id")?,
+        request_id: row.try_get("request_id")?,
+        tenant_id: row.try_get("tenant_id")?,
+        space_id: row.try_get("space_id")?,
+        user_id: row.try_get("user_id")?,
+        role: row.try_get("role")?,
+        source: row.try_get("source")?,
+        external_usage_id: row.try_get("external_usage_id")?,
+        alias: row.try_get("alias")?,
+        provider_model_id: row.try_get("provider_model_id")?,
+        input_tokens: row.try_get("input_tokens")?,
+        output_tokens: row.try_get("output_tokens")?,
+        cached_tokens: row.try_get("cached_tokens")?,
+        token_source: row.try_get("token_source")?,
+        cost_micros: row.try_get("cost_micros")?,
+        currency: row.try_get("currency")?,
+        provider_cost_micros: row.try_get("provider_cost_micros")?,
+        latency_ms: row.try_get("latency_ms")?,
+        status: row.try_get("status")?,
+        cache_hit: row.try_get::<i64, _>("cache_hit")? != 0,
+        rewritten_query: row.try_get("rewritten_query")?,
+        at: row.try_get("at")?,
+    })
 }
 fn token_quota_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<TokenQuotaRecord, sqlx::Error> {
-    Ok(TokenQuotaRecord { quota_id: row.try_get("quota_id")?, tenant_id: row.try_get("tenant_id")?, scope_type: row.try_get("scope_type")?, scope_id: row.try_get("scope_id")?, period: row.try_get("period")?, limit_tokens: row.try_get("limit_tokens")?, limit_requests: row.try_get("limit_requests")?, limit_cost_micros: row.try_get("limit_cost_micros")?, currency: row.try_get("currency")?, enforcement: row.try_get("enforcement")?, action: row.try_get("action")?, enabled: row.try_get::<i64,_>("enabled")? != 0, created_at: row.try_get("created_at")?, updated_at: row.try_get("updated_at")? })
+    Ok(TokenQuotaRecord {
+        quota_id: row.try_get("quota_id")?,
+        tenant_id: row.try_get("tenant_id")?,
+        scope_type: row.try_get("scope_type")?,
+        scope_id: row.try_get("scope_id")?,
+        period: row.try_get("period")?,
+        limit_tokens: row.try_get("limit_tokens")?,
+        limit_requests: row.try_get("limit_requests")?,
+        limit_cost_micros: row.try_get("limit_cost_micros")?,
+        currency: row.try_get("currency")?,
+        enforcement: row.try_get("enforcement")?,
+        action: row.try_get("action")?,
+        enabled: row.try_get::<i64, _>("enabled")? != 0,
+        created_at: row.try_get("created_at")?,
+        updated_at: row.try_get("updated_at")?,
+    })
 }
 fn quota_counter_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<QuotaCounter, sqlx::Error> {
-    Ok(QuotaCounter { tenant_id: row.try_get("tenant_id")?, scope_type: row.try_get("scope_type")?, scope_id: row.try_get("scope_id")?, period_start: row.try_get("period_start")?, reserved_tokens: row.try_get("reserved_tokens")?, used_tokens: row.try_get("used_tokens")?, reserved_requests: row.try_get("reserved_requests")?, used_requests: row.try_get("used_requests")?, reserved_cost_micros: row.try_get("reserved_cost_micros")?, used_cost_micros: row.try_get("used_cost_micros")?, updated_at: row.try_get("updated_at")? })
+    Ok(QuotaCounter {
+        tenant_id: row.try_get("tenant_id")?,
+        scope_type: row.try_get("scope_type")?,
+        scope_id: row.try_get("scope_id")?,
+        period_start: row.try_get("period_start")?,
+        reserved_tokens: row.try_get("reserved_tokens")?,
+        used_tokens: row.try_get("used_tokens")?,
+        reserved_requests: row.try_get("reserved_requests")?,
+        used_requests: row.try_get("used_requests")?,
+        reserved_cost_micros: row.try_get("reserved_cost_micros")?,
+        used_cost_micros: row.try_get("used_cost_micros")?,
+        updated_at: row.try_get("updated_at")?,
+    })
 }
-fn quota_reservation_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<QuotaReservation, sqlx::Error> {
-    Ok(QuotaReservation { reservation_id: row.try_get("reservation_id")?, request_id: row.try_get("request_id")?, tenant_id: row.try_get("tenant_id")?, scope_type: row.try_get("scope_type")?, scope_id: row.try_get("scope_id")?, period_start: row.try_get("period_start")?, reserved_tokens: row.try_get("reserved_tokens")?, reserved_requests: row.try_get("reserved_requests")?, reserved_cost_micros: row.try_get("reserved_cost_micros")?, status: row.try_get("status")?, expires_at: row.try_get("expires_at")?, created_at: row.try_get("created_at")? })
+fn quota_reservation_from_row(
+    row: &sqlx::sqlite::SqliteRow,
+) -> Result<QuotaReservation, sqlx::Error> {
+    Ok(QuotaReservation {
+        reservation_id: row.try_get("reservation_id")?,
+        request_id: row.try_get("request_id")?,
+        tenant_id: row.try_get("tenant_id")?,
+        scope_type: row.try_get("scope_type")?,
+        scope_id: row.try_get("scope_id")?,
+        period_start: row.try_get("period_start")?,
+        reserved_tokens: row.try_get("reserved_tokens")?,
+        reserved_requests: row.try_get("reserved_requests")?,
+        reserved_cost_micros: row.try_get("reserved_cost_micros")?,
+        status: row.try_get("status")?,
+        expires_at: row.try_get("expires_at")?,
+        created_at: row.try_get("created_at")?,
+    })
 }
 
 fn summary_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<DocumentSummaryRecord, sqlx::Error> {
-    Ok(DocumentSummaryRecord { tenant_id: row.try_get("tenant_id")?, space_id: row.try_get("space_id")?, doc_id: row.try_get("doc_id")?, revision_id: row.try_get("revision_id")?, lang: row.try_get("lang")?, model: row.try_get("model")?, prompt_version: row.try_get("prompt_version")?, content_hash: row.try_get("content_hash")?, status: row.try_get("status")?, summary_json: row.try_get("summary_json")?, usage_event_id: row.try_get("usage_event_id")?, generated_at: row.try_get("generated_at")?, error: row.try_get("error")? })
+    Ok(DocumentSummaryRecord {
+        tenant_id: row.try_get("tenant_id")?,
+        space_id: row.try_get("space_id")?,
+        doc_id: row.try_get("doc_id")?,
+        revision_id: row.try_get("revision_id")?,
+        lang: row.try_get("lang")?,
+        model: row.try_get("model")?,
+        prompt_version: row.try_get("prompt_version")?,
+        content_hash: row.try_get("content_hash")?,
+        status: row.try_get("status")?,
+        summary_json: row.try_get("summary_json")?,
+        usage_event_id: row.try_get("usage_event_id")?,
+        generated_at: row.try_get("generated_at")?,
+        error: row.try_get("error")?,
+    })
 }
 fn summary_job_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<SummaryJobRecord, sqlx::Error> {
-    Ok(SummaryJobRecord { job_id: row.try_get("job_id")?, tenant_id: row.try_get("tenant_id")?, space_id: row.try_get("space_id")?, doc_id: row.try_get("doc_id")?, revision_id: row.try_get("revision_id")?, status: row.try_get("status")?, attempts: row.try_get::<i64,_>("attempts")? as u32, scheduled_at: row.try_get("scheduled_at")?, started_at: row.try_get("started_at")?, finished_at: row.try_get("finished_at")?, error: row.try_get("error")? })
+    Ok(SummaryJobRecord {
+        job_id: row.try_get("job_id")?,
+        tenant_id: row.try_get("tenant_id")?,
+        space_id: row.try_get("space_id")?,
+        doc_id: row.try_get("doc_id")?,
+        revision_id: row.try_get("revision_id")?,
+        status: row.try_get("status")?,
+        attempts: row.try_get::<i64, _>("attempts")? as u32,
+        scheduled_at: row.try_get("scheduled_at")?,
+        started_at: row.try_get("started_at")?,
+        finished_at: row.try_get("finished_at")?,
+        error: row.try_get("error")?,
+    })
 }
 fn conversation_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<ConversationRecord, sqlx::Error> {
-    Ok(ConversationRecord { conversation_id: row.try_get("conversation_id")?, tenant_id: row.try_get("tenant_id")?, space_id: row.try_get("space_id")?, owner_id: row.try_get("owner_id")?, title: row.try_get("title")?, external_session_id: row.try_get("external_session_id")?, status: row.try_get("status")?, created_at: row.try_get("created_at")?, updated_at: row.try_get("updated_at")? })
+    Ok(ConversationRecord {
+        conversation_id: row.try_get("conversation_id")?,
+        tenant_id: row.try_get("tenant_id")?,
+        space_id: row.try_get("space_id")?,
+        owner_id: row.try_get("owner_id")?,
+        title: row.try_get("title")?,
+        external_session_id: row.try_get("external_session_id")?,
+        status: row.try_get("status")?,
+        created_at: row.try_get("created_at")?,
+        updated_at: row.try_get("updated_at")?,
+    })
 }
 fn message_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<MessageRecord, sqlx::Error> {
-    Ok(MessageRecord { message_id: row.try_get("message_id")?, conversation_id: row.try_get("conversation_id")?, role: row.try_get("role")?, content: row.try_get("content")?, citations_json: row.try_get("citations_json")?, model: row.try_get("model")?, usage_json: row.try_get("usage_json")?, degraded_json: row.try_get("degraded_json")?, request_id: row.try_get("request_id")?, mode: row.try_get("mode")?, rewritten_query: row.try_get("rewritten_query")?, conversation_context_hash: row.try_get("conversation_context_hash")?, created_at: row.try_get("created_at")? })
+    Ok(MessageRecord {
+        message_id: row.try_get("message_id")?,
+        conversation_id: row.try_get("conversation_id")?,
+        role: row.try_get("role")?,
+        content: row.try_get("content")?,
+        citations_json: row.try_get("citations_json")?,
+        model: row.try_get("model")?,
+        usage_json: row.try_get("usage_json")?,
+        degraded_json: row.try_get("degraded_json")?,
+        request_id: row.try_get("request_id")?,
+        mode: row.try_get("mode")?,
+        rewritten_query: row.try_get("rewritten_query")?,
+        conversation_context_hash: row.try_get("conversation_context_hash")?,
+        created_at: row.try_get("created_at")?,
+    })
 }
 fn token_kind_str(kind: PrincipalKind) -> &'static str {
     match kind {
@@ -720,7 +881,7 @@ impl Store for SqliteStore {
                 continue;
             }
             let mut tx = self.pool.begin().await?;
-            let result = execute_script(&mut *tx, sql).await;
+            let result = execute_script(&mut tx, sql).await;
             match result {
                 Ok(_) => {
                     sqlx::query(
@@ -847,7 +1008,11 @@ impl Store for SqliteStore {
         Ok(())
     }
 
-    async fn list_pages(&self, policy: &Policy, limit: i64) -> Result<Vec<PageSummary>, StoreError> {
+    async fn list_pages(
+        &self,
+        policy: &Policy,
+        limit: i64,
+    ) -> Result<Vec<PageSummary>, StoreError> {
         let visibility = policy.visibility("p", self.dialect())?;
         let sql = format!(
             "SELECT p.tenant_id, p.space_id, p.slug, p.lang, p.title, p.summary,
@@ -860,7 +1025,17 @@ impl Store for SqliteStore {
         );
         let mut query = sqlx::query_as::<
             _,
-            (String, String, String, String, String, String, i64, i64, String),
+            (
+                String,
+                String,
+                String,
+                String,
+                String,
+                String,
+                i64,
+                i64,
+                String,
+            ),
         >(&sql);
         for value in &visibility.binds {
             query = query.bind(value.as_str());
@@ -970,10 +1145,7 @@ impl Store for SqliteStore {
              {order}
              LIMIT 1"
         );
-        let mut query = sqlx::query(&sql)
-            .bind(tenant_id)
-            .bind(space_id)
-            .bind(slug);
+        let mut query = sqlx::query(&sql).bind(tenant_id).bind(space_id).bind(slug);
         if let Some(lang) = lang {
             query = query.bind(lang);
         }
@@ -1128,13 +1300,12 @@ impl Store for SqliteStore {
         }
         let mut tx = self.pool.begin().await?;
 
-        let existing: Option<(String,)> = sqlx::query_as(
-            "SELECT doc_id FROM documents WHERE tenant_id = ? AND doc_id = ?",
-        )
-        .bind(&doc.tenant_id)
-        .bind(&doc.doc_id)
-        .fetch_optional(&mut *tx)
-        .await?;
+        let existing: Option<(String,)> =
+            sqlx::query_as("SELECT doc_id FROM documents WHERE tenant_id = ? AND doc_id = ?")
+                .bind(&doc.tenant_id)
+                .bind(&doc.doc_id)
+                .fetch_optional(&mut *tx)
+                .await?;
         if existing.is_some() {
             tx.commit().await?;
             return Ok(UpsertOutcome::Skipped("doc_id already indexed".to_string()));
@@ -1195,11 +1366,7 @@ impl Store for SqliteStore {
         let chunk_superseded_by = if status == "active" {
             superseded_by.clone()
         } else {
-            Some(
-                superseded_by
-                    .clone()
-                    .unwrap_or_else(|| doc.doc_id.clone()),
-            )
+            Some(superseded_by.clone().unwrap_or_else(|| doc.doc_id.clone()))
         };
         let chunk_valid_to = chunks
             .iter()
@@ -1506,12 +1673,11 @@ impl Store for SqliteStore {
         links: &[EventEntityRecord],
     ) -> Result<EventUpsertOutcome, StoreError> {
         let mut tx = self.pool.begin().await?;
-        let existing: Option<(String,)> = sqlx::query_as(
-            "SELECT event_id FROM events WHERE event_id = ?",
-        )
-        .bind(&event.event_id)
-        .fetch_optional(&mut *tx)
-        .await?;
+        let existing: Option<(String,)> =
+            sqlx::query_as("SELECT event_id FROM events WHERE event_id = ?")
+                .bind(&event.event_id)
+                .fetch_optional(&mut *tx)
+                .await?;
         if existing.is_some() {
             tx.commit().await?;
             return Ok(EventUpsertOutcome::Skipped(
@@ -1619,14 +1785,17 @@ impl Store for SqliteStore {
     async fn search_events(
         &self,
         policy: &Policy,
-        query: &str,
-        depth: u32,
-        max_seeds: i64,
-        max_events: i64,
-        text_weight: f64,
-        limit: i64,
-        _timeout_ms: u64,
+        params: EventSearchParams<'_>,
     ) -> Result<Vec<SearchHit>, StoreError> {
+        let EventSearchParams {
+            query,
+            depth,
+            max_seeds,
+            max_events,
+            text_weight,
+            limit,
+            timeout_ms: _,
+        } = params;
         let seeds = self
             .event_seed_entities(policy, query, max_seeds.max(1))
             .await?;
@@ -1827,12 +1996,10 @@ impl Store for SqliteStore {
     }
 
     async fn list_users(&self, tenant_id: &str) -> Result<Vec<UserRecord>, StoreError> {
-        let rows = sqlx::query(
-            "SELECT * FROM users WHERE tenant_id = ? ORDER BY username",
-        )
-        .bind(tenant_id)
-        .fetch_all(&self.pool)
-        .await?;
+        let rows = sqlx::query("SELECT * FROM users WHERE tenant_id = ? ORDER BY username")
+            .bind(tenant_id)
+            .fetch_all(&self.pool)
+            .await?;
         rows.iter()
             .map(user_from_row)
             .collect::<Result<Vec<_>, sqlx::Error>>()
@@ -1844,13 +2011,11 @@ impl Store for SqliteStore {
         tenant_id: &str,
         username: &str,
     ) -> Result<Option<UserRecord>, StoreError> {
-        let row = sqlx::query(
-            "SELECT * FROM users WHERE tenant_id = ? AND username = ?",
-        )
-        .bind(tenant_id)
-        .bind(username)
-        .fetch_optional(&self.pool)
-        .await?;
+        let row = sqlx::query("SELECT * FROM users WHERE tenant_id = ? AND username = ?")
+            .bind(tenant_id)
+            .bind(username)
+            .fetch_optional(&self.pool)
+            .await?;
         row.map(|row| user_from_row(&row))
             .transpose()
             .map_err(StoreError::Database)
@@ -1861,13 +2026,11 @@ impl Store for SqliteStore {
         tenant_id: &str,
         user_id: &str,
     ) -> Result<Option<UserRecord>, StoreError> {
-        let row = sqlx::query(
-            "SELECT * FROM users WHERE tenant_id = ? AND user_id = ?",
-        )
-        .bind(tenant_id)
-        .bind(user_id)
-        .fetch_optional(&self.pool)
-        .await?;
+        let row = sqlx::query("SELECT * FROM users WHERE tenant_id = ? AND user_id = ?")
+            .bind(tenant_id)
+            .bind(user_id)
+            .fetch_optional(&self.pool)
+            .await?;
         row.map(|row| user_from_row(&row))
             .transpose()
             .map_err(StoreError::Database)
@@ -2647,33 +2810,81 @@ impl Store for SqliteStore {
     }
     async fn list_providers(&self, _tenant_id: &str) -> Result<Vec<ProviderRecord>, StoreError> {
         let rows = sqlx::query("SELECT * FROM providers ORDER BY priority, provider_id")
-            .fetch_all(&self.pool).await?;
-        rows.iter().map(provider_from_row).collect::<Result<Vec<_>, _>>().map_err(StoreError::Database)
+            .fetch_all(&self.pool)
+            .await?;
+        rows.iter()
+            .map(provider_from_row)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(StoreError::Database)
     }
-    async fn get_provider(&self, _tenant_id: &str, provider_id: &str) -> Result<Option<ProviderRecord>, StoreError> {
-        let row = sqlx::query("SELECT * FROM providers WHERE provider_id = ?").bind(provider_id).fetch_optional(&self.pool).await?;
-        row.map(|row| provider_from_row(&row)).transpose().map_err(StoreError::Database)
+    async fn get_provider(
+        &self,
+        _tenant_id: &str,
+        provider_id: &str,
+    ) -> Result<Option<ProviderRecord>, StoreError> {
+        let row = sqlx::query("SELECT * FROM providers WHERE provider_id = ?")
+            .bind(provider_id)
+            .fetch_optional(&self.pool)
+            .await?;
+        row.map(|row| provider_from_row(&row))
+            .transpose()
+            .map_err(StoreError::Database)
     }
-    async fn upsert_provider(&self, _tenant_id: &str, p: &ProviderRecord) -> Result<(), StoreError> {
+    async fn upsert_provider(
+        &self,
+        _tenant_id: &str,
+        p: &ProviderRecord,
+    ) -> Result<(), StoreError> {
         sqlx::query("INSERT INTO providers (provider_id, kind, base_url, api_key_env, status, priority, weight, limits_json, timeouts_json, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT (provider_id) DO UPDATE SET kind=excluded.kind, base_url=excluded.base_url, api_key_env=excluded.api_key_env, status=excluded.status, priority=excluded.priority, weight=excluded.weight, limits_json=excluded.limits_json, timeouts_json=excluded.timeouts_json, updated_at=excluded.updated_at")
             .bind(&p.provider_id).bind(&p.kind).bind(&p.base_url).bind(&p.api_key_env).bind(&p.status)
             .bind(p.priority as i64).bind(p.weight as i64).bind(&p.limits_json).bind(&p.timeouts_json)
             .bind(&p.created_at).bind(&p.updated_at).execute(&self.pool).await?;
         Ok(())
     }
-    async fn delete_provider(&self, _tenant_id: &str, provider_id: &str) -> Result<bool, StoreError> {
-        Ok(sqlx::query("DELETE FROM providers WHERE provider_id = ?").bind(provider_id).execute(&self.pool).await?.rows_affected() > 0)
+    async fn delete_provider(
+        &self,
+        _tenant_id: &str,
+        provider_id: &str,
+    ) -> Result<bool, StoreError> {
+        Ok(sqlx::query("DELETE FROM providers WHERE provider_id = ?")
+            .bind(provider_id)
+            .execute(&self.pool)
+            .await?
+            .rows_affected()
+            > 0)
     }
 
-    async fn list_provider_models(&self, _tenant_id: &str) -> Result<Vec<ProviderModelRecord>, StoreError> {
-        let rows = sqlx::query("SELECT * FROM provider_models ORDER BY provider_id, provider_model_id").fetch_all(&self.pool).await?;
-        rows.iter().map(provider_model_from_row).collect::<Result<Vec<_>, _>>().map_err(StoreError::Database)
+    async fn list_provider_models(
+        &self,
+        _tenant_id: &str,
+    ) -> Result<Vec<ProviderModelRecord>, StoreError> {
+        let rows =
+            sqlx::query("SELECT * FROM provider_models ORDER BY provider_id, provider_model_id")
+                .fetch_all(&self.pool)
+                .await?;
+        rows.iter()
+            .map(provider_model_from_row)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(StoreError::Database)
     }
-    async fn get_provider_model(&self, _tenant_id: &str, id: &str) -> Result<Option<ProviderModelRecord>, StoreError> {
-        let row = sqlx::query("SELECT * FROM provider_models WHERE provider_model_id = ?").bind(id).fetch_optional(&self.pool).await?;
-        row.map(|row| provider_model_from_row(&row)).transpose().map_err(StoreError::Database)
+    async fn get_provider_model(
+        &self,
+        _tenant_id: &str,
+        id: &str,
+    ) -> Result<Option<ProviderModelRecord>, StoreError> {
+        let row = sqlx::query("SELECT * FROM provider_models WHERE provider_model_id = ?")
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await?;
+        row.map(|row| provider_model_from_row(&row))
+            .transpose()
+            .map_err(StoreError::Database)
     }
-    async fn upsert_provider_model(&self, _tenant_id: &str, m: &ProviderModelRecord) -> Result<(), StoreError> {
+    async fn upsert_provider_model(
+        &self,
+        _tenant_id: &str,
+        m: &ProviderModelRecord,
+    ) -> Result<(), StoreError> {
         sqlx::query("INSERT INTO provider_models (provider_model_id, provider_id, upstream_model, context_window, pricing_json, capabilities_json, status, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT (provider_model_id) DO UPDATE SET provider_id=excluded.provider_id, upstream_model=excluded.upstream_model, context_window=excluded.context_window, pricing_json=excluded.pricing_json, capabilities_json=excluded.capabilities_json, status=excluded.status, updated_at=excluded.updated_at")
             .bind(&m.provider_model_id).bind(&m.provider_id).bind(&m.upstream_model).bind(m.context_window)
             .bind(&m.pricing_json).bind(&m.capabilities_json).bind(&m.status).bind(&m.created_at).bind(&m.updated_at)
@@ -2681,31 +2892,75 @@ impl Store for SqliteStore {
         Ok(())
     }
 
-    async fn list_model_aliases(&self, _tenant_id: &str) -> Result<Vec<ModelAliasRecord>, StoreError> {
-        let rows = sqlx::query("SELECT * FROM model_aliases ORDER BY public_id").fetch_all(&self.pool).await?;
-        rows.iter().map(alias_from_row).collect::<Result<Vec<_>, _>>().map_err(StoreError::Database)
+    async fn list_model_aliases(
+        &self,
+        _tenant_id: &str,
+    ) -> Result<Vec<ModelAliasRecord>, StoreError> {
+        let rows = sqlx::query("SELECT * FROM model_aliases ORDER BY public_id")
+            .fetch_all(&self.pool)
+            .await?;
+        rows.iter()
+            .map(alias_from_row)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(StoreError::Database)
     }
-    async fn get_model_alias(&self, _tenant_id: &str, public_id: &str) -> Result<Option<ModelAliasRecord>, StoreError> {
-        let row = sqlx::query("SELECT * FROM model_aliases WHERE public_id = ?").bind(public_id).fetch_optional(&self.pool).await?;
-        row.map(|row| alias_from_row(&row)).transpose().map_err(StoreError::Database)
+    async fn get_model_alias(
+        &self,
+        _tenant_id: &str,
+        public_id: &str,
+    ) -> Result<Option<ModelAliasRecord>, StoreError> {
+        let row = sqlx::query("SELECT * FROM model_aliases WHERE public_id = ?")
+            .bind(public_id)
+            .fetch_optional(&self.pool)
+            .await?;
+        row.map(|row| alias_from_row(&row))
+            .transpose()
+            .map_err(StoreError::Database)
     }
-    async fn upsert_model_alias(&self, _tenant_id: &str, a: &ModelAliasRecord) -> Result<(), StoreError> {
+    async fn upsert_model_alias(
+        &self,
+        _tenant_id: &str,
+        a: &ModelAliasRecord,
+    ) -> Result<(), StoreError> {
         sqlx::query("INSERT INTO model_aliases (public_id, display_name, capabilities_json, status, access_policy_json, price_json, version, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT (public_id) DO UPDATE SET display_name=excluded.display_name, capabilities_json=excluded.capabilities_json, status=excluded.status, access_policy_json=excluded.access_policy_json, price_json=excluded.price_json, version=excluded.version, updated_at=excluded.updated_at")
             .bind(&a.public_id).bind(&a.display_name).bind(&a.capabilities_json).bind(&a.status).bind(&a.access_policy_json)
             .bind(&a.price_json).bind(a.version as i64).bind(&a.created_at).bind(&a.updated_at).execute(&self.pool).await?;
         Ok(())
     }
-    async fn delete_model_alias(&self, _tenant_id: &str, public_id: &str) -> Result<bool, StoreError> {
-        Ok(sqlx::query("DELETE FROM model_aliases WHERE public_id = ?").bind(public_id).execute(&self.pool).await?.rows_affected() > 0)
+    async fn delete_model_alias(
+        &self,
+        _tenant_id: &str,
+        public_id: &str,
+    ) -> Result<bool, StoreError> {
+        Ok(sqlx::query("DELETE FROM model_aliases WHERE public_id = ?")
+            .bind(public_id)
+            .execute(&self.pool)
+            .await?
+            .rows_affected()
+            > 0)
     }
 
-    async fn list_routes(&self, _tenant_id: &str, alias: Option<&str>) -> Result<Vec<RouteRecord>, StoreError> {
+    async fn list_routes(
+        &self,
+        _tenant_id: &str,
+        alias: Option<&str>,
+    ) -> Result<Vec<RouteRecord>, StoreError> {
         let rows = if let Some(alias) = alias {
-            sqlx::query("SELECT * FROM routes WHERE alias_public_id = ? ORDER BY priority, route_id").bind(alias).fetch_all(&self.pool).await?
+            sqlx::query(
+                "SELECT * FROM routes WHERE alias_public_id = ? ORDER BY priority, route_id",
+            )
+            .bind(alias)
+            .fetch_all(&self.pool)
+            .await?
         } else {
-            sqlx::query("SELECT * FROM routes ORDER BY alias_public_id, priority, route_id").fetch_all(&self.pool).await?
+            sqlx::query("SELECT * FROM routes ORDER BY alias_public_id, priority, route_id")
+                .fetch_all(&self.pool)
+                .await?
         };
-        rows.iter().map(route_from_row).collect::<Result<Vec<_>, _>>().map_err(StoreError::Database)
+        rows.iter()
+            .map(route_from_row)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(StoreError::Database)
     }
     async fn upsert_route(&self, _tenant_id: &str, r: &RouteRecord) -> Result<(), StoreError> {
         sqlx::query("INSERT INTO routes (route_id, alias_public_id, provider_model_id, weight, priority, health, circuit_state, last_error_at, circuit_open_until, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT (route_id) DO UPDATE SET alias_public_id=excluded.alias_public_id, provider_model_id=excluded.provider_model_id, weight=excluded.weight, priority=excluded.priority, health=excluded.health, circuit_state=excluded.circuit_state, last_error_at=excluded.last_error_at, circuit_open_until=excluded.circuit_open_until, updated_at=excluded.updated_at")
@@ -2715,9 +2970,22 @@ impl Store for SqliteStore {
         Ok(())
     }
     async fn delete_route(&self, _tenant_id: &str, route_id: &str) -> Result<bool, StoreError> {
-        Ok(sqlx::query("DELETE FROM routes WHERE route_id = ?").bind(route_id).execute(&self.pool).await?.rows_affected() > 0)
+        Ok(sqlx::query("DELETE FROM routes WHERE route_id = ?")
+            .bind(route_id)
+            .execute(&self.pool)
+            .await?
+            .rows_affected()
+            > 0)
     }
-    async fn update_route_health(&self, _tenant_id: &str, route_id: &str, health: &str, circuit: &str, last_error_at: Option<&str>, open_until: Option<&str>) -> Result<(), StoreError> {
+    async fn update_route_health(
+        &self,
+        _tenant_id: &str,
+        route_id: &str,
+        health: &str,
+        circuit: &str,
+        last_error_at: Option<&str>,
+        open_until: Option<&str>,
+    ) -> Result<(), StoreError> {
         sqlx::query("UPDATE routes SET health=?, circuit_state=?, last_error_at=?, circuit_open_until=?, updated_at=? WHERE route_id=?")
             .bind(health).bind(circuit).bind(last_error_at).bind(open_until).bind(now_rfc3339()).bind(route_id)
             .execute(&self.pool).await?;
@@ -2732,24 +3000,61 @@ impl Store for SqliteStore {
             .execute(&self.pool).await?;
         Ok(())
     }
-    async fn list_usage_events(&self, f: &UsageFilter) -> Result<Vec<UsageEventRecord>, StoreError> {
+    async fn list_usage_events(
+        &self,
+        f: &UsageFilter,
+    ) -> Result<Vec<UsageEventRecord>, StoreError> {
         let mut sql = String::from("SELECT * FROM usage_events WHERE tenant_id = ?");
         let mut binds: Vec<String> = vec![f.tenant_id.clone()];
-        if let Some(v)=&f.space_id { sql.push_str(" AND space_id = ?"); binds.push(v.clone()); }
-        if let Some(v)=&f.user_id { sql.push_str(" AND user_id = ?"); binds.push(v.clone()); }
-        if let Some(v)=&f.alias { sql.push_str(" AND alias = ?"); binds.push(v.clone()); }
-        if let Some(v)=&f.from { sql.push_str(" AND at >= ?"); binds.push(v.clone()); }
-        if let Some(v)=&f.to { sql.push_str(" AND at <= ?"); binds.push(v.clone()); }
+        if let Some(v) = &f.space_id {
+            sql.push_str(" AND space_id = ?");
+            binds.push(v.clone());
+        }
+        if let Some(v) = &f.user_id {
+            sql.push_str(" AND user_id = ?");
+            binds.push(v.clone());
+        }
+        if let Some(v) = &f.alias {
+            sql.push_str(" AND alias = ?");
+            binds.push(v.clone());
+        }
+        if let Some(v) = &f.from {
+            sql.push_str(" AND at >= ?");
+            binds.push(v.clone());
+        }
+        if let Some(v) = &f.to {
+            sql.push_str(" AND at <= ?");
+            binds.push(v.clone());
+        }
         sql.push_str(" ORDER BY at DESC LIMIT ?");
         let mut q = sqlx::query(&sql);
-        for v in binds { q = q.bind(v); }
-        let rows = q.bind(if f.limit > 0 { f.limit } else { 1000 }).fetch_all(&self.pool).await?;
-        rows.iter().map(usage_from_row_gateway).collect::<Result<Vec<_>, _>>().map_err(StoreError::Database)
+        for v in binds {
+            q = q.bind(v);
+        }
+        let rows = q
+            .bind(if f.limit > 0 { f.limit } else { 1000 })
+            .fetch_all(&self.pool)
+            .await?;
+        rows.iter()
+            .map(usage_from_row_gateway)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(StoreError::Database)
     }
 
-    async fn list_token_quotas(&self, tenant_id: &str) -> Result<Vec<TokenQuotaRecord>, StoreError> {
-        let rows = sqlx::query("SELECT * FROM token_quotas WHERE tenant_id = ? ORDER BY scope_type, scope_id").bind(tenant_id).fetch_all(&self.pool).await?;
-        rows.iter().map(token_quota_from_row).collect::<Result<Vec<_>, _>>().map_err(StoreError::Database)
+    async fn list_token_quotas(
+        &self,
+        tenant_id: &str,
+    ) -> Result<Vec<TokenQuotaRecord>, StoreError> {
+        let rows = sqlx::query(
+            "SELECT * FROM token_quotas WHERE tenant_id = ? ORDER BY scope_type, scope_id",
+        )
+        .bind(tenant_id)
+        .fetch_all(&self.pool)
+        .await?;
+        rows.iter()
+            .map(token_quota_from_row)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(StoreError::Database)
     }
     async fn upsert_token_quota(&self, q: &TokenQuotaRecord) -> Result<(), StoreError> {
         sqlx::query("INSERT INTO token_quotas (quota_id, tenant_id, scope_type, scope_id, period, limit_tokens, limit_requests, limit_cost_micros, currency, enforcement, action, enabled, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT (quota_id) DO UPDATE SET scope_type=excluded.scope_type, scope_id=excluded.scope_id, period=excluded.period, limit_tokens=excluded.limit_tokens, limit_requests=excluded.limit_requests, limit_cost_micros=excluded.limit_cost_micros, currency=excluded.currency, enforcement=excluded.enforcement, action=excluded.action, enabled=excluded.enabled, updated_at=excluded.updated_at")
@@ -2758,18 +3063,46 @@ impl Store for SqliteStore {
             .execute(&self.pool).await?;
         Ok(())
     }
-    async fn delete_token_quota(&self, tenant_id: &str, quota_id: &str) -> Result<bool, StoreError> {
-        Ok(sqlx::query("DELETE FROM token_quotas WHERE tenant_id = ? AND quota_id = ?").bind(tenant_id).bind(quota_id).execute(&self.pool).await?.rows_affected() > 0)
+    async fn delete_token_quota(
+        &self,
+        tenant_id: &str,
+        quota_id: &str,
+    ) -> Result<bool, StoreError> {
+        Ok(
+            sqlx::query("DELETE FROM token_quotas WHERE tenant_id = ? AND quota_id = ?")
+                .bind(tenant_id)
+                .bind(quota_id)
+                .execute(&self.pool)
+                .await?
+                .rows_affected()
+                > 0,
+        )
     }
 
-    async fn get_quota_counter(&self, tenant_id: &str, scope_type: &str, scope_id: &str, period_start: &str) -> Result<Option<QuotaCounter>, StoreError> {
+    async fn get_quota_counter(
+        &self,
+        tenant_id: &str,
+        scope_type: &str,
+        scope_id: &str,
+        period_start: &str,
+    ) -> Result<Option<QuotaCounter>, StoreError> {
         let row = sqlx::query("SELECT * FROM quota_counters WHERE tenant_id=? AND scope_type=? AND scope_id=? AND period_start=?")
             .bind(tenant_id).bind(scope_type).bind(scope_id).bind(period_start).fetch_optional(&self.pool).await?;
-        row.map(|row| quota_counter_from_row(&row)).transpose().map_err(StoreError::Database)
+        row.map(|row| quota_counter_from_row(&row))
+            .transpose()
+            .map_err(StoreError::Database)
     }
     async fn list_quota_counters(&self, tenant_id: &str) -> Result<Vec<QuotaCounter>, StoreError> {
-        let rows = sqlx::query("SELECT * FROM quota_counters WHERE tenant_id=? ORDER BY scope_type, scope_id").bind(tenant_id).fetch_all(&self.pool).await?;
-        rows.iter().map(quota_counter_from_row).collect::<Result<Vec<_>, _>>().map_err(StoreError::Database)
+        let rows = sqlx::query(
+            "SELECT * FROM quota_counters WHERE tenant_id=? ORDER BY scope_type, scope_id",
+        )
+        .bind(tenant_id)
+        .fetch_all(&self.pool)
+        .await?;
+        rows.iter()
+            .map(quota_counter_from_row)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(StoreError::Database)
     }
     async fn add_quota_reservation(&self, r: &QuotaReservation) -> Result<(), StoreError> {
         let mut tx = self.pool.begin().await?;
@@ -2783,13 +3116,29 @@ impl Store for SqliteStore {
         tx.commit().await?;
         Ok(())
     }
-    async fn get_quota_reservation(&self, tenant_id: &str, request_id: &str) -> Result<Option<QuotaReservation>, StoreError> {
+    async fn get_quota_reservation(
+        &self,
+        tenant_id: &str,
+        request_id: &str,
+    ) -> Result<Option<QuotaReservation>, StoreError> {
         let row = sqlx::query("SELECT * FROM quota_reservations WHERE tenant_id=? AND request_id=? ORDER BY created_at DESC LIMIT 1").bind(tenant_id).bind(request_id).fetch_optional(&self.pool).await?;
-        row.map(|row| quota_reservation_from_row(&row)).transpose().map_err(StoreError::Database)
+        row.map(|row| quota_reservation_from_row(&row))
+            .transpose()
+            .map_err(StoreError::Database)
     }
-    async fn update_quota_reservation(&self, tenant_id: &str, request_id: &str, status: &str) -> Result<(), StoreError> {
+    async fn update_quota_reservation(
+        &self,
+        tenant_id: &str,
+        request_id: &str,
+        status: &str,
+    ) -> Result<(), StoreError> {
         let mut tx = self.pool.begin().await?;
-        let rows = sqlx::query("SELECT * FROM quota_reservations WHERE tenant_id=? AND request_id=?").bind(tenant_id).bind(request_id).fetch_all(&mut *tx).await?;
+        let rows =
+            sqlx::query("SELECT * FROM quota_reservations WHERE tenant_id=? AND request_id=?")
+                .bind(tenant_id)
+                .bind(request_id)
+                .fetch_all(&mut *tx)
+                .await?;
         for row in rows {
             let r = quota_reservation_from_row(&row)?;
             if r.status == "reserved" && (status == "committed" || status == "released") {
@@ -2802,24 +3151,52 @@ impl Store for SqliteStore {
                         .bind(r.reserved_tokens).bind(r.reserved_requests).bind(r.reserved_cost_micros).bind(now_rfc3339())
                         .bind(&r.tenant_id).bind(&r.scope_type).bind(&r.scope_id).bind(&r.period_start).execute(&mut *tx).await?;
                 }
-                sqlx::query("UPDATE quota_reservations SET status=? WHERE reservation_id=?").bind(status).bind(&r.reservation_id).execute(&mut *tx).await?;
+                sqlx::query("UPDATE quota_reservations SET status=? WHERE reservation_id=?")
+                    .bind(status)
+                    .bind(&r.reservation_id)
+                    .execute(&mut *tx)
+                    .await?;
             }
         }
         tx.commit().await?;
         Ok(())
     }
-    async fn list_quota_reservations(&self, tenant_id: &str, request_id: &str) -> Result<Vec<QuotaReservation>, StoreError> {
-        let rows = sqlx::query("SELECT * FROM quota_reservations WHERE tenant_id=? AND request_id=?").bind(tenant_id).bind(request_id).fetch_all(&self.pool).await?;
-        rows.iter().map(quota_reservation_from_row).collect::<Result<Vec<_>, _>>().map_err(StoreError::Database)
+    async fn list_quota_reservations(
+        &self,
+        tenant_id: &str,
+        request_id: &str,
+    ) -> Result<Vec<QuotaReservation>, StoreError> {
+        let rows =
+            sqlx::query("SELECT * FROM quota_reservations WHERE tenant_id=? AND request_id=?")
+                .bind(tenant_id)
+                .bind(request_id)
+                .fetch_all(&self.pool)
+                .await?;
+        rows.iter()
+            .map(quota_reservation_from_row)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(StoreError::Database)
     }
-    async fn adjust_quota_counter(&self, tenant_id: &str, scope_type: &str, scope_id: &str, period_start: &str, token_delta: i64, cost_delta: i64) -> Result<(), StoreError> {
+    async fn adjust_quota_counter(
+        &self,
+        tenant_id: &str,
+        scope_type: &str,
+        scope_id: &str,
+        period_start: &str,
+        token_delta: i64,
+        cost_delta: i64,
+    ) -> Result<(), StoreError> {
         sqlx::query("UPDATE quota_counters SET used_tokens=MAX(0, used_tokens+?), used_cost_micros=MAX(0, used_cost_micros+?), updated_at=? WHERE tenant_id=? AND scope_type=? AND scope_id=? AND period_start=?")
             .bind(token_delta).bind(cost_delta).bind(now_rfc3339()).bind(tenant_id).bind(scope_type).bind(scope_id).bind(period_start)
             .execute(&self.pool).await?;
         Ok(())
     }
 
-    async fn cleanup_expired_quota_reservations(&self, tenant_id: &str, now: &str) -> Result<usize, StoreError> {
+    async fn cleanup_expired_quota_reservations(
+        &self,
+        tenant_id: &str,
+        now: &str,
+    ) -> Result<usize, StoreError> {
         let mut tx = self.pool.begin().await?;
         let rows = sqlx::query("SELECT * FROM quota_reservations WHERE tenant_id=? AND status='reserved' AND expires_at < ?").bind(tenant_id).bind(now).fetch_all(&mut *tx).await?;
         let mut count = 0usize;
@@ -2828,7 +3205,10 @@ impl Store for SqliteStore {
             sqlx::query("UPDATE quota_counters SET reserved_tokens=MAX(0,reserved_tokens-?), reserved_requests=MAX(0,reserved_requests-?), reserved_cost_micros=MAX(0,reserved_cost_micros-?), updated_at=? WHERE tenant_id=? AND scope_type=? AND scope_id=? AND period_start=?")
                 .bind(r.reserved_tokens).bind(r.reserved_requests).bind(r.reserved_cost_micros).bind(now)
                 .bind(&r.tenant_id).bind(&r.scope_type).bind(&r.scope_id).bind(&r.period_start).execute(&mut *tx).await?;
-            sqlx::query("UPDATE quota_reservations SET status='expired' WHERE reservation_id=?").bind(&r.reservation_id).execute(&mut *tx).await?;
+            sqlx::query("UPDATE quota_reservations SET status='expired' WHERE reservation_id=?")
+                .bind(&r.reservation_id)
+                .execute(&mut *tx)
+                .await?;
             count += 1;
         }
         tx.commit().await?;
@@ -2838,27 +3218,65 @@ impl Store for SqliteStore {
     async fn aggregate_usage_events(&self, f: &UsageFilter) -> Result<UsageAggregate, StoreError> {
         let mut sql = String::from("SELECT COUNT(*) AS requests, COALESCE(SUM(input_tokens),0) AS input_tokens, COALESCE(SUM(output_tokens),0) AS output_tokens, COALESCE(SUM(cached_tokens),0) AS cached_tokens, COALESCE(SUM(cost_micros),0) AS cost_micros, COALESCE(SUM(provider_cost_micros),0) AS provider_cost_micros, COALESCE(SUM(CASE WHEN status <> 'success' THEN 1 ELSE 0 END),0) AS errors FROM usage_events WHERE tenant_id = ?");
         let mut binds: Vec<String> = vec![f.tenant_id.clone()];
-        if let Some(v)=&f.space_id { sql.push_str(" AND space_id = ?"); binds.push(v.clone()); }
-        if let Some(v)=&f.user_id { sql.push_str(" AND user_id = ?"); binds.push(v.clone()); }
-        if let Some(v)=&f.alias { sql.push_str(" AND alias = ?"); binds.push(v.clone()); }
-        if let Some(v)=&f.from { sql.push_str(" AND at >= ?"); binds.push(v.clone()); }
-        if let Some(v)=&f.to { sql.push_str(" AND at <= ?"); binds.push(v.clone()); }
+        if let Some(v) = &f.space_id {
+            sql.push_str(" AND space_id = ?");
+            binds.push(v.clone());
+        }
+        if let Some(v) = &f.user_id {
+            sql.push_str(" AND user_id = ?");
+            binds.push(v.clone());
+        }
+        if let Some(v) = &f.alias {
+            sql.push_str(" AND alias = ?");
+            binds.push(v.clone());
+        }
+        if let Some(v) = &f.from {
+            sql.push_str(" AND at >= ?");
+            binds.push(v.clone());
+        }
+        if let Some(v) = &f.to {
+            sql.push_str(" AND at <= ?");
+            binds.push(v.clone());
+        }
         let mut q = sqlx::query(&sql);
-        for v in binds { q = q.bind(v); }
+        for v in binds {
+            q = q.bind(v);
+        }
         let row = q.fetch_one(&self.pool).await?;
-        Ok(UsageAggregate { requests: row.try_get("requests")?, input_tokens: row.try_get("input_tokens")?, output_tokens: row.try_get("output_tokens")?, cached_tokens: row.try_get("cached_tokens")?, cost_micros: row.try_get("cost_micros")?, provider_cost_micros: row.try_get("provider_cost_micros")?, errors: row.try_get("errors")? })
+        Ok(UsageAggregate {
+            requests: row.try_get("requests")?,
+            input_tokens: row.try_get("input_tokens")?,
+            output_tokens: row.try_get("output_tokens")?,
+            cached_tokens: row.try_get("cached_tokens")?,
+            cost_micros: row.try_get("cost_micros")?,
+            provider_cost_micros: row.try_get("provider_cost_micros")?,
+            errors: row.try_get("errors")?,
+        })
     }
 
-    async fn upsert_document_summary(&self, summary: &DocumentSummaryRecord) -> Result<(), StoreError> {
+    async fn upsert_document_summary(
+        &self,
+        summary: &DocumentSummaryRecord,
+    ) -> Result<(), StoreError> {
         sqlx::query("INSERT INTO document_summaries (tenant_id, space_id, doc_id, revision_id, lang, model, prompt_version, content_hash, status, summary_json, usage_event_id, generated_at, error) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT (tenant_id, space_id, doc_id, revision_id, model, prompt_version) DO UPDATE SET content_hash=excluded.content_hash, status=excluded.status, summary_json=excluded.summary_json, usage_event_id=excluded.usage_event_id, generated_at=excluded.generated_at, error=excluded.error")
             .bind(&summary.tenant_id).bind(&summary.space_id).bind(&summary.doc_id).bind(&summary.revision_id).bind(&summary.lang).bind(&summary.model).bind(&summary.prompt_version).bind(&summary.content_hash).bind(&summary.status).bind(&summary.summary_json).bind(&summary.usage_event_id).bind(&summary.generated_at).bind(&summary.error)
             .execute(&self.pool).await?;
         Ok(())
     }
-    async fn get_document_summary(&self, tenant_id: &str, space_id: &str, doc_id: &str, revision_id: &str, model: &str, prompt_version: &str) -> Result<Option<DocumentSummaryRecord>, StoreError> {
+    async fn get_document_summary(
+        &self,
+        tenant_id: &str,
+        space_id: &str,
+        doc_id: &str,
+        revision_id: &str,
+        model: &str,
+        prompt_version: &str,
+    ) -> Result<Option<DocumentSummaryRecord>, StoreError> {
         let row = sqlx::query("SELECT * FROM document_summaries WHERE tenant_id=? AND space_id=? AND doc_id=? AND revision_id=? AND model=? AND prompt_version=?")
             .bind(tenant_id).bind(space_id).bind(doc_id).bind(revision_id).bind(model).bind(prompt_version).fetch_optional(&self.pool).await?;
-        row.map(|row| summary_from_row(&row)).transpose().map_err(StoreError::Database)
+        row.map(|row| summary_from_row(&row))
+            .transpose()
+            .map_err(StoreError::Database)
     }
     async fn create_summary_job(&self, job: &SummaryJobRecord) -> Result<bool, StoreError> {
         let result = sqlx::query("INSERT INTO summary_jobs (job_id, tenant_id, space_id, doc_id, revision_id, status, attempts, scheduled_at, started_at, finished_at, error) VALUES (?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT (tenant_id, space_id, doc_id, revision_id) DO NOTHING")
@@ -2866,11 +3284,31 @@ impl Store for SqliteStore {
             .execute(&self.pool).await?;
         Ok(result.rows_affected() > 0)
     }
-    async fn list_summary_jobs(&self, status: &str, limit: i64) -> Result<Vec<SummaryJobRecord>, StoreError> {
-        let rows = sqlx::query("SELECT * FROM summary_jobs WHERE status=? ORDER BY scheduled_at LIMIT ?").bind(status).bind(limit).fetch_all(&self.pool).await?;
-        rows.iter().map(summary_job_from_row).collect::<Result<Vec<_>, _>>().map_err(StoreError::Database)
+    async fn list_summary_jobs(
+        &self,
+        status: &str,
+        limit: i64,
+    ) -> Result<Vec<SummaryJobRecord>, StoreError> {
+        let rows =
+            sqlx::query("SELECT * FROM summary_jobs WHERE status=? ORDER BY scheduled_at LIMIT ?")
+                .bind(status)
+                .bind(limit)
+                .fetch_all(&self.pool)
+                .await?;
+        rows.iter()
+            .map(summary_job_from_row)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(StoreError::Database)
     }
-    async fn update_summary_job(&self, job_id: &str, status: &str, attempts: u32, started_at: Option<&str>, finished_at: Option<&str>, error: Option<&str>) -> Result<(), StoreError> {
+    async fn update_summary_job(
+        &self,
+        job_id: &str,
+        status: &str,
+        attempts: u32,
+        started_at: Option<&str>,
+        finished_at: Option<&str>,
+        error: Option<&str>,
+    ) -> Result<(), StoreError> {
         sqlx::query("UPDATE summary_jobs SET status=?, attempts=?, started_at=COALESCE(?, started_at), finished_at=?, error=? WHERE job_id=?")
             .bind(status).bind(attempts as i64).bind(started_at).bind(finished_at).bind(error).bind(job_id).execute(&self.pool).await?;
         Ok(())
@@ -2880,15 +3318,40 @@ impl Store for SqliteStore {
             .bind(&c.conversation_id).bind(&c.tenant_id).bind(&c.space_id).bind(&c.owner_id).bind(&c.title).bind(&c.external_session_id).bind(&c.status).bind(&c.created_at).bind(&c.updated_at).execute(&self.pool).await?;
         Ok(())
     }
-    async fn get_conversation(&self, tenant_id: &str, conversation_id: &str) -> Result<Option<ConversationRecord>, StoreError> {
-        let row = sqlx::query("SELECT * FROM conversations WHERE tenant_id=? AND conversation_id=?").bind(tenant_id).bind(conversation_id).fetch_optional(&self.pool).await?;
-        row.map(|row| conversation_from_row(&row)).transpose().map_err(StoreError::Database)
+    async fn get_conversation(
+        &self,
+        tenant_id: &str,
+        conversation_id: &str,
+    ) -> Result<Option<ConversationRecord>, StoreError> {
+        let row =
+            sqlx::query("SELECT * FROM conversations WHERE tenant_id=? AND conversation_id=?")
+                .bind(tenant_id)
+                .bind(conversation_id)
+                .fetch_optional(&self.pool)
+                .await?;
+        row.map(|row| conversation_from_row(&row))
+            .transpose()
+            .map_err(StoreError::Database)
     }
-    async fn list_conversations(&self, tenant_id: &str, owner_id: &str, limit: i64) -> Result<Vec<ConversationRecord>, StoreError> {
+    async fn list_conversations(
+        &self,
+        tenant_id: &str,
+        owner_id: &str,
+        limit: i64,
+    ) -> Result<Vec<ConversationRecord>, StoreError> {
         let rows = sqlx::query("SELECT * FROM conversations WHERE tenant_id=? AND owner_id=? AND status <> 'deleted' ORDER BY updated_at DESC LIMIT ?").bind(tenant_id).bind(owner_id).bind(limit).fetch_all(&self.pool).await?;
-        rows.iter().map(conversation_from_row).collect::<Result<Vec<_>, _>>().map_err(StoreError::Database)
+        rows.iter()
+            .map(conversation_from_row)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(StoreError::Database)
     }
-    async fn update_conversation(&self, tenant_id: &str, conversation_id: &str, title: Option<&str>, status: Option<&str>) -> Result<(), StoreError> {
+    async fn update_conversation(
+        &self,
+        tenant_id: &str,
+        conversation_id: &str,
+        title: Option<&str>,
+        status: Option<&str>,
+    ) -> Result<(), StoreError> {
         sqlx::query("UPDATE conversations SET title=COALESCE(?, title), status=COALESCE(?, status), updated_at=? WHERE tenant_id=? AND conversation_id=?")
             .bind(title).bind(status).bind(now_rfc3339()).bind(tenant_id).bind(conversation_id).execute(&self.pool).await?;
         Ok(())
@@ -2898,39 +3361,92 @@ impl Store for SqliteStore {
             .bind(&m.message_id).bind(&m.conversation_id).bind(&m.role).bind(&m.content).bind(&m.citations_json).bind(&m.model).bind(&m.usage_json).bind(&m.degraded_json).bind(&m.request_id).bind(&m.mode).bind(&m.rewritten_query).bind(&m.conversation_context_hash).bind(&m.created_at).execute(&self.pool).await?;
         Ok(())
     }
-    async fn list_messages(&self, conversation_id: &str, limit: i64) -> Result<Vec<MessageRecord>, StoreError> {
-        let rows = sqlx::query("SELECT * FROM messages WHERE conversation_id=? ORDER BY created_at ASC LIMIT ?").bind(conversation_id).bind(limit).fetch_all(&self.pool).await?;
-        rows.iter().map(message_from_row).collect::<Result<Vec<_>, _>>().map_err(StoreError::Database)
+    async fn list_messages(
+        &self,
+        conversation_id: &str,
+        limit: i64,
+    ) -> Result<Vec<MessageRecord>, StoreError> {
+        let rows = sqlx::query(
+            "SELECT * FROM messages WHERE conversation_id=? ORDER BY created_at ASC LIMIT ?",
+        )
+        .bind(conversation_id)
+        .bind(limit)
+        .fetch_all(&self.pool)
+        .await?;
+        rows.iter()
+            .map(message_from_row)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(StoreError::Database)
     }
 
-    async fn bind_conversation_external_session(&self, tenant_id: &str, conversation_id: &str, external_session_id: &str) -> Result<(), StoreError> {
+    async fn bind_conversation_external_session(
+        &self,
+        tenant_id: &str,
+        conversation_id: &str,
+        external_session_id: &str,
+    ) -> Result<(), StoreError> {
         sqlx::query("UPDATE conversations SET external_session_id=?, updated_at=? WHERE tenant_id=? AND conversation_id=?")
             .bind(external_session_id).bind(now_rfc3339()).bind(tenant_id).bind(conversation_id).execute(&self.pool).await?;
         Ok(())
     }
 
-    async fn set_usage_rewritten_query(&self, usage_event_id: &str, rewritten_query: &str) -> Result<(), StoreError> {
-        sqlx::query("UPDATE usage_events SET rewritten_query=? WHERE usage_event_id=?").bind(rewritten_query).bind(usage_event_id).execute(&self.pool).await?;
+    async fn set_usage_rewritten_query(
+        &self,
+        usage_event_id: &str,
+        rewritten_query: &str,
+    ) -> Result<(), StoreError> {
+        sqlx::query("UPDATE usage_events SET rewritten_query=? WHERE usage_event_id=?")
+            .bind(rewritten_query)
+            .bind(usage_event_id)
+            .execute(&self.pool)
+            .await?;
         Ok(())
     }
 
-    async fn set_user_disabled(&self, tenant_id: &str, user_id: &str, disabled: bool) -> Result<(), StoreError> {
-        sqlx::query("UPDATE users SET disabled=? WHERE tenant_id=? AND user_id=?").bind(if disabled {1i64} else {0i64}).bind(tenant_id).bind(user_id).execute(&self.pool).await?;
+    async fn set_user_disabled(
+        &self,
+        tenant_id: &str,
+        user_id: &str,
+        disabled: bool,
+    ) -> Result<(), StoreError> {
+        sqlx::query("UPDATE users SET disabled=? WHERE tenant_id=? AND user_id=?")
+            .bind(if disabled { 1i64 } else { 0i64 })
+            .bind(tenant_id)
+            .bind(user_id)
+            .execute(&self.pool)
+            .await?;
         Ok(())
     }
 
-    async fn archive_page(&self, tenant_id: &str, space_id: &str, slug: &str, lang: &str) -> Result<bool, StoreError> {
+    async fn archive_page(
+        &self,
+        tenant_id: &str,
+        space_id: &str,
+        slug: &str,
+        lang: &str,
+    ) -> Result<bool, StoreError> {
         let result = sqlx::query("UPDATE pages SET valid_to=? WHERE tenant_id=? AND space_id=? AND slug=? AND lang=? AND valid_to IS NULL")
             .bind(now_rfc3339()).bind(tenant_id).bind(space_id).bind(slug).bind(lang).execute(&self.pool).await?;
         Ok(result.rows_affected() > 0)
     }
-    async fn restore_page(&self, tenant_id: &str, space_id: &str, slug: &str, lang: &str) -> Result<bool, StoreError> {
+    async fn restore_page(
+        &self,
+        tenant_id: &str,
+        space_id: &str,
+        slug: &str,
+        lang: &str,
+    ) -> Result<bool, StoreError> {
         let result = sqlx::query("UPDATE pages SET valid_to=NULL WHERE tenant_id=? AND space_id=? AND slug=? AND lang=? AND valid_to IS NOT NULL")
             .bind(tenant_id).bind(space_id).bind(slug).bind(lang).execute(&self.pool).await?;
         Ok(result.rows_affected() > 0)
     }
 
-    async fn archive_document_path(&self, tenant_id: &str, space_id: &str, logical_path: &str) -> Result<usize, StoreError> {
+    async fn archive_document_path(
+        &self,
+        tenant_id: &str,
+        space_id: &str,
+        logical_path: &str,
+    ) -> Result<usize, StoreError> {
         let now = now_rfc3339();
         let docs = sqlx::query("UPDATE documents SET status='archived', valid_to=? WHERE tenant_id=? AND space_id=? AND logical_path=? AND status='active' AND valid_to IS NULL")
             .bind(&now).bind(tenant_id).bind(space_id).bind(logical_path).execute(&self.pool).await?;
@@ -2938,7 +3454,12 @@ impl Store for SqliteStore {
             .bind(&now).bind(tenant_id).bind(space_id).bind(tenant_id).bind(space_id).bind(logical_path).execute(&self.pool).await?;
         Ok(docs.rows_affected() as usize)
     }
-    async fn restore_document_path(&self, tenant_id: &str, space_id: &str, logical_path: &str) -> Result<usize, StoreError> {
+    async fn restore_document_path(
+        &self,
+        tenant_id: &str,
+        space_id: &str,
+        logical_path: &str,
+    ) -> Result<usize, StoreError> {
         let docs = sqlx::query("UPDATE documents SET status='active', valid_to=NULL WHERE tenant_id=? AND space_id=? AND logical_path=? AND status='archived'")
             .bind(tenant_id).bind(space_id).bind(logical_path).execute(&self.pool).await?;
         sqlx::query("UPDATE chunks SET valid_to=NULL WHERE tenant_id=? AND space_id=? AND valid_to IS NOT NULL AND doc_id IN (SELECT doc_id FROM documents WHERE tenant_id=? AND space_id=? AND logical_path=?)")
@@ -2946,57 +3467,130 @@ impl Store for SqliteStore {
         Ok(docs.rows_affected() as usize)
     }
 
-    async fn list_page_records(&self, policy: &Policy, limit: i64) -> Result<Vec<PageRecord>, StoreError> {
+    async fn list_page_records(
+        &self,
+        policy: &Policy,
+        limit: i64,
+    ) -> Result<Vec<PageRecord>, StoreError> {
         let visibility = policy.visibility("p", self.dialect())?;
         let sql = format!("SELECT * FROM pages p WHERE {vis} ORDER BY p.space_id, p.lang, p.order_index, p.slug LIMIT ?", vis = visibility.sql);
         let mut query = sqlx::query(&sql);
-        for value in &visibility.binds { query = query.bind(value.as_str()); }
+        for value in &visibility.binds {
+            query = query.bind(value.as_str());
+        }
         let rows = query.bind(limit).fetch_all(&self.pool).await?;
         rows.iter()
             .map(|row| -> Result<PageRecord, sqlx::Error> {
                 Ok(PageRecord {
-                    tenant_id: row.try_get("tenant_id")?, space_id: row.try_get("space_id")?, slug: row.try_get("slug")?,
-                    lang: row.try_get("lang")?, title: row.try_get("title")?, summary: row.try_get("summary")?,
-                    order_index: row.try_get::<i64, _>("order_index")? as i32, current_revision_id: row.try_get("current_revision_id")?,
-                    content_hash: row.try_get("content_hash")?, acl_json: row.try_get("acl_json")?, acl_principals: row.try_get("acl_principals")?,
-                    valid_from: row.try_get("valid_from")?, valid_to: row.try_get("valid_to")?, version: row.try_get::<i64, _>("version")? as u32,
-                    superseded_by: row.try_get("superseded_by")?, created_at: row.try_get("created_at")?, updated_at: row.try_get("updated_at")?,
+                    tenant_id: row.try_get("tenant_id")?,
+                    space_id: row.try_get("space_id")?,
+                    slug: row.try_get("slug")?,
+                    lang: row.try_get("lang")?,
+                    title: row.try_get("title")?,
+                    summary: row.try_get("summary")?,
+                    order_index: row.try_get::<i64, _>("order_index")? as i32,
+                    current_revision_id: row.try_get("current_revision_id")?,
+                    content_hash: row.try_get("content_hash")?,
+                    acl_json: row.try_get("acl_json")?,
+                    acl_principals: row.try_get("acl_principals")?,
+                    valid_from: row.try_get("valid_from")?,
+                    valid_to: row.try_get("valid_to")?,
+                    version: row.try_get::<i64, _>("version")? as u32,
+                    superseded_by: row.try_get("superseded_by")?,
+                    created_at: row.try_get("created_at")?,
+                    updated_at: row.try_get("updated_at")?,
                 })
             })
             .collect::<Result<Vec<_>, _>>()
             .map_err(StoreError::Database)
     }
-    async fn get_revision(&self, tenant_id: &str, revision_id: &str) -> Result<Option<RevisionRecord>, StoreError> {
-        let row = sqlx::query("SELECT * FROM revisions WHERE tenant_id=? AND revision_id=?").bind(tenant_id).bind(revision_id).fetch_optional(&self.pool).await?;
+    async fn get_revision(
+        &self,
+        tenant_id: &str,
+        revision_id: &str,
+    ) -> Result<Option<RevisionRecord>, StoreError> {
+        let row = sqlx::query("SELECT * FROM revisions WHERE tenant_id=? AND revision_id=?")
+            .bind(tenant_id)
+            .bind(revision_id)
+            .fetch_optional(&self.pool)
+            .await?;
         match row {
             Some(row) => Ok(Some(RevisionRecord {
-                tenant_id: row.try_get("tenant_id")?, revision_id: row.try_get("revision_id")?, space_id: row.try_get("space_id")?,
-                slug: row.try_get("slug")?, lang: row.try_get("lang")?, title: row.try_get("title")?, markdown: row.try_get("markdown")?,
-                content_hash: row.try_get("content_hash")?, author: row.try_get("author")?, created_at: row.try_get("created_at")?,
-                version: row.try_get::<i64, _>("version")? as u32, acl_json: row.try_get("acl_json")?, acl_principals: row.try_get("acl_principals")?,
-                valid_from: row.try_get("valid_from")?, valid_to: row.try_get("valid_to")?, superseded_by: row.try_get("superseded_by")?,
-                source_url: row.try_get("source_url")?, source_revision: row.try_get("source_revision")?,
+                tenant_id: row.try_get("tenant_id")?,
+                revision_id: row.try_get("revision_id")?,
+                space_id: row.try_get("space_id")?,
+                slug: row.try_get("slug")?,
+                lang: row.try_get("lang")?,
+                title: row.try_get("title")?,
+                markdown: row.try_get("markdown")?,
+                content_hash: row.try_get("content_hash")?,
+                author: row.try_get("author")?,
+                created_at: row.try_get("created_at")?,
+                version: row.try_get::<i64, _>("version")? as u32,
+                acl_json: row.try_get("acl_json")?,
+                acl_principals: row.try_get("acl_principals")?,
+                valid_from: row.try_get("valid_from")?,
+                valid_to: row.try_get("valid_to")?,
+                superseded_by: row.try_get("superseded_by")?,
+                source_url: row.try_get("source_url")?,
+                source_revision: row.try_get("source_revision")?,
             })),
             None => Ok(None),
         }
     }
-    async fn restore_conversation(&self, tenant_id: &str, conversation_id: &str) -> Result<bool, StoreError> {
+    async fn restore_conversation(
+        &self,
+        tenant_id: &str,
+        conversation_id: &str,
+    ) -> Result<bool, StoreError> {
         let result = sqlx::query("UPDATE conversations SET status='active', updated_at=? WHERE tenant_id=? AND conversation_id=? AND status='deleted'")
             .bind(now_rfc3339()).bind(tenant_id).bind(conversation_id).execute(&self.pool).await?;
         Ok(result.rows_affected() > 0)
     }
 
-    async fn billing_get_wallet(&self, tenant_id: &str, currency: &str) -> Result<Option<WalletRecord>, StoreError> {
-        let row = sqlx::query("SELECT * FROM wallets WHERE tenant_id=? AND currency=?").bind(tenant_id).bind(currency).fetch_optional(&self.pool).await.map_err(StoreError::Database)?;
+    async fn billing_get_wallet(
+        &self,
+        tenant_id: &str,
+        currency: &str,
+    ) -> Result<Option<WalletRecord>, StoreError> {
+        let row = sqlx::query("SELECT * FROM wallets WHERE tenant_id=? AND currency=?")
+            .bind(tenant_id)
+            .bind(currency)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(StoreError::Database)?;
         row.map(|row| -> Result<WalletRecord, sqlx::Error> {
-            Ok(WalletRecord { wallet_id: row.try_get("wallet_id")?, tenant_id: row.try_get("tenant_id")?, currency: row.try_get("currency")?, balance_micros: row.try_get("balance_micros")?, status: row.try_get("status")?, updated_at: row.try_get("updated_at")? })
-        }).transpose().map_err(StoreError::Database)
+            Ok(WalletRecord {
+                wallet_id: row.try_get("wallet_id")?,
+                tenant_id: row.try_get("tenant_id")?,
+                currency: row.try_get("currency")?,
+                balance_micros: row.try_get("balance_micros")?,
+                status: row.try_get("status")?,
+                updated_at: row.try_get("updated_at")?,
+            })
+        })
+        .transpose()
+        .map_err(StoreError::Database)
     }
     async fn billing_list_wallets(&self, tenant_id: &str) -> Result<Vec<WalletRecord>, StoreError> {
-        let rows = sqlx::query("SELECT * FROM wallets WHERE tenant_id=? ORDER BY currency").bind(tenant_id).fetch_all(&self.pool).await.map_err(StoreError::Database)?;
-        rows.iter().map(|row| -> Result<WalletRecord, sqlx::Error> {
-            Ok(WalletRecord { wallet_id: row.try_get("wallet_id")?, tenant_id: row.try_get("tenant_id")?, currency: row.try_get("currency")?, balance_micros: row.try_get("balance_micros")?, status: row.try_get("status")?, updated_at: row.try_get("updated_at")? })
-        }).collect::<Result<Vec<_>, _>>().map_err(StoreError::Database)
+        let rows = sqlx::query("SELECT * FROM wallets WHERE tenant_id=? ORDER BY currency")
+            .bind(tenant_id)
+            .fetch_all(&self.pool)
+            .await
+            .map_err(StoreError::Database)?;
+        rows.iter()
+            .map(|row| -> Result<WalletRecord, sqlx::Error> {
+                Ok(WalletRecord {
+                    wallet_id: row.try_get("wallet_id")?,
+                    tenant_id: row.try_get("tenant_id")?,
+                    currency: row.try_get("currency")?,
+                    balance_micros: row.try_get("balance_micros")?,
+                    status: row.try_get("status")?,
+                    updated_at: row.try_get("updated_at")?,
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(StoreError::Database)
     }
     async fn billing_ensure_wallet(&self, wallet: &WalletRecord) -> Result<(), StoreError> {
         sqlx::query("INSERT INTO wallets (wallet_id, tenant_id, currency, balance_micros, status, updated_at) VALUES (?,?,?,?,?,?) ON CONFLICT (tenant_id, currency) DO NOTHING")
@@ -3004,8 +3598,16 @@ impl Store for SqliteStore {
             .execute(&self.pool).await.map_err(StoreError::Database)?;
         Ok(())
     }
-    async fn billing_post_ledger(&self, entries: &[LedgerEntryRecord], balance_delta_micros: i64, allow_negative: bool, currency: &str) -> Result<LedgerTxResult, StoreError> {
-        let Some(first) = entries.first() else { return Ok(LedgerTxResult::Duplicate); };
+    async fn billing_post_ledger(
+        &self,
+        entries: &[LedgerEntryRecord],
+        balance_delta_micros: i64,
+        allow_negative: bool,
+        currency: &str,
+    ) -> Result<LedgerTxResult, StoreError> {
+        let Some(first) = entries.first() else {
+            return Ok(LedgerTxResult::Duplicate);
+        };
         let mut tx = self.pool.begin().await.map_err(StoreError::Database)?;
         for entry in entries {
             let result = sqlx::query("INSERT INTO ledger_entries (entry_id, group_id, wallet_id, tenant_id, account, direction, amount_micros, currency, idempotency_key, request_id, metadata_json, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)")
@@ -3036,16 +3638,51 @@ impl Store for SqliteStore {
                 return Ok(LedgerTxResult::Insufficient);
             }
         }
-        let balance: i64 = sqlx::query_scalar("SELECT balance_micros FROM wallets WHERE tenant_id=? AND currency=?")
-            .bind(&first.tenant_id).bind(currency).fetch_one(&mut *tx).await.map_err(StoreError::Database)?;
+        let balance: i64 = sqlx::query_scalar(
+            "SELECT balance_micros FROM wallets WHERE tenant_id=? AND currency=?",
+        )
+        .bind(&first.tenant_id)
+        .bind(currency)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(StoreError::Database)?;
         tx.commit().await.map_err(StoreError::Database)?;
-        Ok(LedgerTxResult::Applied { balance_micros: balance })
+        Ok(LedgerTxResult::Applied {
+            balance_micros: balance,
+        })
     }
-    async fn billing_list_ledger(&self, tenant_id: &str, limit: i64) -> Result<Vec<LedgerEntryRecord>, StoreError> {
-        let rows = sqlx::query("SELECT * FROM ledger_entries WHERE tenant_id=? ORDER BY created_at DESC LIMIT ?").bind(tenant_id).bind(limit).fetch_all(&self.pool).await.map_err(StoreError::Database)?;
-        rows.iter().map(|row| -> Result<LedgerEntryRecord, sqlx::Error> {
-            Ok(LedgerEntryRecord { entry_id: row.try_get("entry_id")?, group_id: row.try_get("group_id")?, wallet_id: row.try_get("wallet_id")?, tenant_id: row.try_get("tenant_id")?, account: row.try_get("account")?, direction: row.try_get("direction")?, amount_micros: row.try_get("amount_micros")?, currency: row.try_get("currency")?, idempotency_key: row.try_get("idempotency_key")?, request_id: row.try_get("request_id")?, metadata_json: row.try_get("metadata_json")?, created_at: row.try_get("created_at")? })
-        }).collect::<Result<Vec<_>, _>>().map_err(StoreError::Database)
+    async fn billing_list_ledger(
+        &self,
+        tenant_id: &str,
+        limit: i64,
+    ) -> Result<Vec<LedgerEntryRecord>, StoreError> {
+        let rows = sqlx::query(
+            "SELECT * FROM ledger_entries WHERE tenant_id=? ORDER BY created_at DESC LIMIT ?",
+        )
+        .bind(tenant_id)
+        .bind(limit)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(StoreError::Database)?;
+        rows.iter()
+            .map(|row| -> Result<LedgerEntryRecord, sqlx::Error> {
+                Ok(LedgerEntryRecord {
+                    entry_id: row.try_get("entry_id")?,
+                    group_id: row.try_get("group_id")?,
+                    wallet_id: row.try_get("wallet_id")?,
+                    tenant_id: row.try_get("tenant_id")?,
+                    account: row.try_get("account")?,
+                    direction: row.try_get("direction")?,
+                    amount_micros: row.try_get("amount_micros")?,
+                    currency: row.try_get("currency")?,
+                    idempotency_key: row.try_get("idempotency_key")?,
+                    request_id: row.try_get("request_id")?,
+                    metadata_json: row.try_get("metadata_json")?,
+                    created_at: row.try_get("created_at")?,
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(StoreError::Database)
     }
     async fn billing_upsert_topup(&self, topup: &TopupRecord) -> Result<(), StoreError> {
         sqlx::query("INSERT INTO topups (topup_id, wallet_id, tenant_id, amount_micros, currency, channel, provider_ref, status, idempotency_key, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT (topup_id) DO UPDATE SET status=excluded.status, provider_ref=excluded.provider_ref, updated_at=excluded.updated_at")
@@ -3053,14 +3690,47 @@ impl Store for SqliteStore {
             .execute(&self.pool).await.map_err(StoreError::Database)?;
         Ok(())
     }
-    async fn billing_get_topup_by_key(&self, tenant_id: &str, idempotency_key: &str) -> Result<Option<TopupRecord>, StoreError> {
-        let row = sqlx::query("SELECT * FROM topups WHERE tenant_id=? AND idempotency_key=?").bind(tenant_id).bind(idempotency_key).fetch_optional(&self.pool).await.map_err(StoreError::Database)?;
+    async fn billing_get_topup_by_key(
+        &self,
+        tenant_id: &str,
+        idempotency_key: &str,
+    ) -> Result<Option<TopupRecord>, StoreError> {
+        let row = sqlx::query("SELECT * FROM topups WHERE tenant_id=? AND idempotency_key=?")
+            .bind(tenant_id)
+            .bind(idempotency_key)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(StoreError::Database)?;
         row.map(|row| -> Result<TopupRecord, sqlx::Error> {
-            Ok(TopupRecord { topup_id: row.try_get("topup_id")?, wallet_id: row.try_get("wallet_id")?, tenant_id: row.try_get("tenant_id")?, amount_micros: row.try_get("amount_micros")?, currency: row.try_get("currency")?, channel: row.try_get("channel")?, provider_ref: row.try_get("provider_ref")?, status: row.try_get("status")?, idempotency_key: row.try_get("idempotency_key")?, created_at: row.try_get("created_at")?, updated_at: row.try_get("updated_at")? })
-        }).transpose().map_err(StoreError::Database)
+            Ok(TopupRecord {
+                topup_id: row.try_get("topup_id")?,
+                wallet_id: row.try_get("wallet_id")?,
+                tenant_id: row.try_get("tenant_id")?,
+                amount_micros: row.try_get("amount_micros")?,
+                currency: row.try_get("currency")?,
+                channel: row.try_get("channel")?,
+                provider_ref: row.try_get("provider_ref")?,
+                status: row.try_get("status")?,
+                idempotency_key: row.try_get("idempotency_key")?,
+                created_at: row.try_get("created_at")?,
+                updated_at: row.try_get("updated_at")?,
+            })
+        })
+        .transpose()
+        .map_err(StoreError::Database)
     }
-    async fn billing_set_topup_status(&self, topup_id: &str, status: &str) -> Result<(), StoreError> {
-        sqlx::query("UPDATE topups SET status=?, updated_at=? WHERE topup_id=?").bind(status).bind(crate::util::now_rfc3339()).bind(topup_id).execute(&self.pool).await.map_err(StoreError::Database)?;
+    async fn billing_set_topup_status(
+        &self,
+        topup_id: &str,
+        status: &str,
+    ) -> Result<(), StoreError> {
+        sqlx::query("UPDATE topups SET status=?, updated_at=? WHERE topup_id=?")
+            .bind(status)
+            .bind(crate::util::now_rfc3339())
+            .bind(topup_id)
+            .execute(&self.pool)
+            .await
+            .map_err(StoreError::Database)?;
         Ok(())
     }
     async fn billing_upsert_plan(&self, plan: &PlanRecord) -> Result<(), StoreError> {
@@ -3070,49 +3740,145 @@ impl Store for SqliteStore {
         Ok(())
     }
     async fn billing_get_plan(&self, plan_id: &str) -> Result<Option<PlanRecord>, StoreError> {
-        let row = sqlx::query("SELECT * FROM plans WHERE plan_id=?").bind(plan_id).fetch_optional(&self.pool).await.map_err(StoreError::Database)?;
+        let row = sqlx::query("SELECT * FROM plans WHERE plan_id=?")
+            .bind(plan_id)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(StoreError::Database)?;
         row.map(|row| -> Result<PlanRecord, sqlx::Error> {
-            Ok(PlanRecord { plan_id: row.try_get("plan_id")?, name: row.try_get("name")?, price_micros: row.try_get("price_micros")?, included_tokens: row.try_get("included_tokens")?, currency: row.try_get("currency")?, period: row.try_get("period")?, status: row.try_get("status")?, features_json: row.try_get("features_json")?, created_at: row.try_get("created_at")?, updated_at: row.try_get("updated_at")? })
-        }).transpose().map_err(StoreError::Database)
+            Ok(PlanRecord {
+                plan_id: row.try_get("plan_id")?,
+                name: row.try_get("name")?,
+                price_micros: row.try_get("price_micros")?,
+                included_tokens: row.try_get("included_tokens")?,
+                currency: row.try_get("currency")?,
+                period: row.try_get("period")?,
+                status: row.try_get("status")?,
+                features_json: row.try_get("features_json")?,
+                created_at: row.try_get("created_at")?,
+                updated_at: row.try_get("updated_at")?,
+            })
+        })
+        .transpose()
+        .map_err(StoreError::Database)
     }
     async fn billing_list_plans(&self) -> Result<Vec<PlanRecord>, StoreError> {
-        let rows = sqlx::query("SELECT * FROM plans ORDER BY price_micros").fetch_all(&self.pool).await.map_err(StoreError::Database)?;
-        rows.iter().map(|row| -> Result<PlanRecord, sqlx::Error> {
-            Ok(PlanRecord { plan_id: row.try_get("plan_id")?, name: row.try_get("name")?, price_micros: row.try_get("price_micros")?, included_tokens: row.try_get("included_tokens")?, currency: row.try_get("currency")?, period: row.try_get("period")?, status: row.try_get("status")?, features_json: row.try_get("features_json")?, created_at: row.try_get("created_at")?, updated_at: row.try_get("updated_at")? })
-        }).collect::<Result<Vec<_>, _>>().map_err(StoreError::Database)
+        let rows = sqlx::query("SELECT * FROM plans ORDER BY price_micros")
+            .fetch_all(&self.pool)
+            .await
+            .map_err(StoreError::Database)?;
+        rows.iter()
+            .map(|row| -> Result<PlanRecord, sqlx::Error> {
+                Ok(PlanRecord {
+                    plan_id: row.try_get("plan_id")?,
+                    name: row.try_get("name")?,
+                    price_micros: row.try_get("price_micros")?,
+                    included_tokens: row.try_get("included_tokens")?,
+                    currency: row.try_get("currency")?,
+                    period: row.try_get("period")?,
+                    status: row.try_get("status")?,
+                    features_json: row.try_get("features_json")?,
+                    created_at: row.try_get("created_at")?,
+                    updated_at: row.try_get("updated_at")?,
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(StoreError::Database)
     }
-    async fn billing_upsert_subscription(&self, subscription: &SubscriptionRecord) -> Result<(), StoreError> {
+    async fn billing_upsert_subscription(
+        &self,
+        subscription: &SubscriptionRecord,
+    ) -> Result<(), StoreError> {
         sqlx::query("INSERT INTO subscriptions (subscription_id, tenant_id, plan_id, status, trial_ends_at, current_period_start, current_period_end, past_due_at, suspended_at, cancelled_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT (subscription_id) DO UPDATE SET plan_id=excluded.plan_id, status=excluded.status, trial_ends_at=excluded.trial_ends_at, current_period_start=excluded.current_period_start, current_period_end=excluded.current_period_end, past_due_at=excluded.past_due_at, suspended_at=excluded.suspended_at, cancelled_at=excluded.cancelled_at, updated_at=excluded.updated_at")
             .bind(&subscription.subscription_id).bind(&subscription.tenant_id).bind(&subscription.plan_id).bind(&subscription.status).bind(&subscription.trial_ends_at).bind(&subscription.current_period_start).bind(&subscription.current_period_end).bind(&subscription.past_due_at).bind(&subscription.suspended_at).bind(&subscription.cancelled_at).bind(&subscription.updated_at)
             .execute(&self.pool).await.map_err(StoreError::Database)?;
         Ok(())
     }
-    async fn billing_get_subscription(&self, tenant_id: &str) -> Result<Option<SubscriptionRecord>, StoreError> {
-        let row = sqlx::query("SELECT * FROM subscriptions WHERE tenant_id=? ORDER BY updated_at DESC LIMIT 1").bind(tenant_id).fetch_optional(&self.pool).await.map_err(StoreError::Database)?;
+    async fn billing_get_subscription(
+        &self,
+        tenant_id: &str,
+    ) -> Result<Option<SubscriptionRecord>, StoreError> {
+        let row = sqlx::query(
+            "SELECT * FROM subscriptions WHERE tenant_id=? ORDER BY updated_at DESC LIMIT 1",
+        )
+        .bind(tenant_id)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(StoreError::Database)?;
         row.map(|row| -> Result<SubscriptionRecord, sqlx::Error> {
-            Ok(SubscriptionRecord { subscription_id: row.try_get("subscription_id")?, tenant_id: row.try_get("tenant_id")?, plan_id: row.try_get("plan_id")?, status: row.try_get("status")?, trial_ends_at: row.try_get("trial_ends_at")?, current_period_start: row.try_get("current_period_start")?, current_period_end: row.try_get("current_period_end")?, past_due_at: row.try_get("past_due_at")?, suspended_at: row.try_get("suspended_at")?, cancelled_at: row.try_get("cancelled_at")?, updated_at: row.try_get("updated_at")? })
-        }).transpose().map_err(StoreError::Database)
+            Ok(SubscriptionRecord {
+                subscription_id: row.try_get("subscription_id")?,
+                tenant_id: row.try_get("tenant_id")?,
+                plan_id: row.try_get("plan_id")?,
+                status: row.try_get("status")?,
+                trial_ends_at: row.try_get("trial_ends_at")?,
+                current_period_start: row.try_get("current_period_start")?,
+                current_period_end: row.try_get("current_period_end")?,
+                past_due_at: row.try_get("past_due_at")?,
+                suspended_at: row.try_get("suspended_at")?,
+                cancelled_at: row.try_get("cancelled_at")?,
+                updated_at: row.try_get("updated_at")?,
+            })
+        })
+        .transpose()
+        .map_err(StoreError::Database)
     }
-    async fn billing_upsert_entitlement(&self, entitlement: &EntitlementRecord) -> Result<(), StoreError> {
+    async fn billing_upsert_entitlement(
+        &self,
+        entitlement: &EntitlementRecord,
+    ) -> Result<(), StoreError> {
         sqlx::query("INSERT INTO entitlements (tenant_id, plan_id, status, balance_micros, included_tokens, used_tokens, currency, period_start, period_end, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?) ON CONFLICT (tenant_id) DO UPDATE SET plan_id=excluded.plan_id, status=excluded.status, balance_micros=excluded.balance_micros, included_tokens=excluded.included_tokens, used_tokens=excluded.used_tokens, currency=excluded.currency, period_start=excluded.period_start, period_end=excluded.period_end, updated_at=excluded.updated_at")
             .bind(&entitlement.tenant_id).bind(&entitlement.plan_id).bind(&entitlement.status).bind(entitlement.balance_micros).bind(entitlement.included_tokens).bind(entitlement.used_tokens).bind(&entitlement.currency).bind(&entitlement.period_start).bind(&entitlement.period_end).bind(&entitlement.updated_at)
             .execute(&self.pool).await.map_err(StoreError::Database)?;
         Ok(())
     }
-    async fn billing_get_entitlement(&self, tenant_id: &str) -> Result<Option<EntitlementRecord>, StoreError> {
-        let row = sqlx::query("SELECT * FROM entitlements WHERE tenant_id=?").bind(tenant_id).fetch_optional(&self.pool).await.map_err(StoreError::Database)?;
+    async fn billing_get_entitlement(
+        &self,
+        tenant_id: &str,
+    ) -> Result<Option<EntitlementRecord>, StoreError> {
+        let row = sqlx::query("SELECT * FROM entitlements WHERE tenant_id=?")
+            .bind(tenant_id)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(StoreError::Database)?;
         row.map(|row| -> Result<EntitlementRecord, sqlx::Error> {
-            Ok(EntitlementRecord { tenant_id: row.try_get("tenant_id")?, plan_id: row.try_get("plan_id")?, status: row.try_get("status")?, balance_micros: row.try_get("balance_micros")?, included_tokens: row.try_get("included_tokens")?, used_tokens: row.try_get("used_tokens")?, currency: row.try_get("currency")?, period_start: row.try_get("period_start")?, period_end: row.try_get("period_end")?, updated_at: row.try_get("updated_at")? })
-        }).transpose().map_err(StoreError::Database)
+            Ok(EntitlementRecord {
+                tenant_id: row.try_get("tenant_id")?,
+                plan_id: row.try_get("plan_id")?,
+                status: row.try_get("status")?,
+                balance_micros: row.try_get("balance_micros")?,
+                included_tokens: row.try_get("included_tokens")?,
+                used_tokens: row.try_get("used_tokens")?,
+                currency: row.try_get("currency")?,
+                period_start: row.try_get("period_start")?,
+                period_end: row.try_get("period_end")?,
+                updated_at: row.try_get("updated_at")?,
+            })
+        })
+        .transpose()
+        .map_err(StoreError::Database)
     }
-    async fn billing_insert_payment_event(&self, event: &PaymentEventRecord) -> Result<bool, StoreError> {
+    async fn billing_insert_payment_event(
+        &self,
+        event: &PaymentEventRecord,
+    ) -> Result<bool, StoreError> {
         let result = sqlx::query("INSERT INTO payment_events (provider_event_id, provider, event_type, payload_json, status, received_at, processed_at) VALUES (?,?,?,?,?,?,?) ON CONFLICT (provider_event_id) DO NOTHING")
             .bind(&event.provider_event_id).bind(&event.provider).bind(&event.event_type).bind(&event.payload_json).bind(&event.status).bind(&event.received_at).bind(&event.processed_at)
             .execute(&self.pool).await.map_err(StoreError::Database)?;
         Ok(result.rows_affected() > 0)
     }
-    async fn billing_mark_payment_event(&self, provider_event_id: &str, status: &str) -> Result<(), StoreError> {
-        sqlx::query("UPDATE payment_events SET status=?, processed_at=? WHERE provider_event_id=?").bind(status).bind(crate::util::now_rfc3339()).bind(provider_event_id).execute(&self.pool).await.map_err(StoreError::Database)?;
+    async fn billing_mark_payment_event(
+        &self,
+        provider_event_id: &str,
+        status: &str,
+    ) -> Result<(), StoreError> {
+        sqlx::query("UPDATE payment_events SET status=?, processed_at=? WHERE provider_event_id=?")
+            .bind(status)
+            .bind(crate::util::now_rfc3339())
+            .bind(provider_event_id)
+            .execute(&self.pool)
+            .await
+            .map_err(StoreError::Database)?;
         Ok(())
     }
     async fn billing_upsert_invoice(&self, invoice: &InvoiceRecord) -> Result<(), StoreError> {
@@ -3121,24 +3887,89 @@ impl Store for SqliteStore {
             .execute(&self.pool).await.map_err(StoreError::Database)?;
         Ok(())
     }
-    async fn billing_list_invoices(&self, tenant_id: &str, limit: i64) -> Result<Vec<InvoiceRecord>, StoreError> {
-        let rows = sqlx::query("SELECT * FROM invoices WHERE tenant_id=? ORDER BY created_at DESC LIMIT ?").bind(tenant_id).bind(limit).fetch_all(&self.pool).await.map_err(StoreError::Database)?;
-        rows.iter().map(|row| -> Result<InvoiceRecord, sqlx::Error> {
-            Ok(InvoiceRecord { invoice_id: row.try_get("invoice_id")?, tenant_id: row.try_get("tenant_id")?, period_start: row.try_get("period_start")?, period_end: row.try_get("period_end")?, amount_micros: row.try_get("amount_micros")?, currency: row.try_get("currency")?, status: row.try_get("status")?, created_at: row.try_get("created_at")? })
-        }).collect::<Result<Vec<_>, _>>().map_err(StoreError::Database)
+    async fn billing_list_invoices(
+        &self,
+        tenant_id: &str,
+        limit: i64,
+    ) -> Result<Vec<InvoiceRecord>, StoreError> {
+        let rows = sqlx::query(
+            "SELECT * FROM invoices WHERE tenant_id=? ORDER BY created_at DESC LIMIT ?",
+        )
+        .bind(tenant_id)
+        .bind(limit)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(StoreError::Database)?;
+        rows.iter()
+            .map(|row| -> Result<InvoiceRecord, sqlx::Error> {
+                Ok(InvoiceRecord {
+                    invoice_id: row.try_get("invoice_id")?,
+                    tenant_id: row.try_get("tenant_id")?,
+                    period_start: row.try_get("period_start")?,
+                    period_end: row.try_get("period_end")?,
+                    amount_micros: row.try_get("amount_micros")?,
+                    currency: row.try_get("currency")?,
+                    status: row.try_get("status")?,
+                    created_at: row.try_get("created_at")?,
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(StoreError::Database)
     }
 
     async fn connector_list(&self, tenant_id: &str) -> Result<Vec<ConnectorRecord>, StoreError> {
-        let rows = sqlx::query("SELECT * FROM connectors WHERE tenant_id=? ORDER BY name").bind(tenant_id).fetch_all(&self.pool).await.map_err(StoreError::Database)?;
-        rows.iter().map(|row| -> Result<ConnectorRecord, sqlx::Error> {
-            Ok(ConnectorRecord { connector_id: row.try_get("connector_id")?, tenant_id: row.try_get("tenant_id")?, space_id: row.try_get("space_id")?, kind: row.try_get("kind")?, name: row.try_get("name")?, config_json: row.try_get("config_json")?, secret_env: row.try_get("secret_env")?, status: row.try_get("status")?, last_sync_at: row.try_get("last_sync_at")?, created_at: row.try_get("created_at")?, updated_at: row.try_get("updated_at")? })
-        }).collect::<Result<Vec<_>, _>>().map_err(StoreError::Database)
+        let rows = sqlx::query("SELECT * FROM connectors WHERE tenant_id=? ORDER BY name")
+            .bind(tenant_id)
+            .fetch_all(&self.pool)
+            .await
+            .map_err(StoreError::Database)?;
+        rows.iter()
+            .map(|row| -> Result<ConnectorRecord, sqlx::Error> {
+                Ok(ConnectorRecord {
+                    connector_id: row.try_get("connector_id")?,
+                    tenant_id: row.try_get("tenant_id")?,
+                    space_id: row.try_get("space_id")?,
+                    kind: row.try_get("kind")?,
+                    name: row.try_get("name")?,
+                    config_json: row.try_get("config_json")?,
+                    secret_env: row.try_get("secret_env")?,
+                    status: row.try_get("status")?,
+                    last_sync_at: row.try_get("last_sync_at")?,
+                    created_at: row.try_get("created_at")?,
+                    updated_at: row.try_get("updated_at")?,
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(StoreError::Database)
     }
-    async fn connector_get(&self, tenant_id: &str, connector_id: &str) -> Result<Option<ConnectorRecord>, StoreError> {
-        let row = sqlx::query("SELECT * FROM connectors WHERE tenant_id=? AND connector_id=?").bind(tenant_id).bind(connector_id).fetch_optional(&self.pool).await.map_err(StoreError::Database)?;
+    async fn connector_get(
+        &self,
+        tenant_id: &str,
+        connector_id: &str,
+    ) -> Result<Option<ConnectorRecord>, StoreError> {
+        let row = sqlx::query("SELECT * FROM connectors WHERE tenant_id=? AND connector_id=?")
+            .bind(tenant_id)
+            .bind(connector_id)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(StoreError::Database)?;
         row.map(|row| -> Result<ConnectorRecord, sqlx::Error> {
-            Ok(ConnectorRecord { connector_id: row.try_get("connector_id")?, tenant_id: row.try_get("tenant_id")?, space_id: row.try_get("space_id")?, kind: row.try_get("kind")?, name: row.try_get("name")?, config_json: row.try_get("config_json")?, secret_env: row.try_get("secret_env")?, status: row.try_get("status")?, last_sync_at: row.try_get("last_sync_at")?, created_at: row.try_get("created_at")?, updated_at: row.try_get("updated_at")? })
-        }).transpose().map_err(StoreError::Database)
+            Ok(ConnectorRecord {
+                connector_id: row.try_get("connector_id")?,
+                tenant_id: row.try_get("tenant_id")?,
+                space_id: row.try_get("space_id")?,
+                kind: row.try_get("kind")?,
+                name: row.try_get("name")?,
+                config_json: row.try_get("config_json")?,
+                secret_env: row.try_get("secret_env")?,
+                status: row.try_get("status")?,
+                last_sync_at: row.try_get("last_sync_at")?,
+                created_at: row.try_get("created_at")?,
+                updated_at: row.try_get("updated_at")?,
+            })
+        })
+        .transpose()
+        .map_err(StoreError::Database)
     }
     async fn connector_upsert(&self, connector: &ConnectorRecord) -> Result<(), StoreError> {
         sqlx::query("INSERT INTO connectors (connector_id, tenant_id, space_id, kind, name, config_json, secret_env, status, last_sync_at, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT (connector_id) DO UPDATE SET space_id=excluded.space_id, kind=excluded.kind, name=excluded.name, config_json=excluded.config_json, secret_env=excluded.secret_env, status=excluded.status, updated_at=excluded.updated_at")
@@ -3146,11 +3977,25 @@ impl Store for SqliteStore {
             .execute(&self.pool).await.map_err(StoreError::Database)?;
         Ok(())
     }
-    async fn connector_delete(&self, tenant_id: &str, connector_id: &str) -> Result<bool, StoreError> {
-        let result = sqlx::query("DELETE FROM connectors WHERE tenant_id=? AND connector_id=?").bind(tenant_id).bind(connector_id).execute(&self.pool).await.map_err(StoreError::Database)?;
+    async fn connector_delete(
+        &self,
+        tenant_id: &str,
+        connector_id: &str,
+    ) -> Result<bool, StoreError> {
+        let result = sqlx::query("DELETE FROM connectors WHERE tenant_id=? AND connector_id=?")
+            .bind(tenant_id)
+            .bind(connector_id)
+            .execute(&self.pool)
+            .await
+            .map_err(StoreError::Database)?;
         Ok(result.rows_affected() > 0)
     }
-    async fn connector_mark_synced(&self, tenant_id: &str, connector_id: &str, at: &str) -> Result<(), StoreError> {
+    async fn connector_mark_synced(
+        &self,
+        tenant_id: &str,
+        connector_id: &str,
+        at: &str,
+    ) -> Result<(), StoreError> {
         sqlx::query("UPDATE connectors SET last_sync_at=?, updated_at=? WHERE tenant_id=? AND connector_id=?").bind(at).bind(crate::util::now_rfc3339()).bind(tenant_id).bind(connector_id).execute(&self.pool).await.map_err(StoreError::Database)?;
         Ok(())
     }
@@ -3160,13 +4005,44 @@ impl Store for SqliteStore {
             .execute(&self.pool).await.map_err(StoreError::Database)?;
         Ok(())
     }
-    async fn external_ref_list(&self, tenant_id: &str, doc_id: Option<&str>, provider: Option<&str>, limit: i64) -> Result<Vec<ExternalRefRecord>, StoreError> {
-        let rows = sqlx::query("SELECT * FROM external_refs WHERE tenant_id=? ORDER BY fetched_at DESC LIMIT 500").bind(tenant_id).fetch_all(&self.pool).await.map_err(StoreError::Database)?;
-        let mut refs = rows.iter().map(|row| -> Result<ExternalRefRecord, sqlx::Error> {
-            Ok(ExternalRefRecord { tenant_id: row.try_get("tenant_id")?, space_id: row.try_get("space_id")?, doc_id: row.try_get("doc_id")?, provider: row.try_get("provider")?, external_id: row.try_get("external_id")?, url: row.try_get("url")?, revision: row.try_get("revision")?, acl_json: row.try_get("acl_json")?, fetched_at: row.try_get("fetched_at")?, status: row.try_get("status")? })
-        }).collect::<Result<Vec<_>, _>>().map_err(StoreError::Database)?;
-        if let Some(doc_id) = doc_id { refs.retain(|reference| reference.doc_id == doc_id); }
-        if let Some(provider) = provider { refs.retain(|reference| reference.provider == provider); }
+    async fn external_ref_list(
+        &self,
+        tenant_id: &str,
+        doc_id: Option<&str>,
+        provider: Option<&str>,
+        limit: i64,
+    ) -> Result<Vec<ExternalRefRecord>, StoreError> {
+        let rows = sqlx::query(
+            "SELECT * FROM external_refs WHERE tenant_id=? ORDER BY fetched_at DESC LIMIT 500",
+        )
+        .bind(tenant_id)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(StoreError::Database)?;
+        let mut refs = rows
+            .iter()
+            .map(|row| -> Result<ExternalRefRecord, sqlx::Error> {
+                Ok(ExternalRefRecord {
+                    tenant_id: row.try_get("tenant_id")?,
+                    space_id: row.try_get("space_id")?,
+                    doc_id: row.try_get("doc_id")?,
+                    provider: row.try_get("provider")?,
+                    external_id: row.try_get("external_id")?,
+                    url: row.try_get("url")?,
+                    revision: row.try_get("revision")?,
+                    acl_json: row.try_get("acl_json")?,
+                    fetched_at: row.try_get("fetched_at")?,
+                    status: row.try_get("status")?,
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(StoreError::Database)?;
+        if let Some(doc_id) = doc_id {
+            refs.retain(|reference| reference.doc_id == doc_id);
+        }
+        if let Some(provider) = provider {
+            refs.retain(|reference| reference.provider == provider);
+        }
         refs.truncate(limit.max(1) as usize);
         Ok(refs)
     }
@@ -3176,24 +4052,78 @@ impl Store for SqliteStore {
             .execute(&self.pool).await.map_err(StoreError::Database)?;
         Ok(())
     }
-    async fn connector_job_update(&self, job_id: &str, status: &str, finished_at: Option<&str>, stats_json: &str, error: Option<&str>) -> Result<(), StoreError> {
+    async fn connector_job_update(
+        &self,
+        job_id: &str,
+        status: &str,
+        finished_at: Option<&str>,
+        stats_json: &str,
+        error: Option<&str>,
+    ) -> Result<(), StoreError> {
         sqlx::query("UPDATE connector_jobs SET status=?, finished_at=?, stats_json=?, error=? WHERE job_id=?").bind(status).bind(finished_at).bind(stats_json).bind(error).bind(job_id).execute(&self.pool).await.map_err(StoreError::Database)?;
         Ok(())
     }
-    async fn connector_job_list(&self, connector_id: &str, limit: i64) -> Result<Vec<ConnectorJobRecord>, StoreError> {
-        let rows = sqlx::query("SELECT * FROM connector_jobs WHERE connector_id=? ORDER BY started_at DESC LIMIT ?").bind(connector_id).bind(limit).fetch_all(&self.pool).await.map_err(StoreError::Database)?;
-        rows.iter().map(|row| -> Result<ConnectorJobRecord, sqlx::Error> {
-            Ok(ConnectorJobRecord { job_id: row.try_get("job_id")?, connector_id: row.try_get("connector_id")?, status: row.try_get("status")?, started_at: row.try_get("started_at")?, finished_at: row.try_get("finished_at")?, stats_json: row.try_get("stats_json")?, error: row.try_get("error")? })
-        }).collect::<Result<Vec<_>, _>>().map_err(StoreError::Database)
+    async fn connector_job_list(
+        &self,
+        connector_id: &str,
+        limit: i64,
+    ) -> Result<Vec<ConnectorJobRecord>, StoreError> {
+        let rows = sqlx::query(
+            "SELECT * FROM connector_jobs WHERE connector_id=? ORDER BY started_at DESC LIMIT ?",
+        )
+        .bind(connector_id)
+        .bind(limit)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(StoreError::Database)?;
+        rows.iter()
+            .map(|row| -> Result<ConnectorJobRecord, sqlx::Error> {
+                Ok(ConnectorJobRecord {
+                    job_id: row.try_get("job_id")?,
+                    connector_id: row.try_get("connector_id")?,
+                    status: row.try_get("status")?,
+                    started_at: row.try_get("started_at")?,
+                    finished_at: row.try_get("finished_at")?,
+                    stats_json: row.try_get("stats_json")?,
+                    error: row.try_get("error")?,
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(StoreError::Database)
     }
 
-    async fn get_user_by_email(&self, tenant_id: &str, email: &str) -> Result<Option<UserRecord>, StoreError> {
-        let row = sqlx::query("SELECT * FROM users WHERE tenant_id=? AND email=?").bind(tenant_id).bind(email).fetch_optional(&self.pool).await.map_err(StoreError::Database)?;
-        row.map(|row| user_from_row(&row)).transpose().map_err(StoreError::Database)
+    async fn get_user_by_email(
+        &self,
+        tenant_id: &str,
+        email: &str,
+    ) -> Result<Option<UserRecord>, StoreError> {
+        let row = sqlx::query("SELECT * FROM users WHERE tenant_id=? AND email=?")
+            .bind(tenant_id)
+            .bind(email)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(StoreError::Database)?;
+        row.map(|row| user_from_row(&row))
+            .transpose()
+            .map_err(StoreError::Database)
     }
-    async fn get_user_by_external_id(&self, tenant_id: &str, source: &str, external_id: &str) -> Result<Option<UserRecord>, StoreError> {
-        let row = sqlx::query("SELECT * FROM users WHERE tenant_id=? AND source=? AND external_id=?").bind(tenant_id).bind(source).bind(external_id).fetch_optional(&self.pool).await.map_err(StoreError::Database)?;
-        row.map(|row| user_from_row(&row)).transpose().map_err(StoreError::Database)
+    async fn get_user_by_external_id(
+        &self,
+        tenant_id: &str,
+        source: &str,
+        external_id: &str,
+    ) -> Result<Option<UserRecord>, StoreError> {
+        let row =
+            sqlx::query("SELECT * FROM users WHERE tenant_id=? AND source=? AND external_id=?")
+                .bind(tenant_id)
+                .bind(source)
+                .bind(external_id)
+                .fetch_optional(&self.pool)
+                .await
+                .map_err(StoreError::Database)?;
+        row.map(|row| user_from_row(&row))
+            .transpose()
+            .map_err(StoreError::Database)
     }
     async fn create_sso_user(&self, user: &UserRecord) -> Result<(), StoreError> {
         sqlx::query("INSERT INTO users (tenant_id, user_id, username, password_hash, display_name, created_at, disabled, role, email, external_id, source, last_sso_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)")
@@ -3201,15 +4131,31 @@ impl Store for SqliteStore {
             .execute(&self.pool).await.map_err(StoreError::Database)?;
         Ok(())
     }
-    async fn link_sso_identity(&self, tenant_id: &str, user_id: &str, email: &str, external_id: &str, last_sso_at: &str) -> Result<(), StoreError> {
+    async fn link_sso_identity(
+        &self,
+        tenant_id: &str,
+        user_id: &str,
+        email: &str,
+        external_id: &str,
+        last_sso_at: &str,
+    ) -> Result<(), StoreError> {
         sqlx::query("UPDATE users SET email=COALESCE(email, ?), external_id=COALESCE(external_id, ?), source=CASE WHEN source='local' THEN 'sso' ELSE source END, last_sso_at=? WHERE tenant_id=? AND user_id=?")
             .bind(email).bind(external_id).bind(last_sso_at).bind(tenant_id).bind(user_id).execute(&self.pool).await.map_err(StoreError::Database)?;
         Ok(())
     }
-    async fn touch_sso_login(&self, tenant_id: &str, user_id: &str, last_sso_at: &str) -> Result<(), StoreError> {
-        sqlx::query("UPDATE users SET last_sso_at=? WHERE tenant_id=? AND user_id=?").bind(last_sso_at).bind(tenant_id).bind(user_id).execute(&self.pool).await.map_err(StoreError::Database)?;
+    async fn touch_sso_login(
+        &self,
+        tenant_id: &str,
+        user_id: &str,
+        last_sso_at: &str,
+    ) -> Result<(), StoreError> {
+        sqlx::query("UPDATE users SET last_sso_at=? WHERE tenant_id=? AND user_id=?")
+            .bind(last_sso_at)
+            .bind(tenant_id)
+            .bind(user_id)
+            .execute(&self.pool)
+            .await
+            .map_err(StoreError::Database)?;
         Ok(())
     }
-
 }
-

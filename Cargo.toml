@@ -5,6 +5,9 @@ edition = "2021"
 rust-version = "1.82"
 description = "Layered knowledge base: one kernel, three profiles, files as source of truth"
 license = "MIT"
+repository = "https://github.com/Linxira-OS/linxira-knowledge-base"
+homepage = "https://github.com/Linxira-OS/linxira-knowledge-base"
+readme = "README.md"
 
 [features]
 default = []

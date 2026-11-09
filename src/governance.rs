@@ -28,7 +28,9 @@ impl TokenScope {
             "read" => Ok(TokenScope::Read),
             "write" => Ok(TokenScope::Write),
             "admin" => Ok(TokenScope::Admin),
-            other => Err(format!("unknown scope {other:?}; expected read, write or admin")),
+            other => Err(format!(
+                "unknown scope {other:?}; expected read, write or admin"
+            )),
         }
     }
 
@@ -41,7 +43,10 @@ impl TokenScope {
     }
 
     pub fn allows_read(self) -> bool {
-        matches!(self, TokenScope::Read | TokenScope::Write | TokenScope::Admin)
+        matches!(
+            self,
+            TokenScope::Read | TokenScope::Write | TokenScope::Admin
+        )
     }
 
     pub fn allows_write(self) -> bool {
@@ -52,7 +57,6 @@ impl TokenScope {
         matches!(self, TokenScope::Admin)
     }
 }
-
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -68,7 +72,9 @@ impl UserRole {
             "user" => Ok(UserRole::User),
             "admin" => Ok(UserRole::Admin),
             "owner" => Ok(UserRole::Owner),
-            other => Err(format!("unknown tenant role {other:?}; expected owner, admin or user")),
+            other => Err(format!(
+                "unknown tenant role {other:?}; expected owner, admin or user"
+            )),
         }
     }
 
@@ -177,7 +183,9 @@ impl PrincipalType {
             "user" => Ok(PrincipalType::User),
             "group" => Ok(PrincipalType::Group),
             "agent" => Ok(PrincipalType::Agent),
-            other => Err(format!("unknown principal type {other:?}; expected user, group or agent")),
+            other => Err(format!(
+                "unknown principal type {other:?}; expected user, group or agent"
+            )),
         }
     }
 
@@ -221,7 +229,12 @@ impl Principal {
         }
     }
 
-    pub fn local_user(user_id: &str, tenant_id: &str, spaces: Vec<String>, groups: Vec<String>) -> Self {
+    pub fn local_user(
+        user_id: &str,
+        tenant_id: &str,
+        spaces: Vec<String>,
+        groups: Vec<String>,
+    ) -> Self {
         Self::local_user_with_role(user_id, tenant_id, spaces, groups, UserRole::User)
     }
 
@@ -293,11 +306,18 @@ impl Policy {
             return Err("principal has no tenant_id".to_string());
         }
         if principal.allowed_space_ids.is_empty()
-            || principal.allowed_space_ids.iter().any(|s| s.trim().is_empty())
+            || principal
+                .allowed_space_ids
+                .iter()
+                .any(|s| s.trim().is_empty())
         {
             return Err("principal has no allowed spaces".to_string());
         }
-        Ok(Self { principal, as_of, lang: None })
+        Ok(Self {
+            principal,
+            as_of,
+            lang: None,
+        })
     }
 
     pub fn with_lang(mut self, lang: Option<String>) -> Self {
@@ -377,9 +397,7 @@ impl Policy {
             let ph = dialect.placeholder(next);
             next += 1;
             binds.push(format!("%{}%", escape_like(pattern)));
-            acl_clauses.push(format!(
-                "{alias}.acl_principals LIKE {ph} ESCAPE '\\'"
-            ));
+            acl_clauses.push(format!("{alias}.acl_principals LIKE {ph} ESCAPE '\\'"));
         }
 
         let lang_clause = if let Some(lang) = &self.lang {
@@ -613,11 +631,8 @@ mod tests {
         let visibility = policy.visibility("c", SqlDialect::Sqlite).unwrap();
         assert!(visibility.sql.contains("c.tenant_id = ?"));
         assert!(visibility.sql.contains("c.acl_principals LIKE ?"));
-        assert!(visibility.binds.contains(&"|*|".to_string()) == false);
-        assert!(visibility
-            .binds
-            .iter()
-            .any(|b| b.contains("|*|")));
+        assert!(!visibility.binds.contains(&"|*|".to_string()));
+        assert!(visibility.binds.iter().any(|b| b.contains("|*|")));
     }
 
     #[test]
@@ -629,7 +644,12 @@ mod tests {
         assert!(acl.allows(&bob));
         bob.groups.clear();
         assert!(!acl.allows(&bob));
-        assert!(!acl.allows(&Principal::local_user("carol", "t1", vec!["s1".into()], vec![])));
+        assert!(!acl.allows(&Principal::local_user(
+            "carol",
+            "t1",
+            vec!["s1".into()],
+            vec![]
+        )));
         alice.groups.clear();
         let policy = Policy::new(alice, None).unwrap();
         assert!(policy.can_read(&hit_for(&acl)));
@@ -649,11 +669,7 @@ mod tests {
 
     #[test]
     fn temporal_window_is_enforced() {
-        let policy = Policy::new(
-            Principal::solo(),
-            Some("2026-01-01T00:00:00Z"),
-        )
-        .unwrap();
+        let policy = Policy::new(Principal::solo(), Some("2026-01-01T00:00:00Z")).unwrap();
         let mut fields = hit_for(&Acl::allow_all());
         fields.tenant_id = SOLO_TENANT.into();
         fields.space_id = SOLO_SPACE.into();

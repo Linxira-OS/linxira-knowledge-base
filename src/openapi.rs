@@ -29,85 +29,375 @@ pub fn document() -> Value {
     add("/openapi.json", "get", "OpenAPI document", "public");
     add("/health", "get", "Health", "public");
     add("/metrics", "get", "Prometheus metrics", "public");
-    add("/api/v1/query", "post", "Unified search/answer/both", "kb.read");
-    add("/api/v1/query/stream", "post", "Streaming query (SSE)", "kb.read");
+    add(
+        "/api/v1/query",
+        "post",
+        "Unified search/answer/both",
+        "kb.read",
+    );
+    add(
+        "/api/v1/query/stream",
+        "post",
+        "Streaming query (SSE)",
+        "kb.read",
+    );
     add("/api/v1/search", "get", "Search", "kb.read");
     add("/api/v1/answer", "post", "Answer", "kb.read");
-    add("/api/v1/answer/stream", "get", "Streaming answer (SSE)", "kb.read");
-    add("/api/v1/pages/{space}/{slug}", "get", "Read page JSON", "kb.read");
-    add("/api/v1/pages/{space}/{slug}", "put", "Save page (If-Match)", "kb.write");
-    add("/api/v1/pages/{space}/{slug}", "delete", "Archive page", "kb.write");
-    add("/api/v1/pages/{space}/{slug}/history", "get", "Page revisions", "kb.read");
-    add("/api/v1/pages/{space}/{slug}/restore", "post", "Restore page", "kb.write");
-    add("/api/v1/pages/{space}/{slug}/summary", "get", "Page summary", "kb.read");
+    add(
+        "/api/v1/answer/stream",
+        "get",
+        "Streaming answer (SSE)",
+        "kb.read",
+    );
+    add(
+        "/api/v1/pages/{space}/{slug}",
+        "get",
+        "Read page JSON",
+        "kb.read",
+    );
+    add(
+        "/api/v1/pages/{space}/{slug}",
+        "put",
+        "Save page (If-Match)",
+        "kb.write",
+    );
+    add(
+        "/api/v1/pages/{space}/{slug}",
+        "delete",
+        "Archive page",
+        "kb.write",
+    );
+    add(
+        "/api/v1/pages/{space}/{slug}/history",
+        "get",
+        "Page revisions",
+        "kb.read",
+    );
+    add(
+        "/api/v1/pages/{space}/{slug}/restore",
+        "post",
+        "Restore page",
+        "kb.write",
+    );
+    add(
+        "/api/v1/pages/{space}/{slug}/summary",
+        "get",
+        "Page summary",
+        "kb.read",
+    );
     add("/api/v1/spaces", "get", "List spaces", "kb.read");
     add("/api/v1/spaces", "post", "Create space", "kb.write");
     add("/api/v1/spaces/{space_id}", "get", "Get space", "kb.read");
-    add("/api/v1/spaces/{space_id}", "patch", "Update space", "kb.admin");
-    add("/api/v1/spaces/{space_id}", "delete", "Delete space", "kb.admin");
-    add("/api/v1/spaces/{space_id}/usage", "get", "Space usage", "kb.read");
-    add("/api/v1/spaces/{space_id}/quota", "put", "Set space quota", "kb.admin");
-    add("/api/v1/spaces/{space_id}/members", "get", "List members", "kb.read");
-    add("/api/v1/spaces/{space_id}/members", "post", "Add member", "kb.admin");
+    add(
+        "/api/v1/spaces/{space_id}",
+        "patch",
+        "Update space",
+        "kb.admin",
+    );
+    add(
+        "/api/v1/spaces/{space_id}",
+        "delete",
+        "Delete space",
+        "kb.admin",
+    );
+    add(
+        "/api/v1/spaces/{space_id}/usage",
+        "get",
+        "Space usage",
+        "kb.read",
+    );
+    add(
+        "/api/v1/spaces/{space_id}/quota",
+        "put",
+        "Set space quota",
+        "kb.admin",
+    );
+    add(
+        "/api/v1/spaces/{space_id}/members",
+        "get",
+        "List members",
+        "kb.read",
+    );
+    add(
+        "/api/v1/spaces/{space_id}/members",
+        "post",
+        "Add member",
+        "kb.admin",
+    );
     add("/api/v1/groups", "get", "List groups", "kb.read");
     add("/api/v1/groups", "post", "Create group", "kb.write");
     add("/api/v1/groups/{group_id}", "get", "Get group", "kb.read");
-    add("/api/v1/groups/{group_id}", "patch", "Update group", "kb.admin");
-    add("/api/v1/groups/{group_id}", "delete", "Delete group", "kb.admin");
-    add("/api/v1/auth/sso/status", "get", "Trusted-header SSO status", "public");
-    add("/api/v1/auth/csrf", "get", "Issue CSRF cookie/token", "public");
-    add("/api/v1/auth/login", "post", "JSON login (session cookie)", "public");
+    add(
+        "/api/v1/groups/{group_id}",
+        "patch",
+        "Update group",
+        "kb.admin",
+    );
+    add(
+        "/api/v1/groups/{group_id}",
+        "delete",
+        "Delete group",
+        "kb.admin",
+    );
+    add(
+        "/api/v1/auth/sso/status",
+        "get",
+        "Trusted-header SSO status",
+        "public",
+    );
+    add(
+        "/api/v1/auth/csrf",
+        "get",
+        "Issue CSRF cookie/token",
+        "public",
+    );
+    add(
+        "/api/v1/auth/login",
+        "post",
+        "JSON login (session cookie)",
+        "public",
+    );
     add("/api/v1/auth/me", "get", "Current principal", "kb.read");
     add("/api/v1/auth/logout", "post", "Logout", "kb.read");
     add("/api/v1/pages", "get", "List visible pages", "kb.read");
-    add("/api/v1/pages/{space}/{slug}/revisions/{revision_id}", "get", "Read one revision", "kb.read");
-    add("/api/v1/conversations", "get", "List conversations", "kb.read");
-    add("/api/v1/conversations", "post", "Create conversation", "kb.read");
-    add("/api/v1/conversations/{conversation_id}", "get", "Get conversation", "kb.read");
-    add("/api/v1/conversations/{conversation_id}", "delete", "Delete conversation", "kb.write");
-    add("/api/v1/conversations/{conversation_id}/external-session", "post", "Bind external session", "kb.write");
-    add("/api/v1/conversations/{conversation_id}/restore", "post", "Restore conversation", "kb.write");
+    add(
+        "/api/v1/pages/{space}/{slug}/revisions/{revision_id}",
+        "get",
+        "Read one revision",
+        "kb.read",
+    );
+    add(
+        "/api/v1/conversations",
+        "get",
+        "List conversations",
+        "kb.read",
+    );
+    add(
+        "/api/v1/conversations",
+        "post",
+        "Create conversation",
+        "kb.read",
+    );
+    add(
+        "/api/v1/conversations/{conversation_id}",
+        "get",
+        "Get conversation",
+        "kb.read",
+    );
+    add(
+        "/api/v1/conversations/{conversation_id}",
+        "delete",
+        "Delete conversation",
+        "kb.write",
+    );
+    add(
+        "/api/v1/conversations/{conversation_id}/external-session",
+        "post",
+        "Bind external session",
+        "kb.write",
+    );
+    add(
+        "/api/v1/conversations/{conversation_id}/restore",
+        "post",
+        "Restore conversation",
+        "kb.write",
+    );
     add("/api/v1/features", "get", "Feature flags", "kb.read");
     add("/api/v1/gateway/chat", "post", "Gateway chat", "kb.read");
-    add("/api/v1/billing/checkout", "post", "Billing checkout", "kb.write");
+    add(
+        "/api/v1/billing/checkout",
+        "post",
+        "Billing checkout",
+        "kb.write",
+    );
     add("/api/v1/billing/plans", "get", "Billing plans", "kb.read");
-    add("/api/v1/billing/wallet", "get", "Wallet and entitlement", "kb.read");
+    add(
+        "/api/v1/billing/wallet",
+        "get",
+        "Wallet and entitlement",
+        "kb.read",
+    );
     add("/api/v1/billing/ledger", "get", "Wallet ledger", "kb.read");
     add("/api/v1/billing/invoices", "get", "Invoices", "kb.read");
-    add("/api/v1/billing/topup", "post", "Manual/mock topup", "kb.write");
-    add("/api/v1/billing/subscribe", "post", "Subscribe to a plan", "kb.write");
-    add("/api/v1/billing/subscription", "get", "Current subscription", "kb.read");
-    add("/api/v1/billing/subscription", "patch", "Transition subscription", "kb.write");
-    add("/api/v1/billing/entitlement", "get", "Entitlement snapshot", "kb.read");
-    add("/api/v1/billing/webhook/{provider}", "post", "Payment webhook (signed)", "public");
-    add("/api/v1/admin/users", "get", "Admin: list users", "kb.admin");
-    add("/api/v1/admin/users/{user_id}", "patch", "Admin: update user", "kb.admin");
-    add("/api/v1/admin/users/{user_id}/disable", "post", "Admin: disable user", "kb.admin");
-    add("/api/v1/admin/roles", "get", "Admin: list roles", "kb.admin");
-    add("/api/v1/admin/groups", "get", "Admin: list groups", "kb.admin");
-    add("/api/v1/admin/spaces", "get", "Admin: list spaces", "kb.admin");
-    add("/api/v1/admin/providers", "get", "Admin: providers", "kb.admin");
-    add("/api/v1/admin/providers", "post", "Admin: create provider", "kb.admin");
-    add("/api/v1/admin/providers/{provider_id}", "patch", "Admin: update provider", "kb.admin");
-    add("/api/v1/admin/provider-models", "get", "Admin: provider models", "kb.admin");
+    add(
+        "/api/v1/billing/topup",
+        "post",
+        "Manual/mock topup",
+        "kb.write",
+    );
+    add(
+        "/api/v1/billing/subscribe",
+        "post",
+        "Subscribe to a plan",
+        "kb.write",
+    );
+    add(
+        "/api/v1/billing/subscription",
+        "get",
+        "Current subscription",
+        "kb.read",
+    );
+    add(
+        "/api/v1/billing/subscription",
+        "patch",
+        "Transition subscription",
+        "kb.write",
+    );
+    add(
+        "/api/v1/billing/entitlement",
+        "get",
+        "Entitlement snapshot",
+        "kb.read",
+    );
+    add(
+        "/api/v1/billing/webhook/{provider}",
+        "post",
+        "Payment webhook (signed)",
+        "public",
+    );
+    add(
+        "/api/v1/admin/users",
+        "get",
+        "Admin: list users",
+        "kb.admin",
+    );
+    add(
+        "/api/v1/admin/users/{user_id}",
+        "patch",
+        "Admin: update user",
+        "kb.admin",
+    );
+    add(
+        "/api/v1/admin/users/{user_id}/disable",
+        "post",
+        "Admin: disable user",
+        "kb.admin",
+    );
+    add(
+        "/api/v1/admin/roles",
+        "get",
+        "Admin: list roles",
+        "kb.admin",
+    );
+    add(
+        "/api/v1/admin/groups",
+        "get",
+        "Admin: list groups",
+        "kb.admin",
+    );
+    add(
+        "/api/v1/admin/spaces",
+        "get",
+        "Admin: list spaces",
+        "kb.admin",
+    );
+    add(
+        "/api/v1/admin/providers",
+        "get",
+        "Admin: providers",
+        "kb.admin",
+    );
+    add(
+        "/api/v1/admin/providers",
+        "post",
+        "Admin: create provider",
+        "kb.admin",
+    );
+    add(
+        "/api/v1/admin/providers/{provider_id}",
+        "patch",
+        "Admin: update provider",
+        "kb.admin",
+    );
+    add(
+        "/api/v1/admin/provider-models",
+        "get",
+        "Admin: provider models",
+        "kb.admin",
+    );
     add("/api/v1/admin/aliases", "get", "Admin: aliases", "kb.admin");
-    add("/api/v1/admin/aliases", "post", "Admin: create alias", "kb.admin");
+    add(
+        "/api/v1/admin/aliases",
+        "post",
+        "Admin: create alias",
+        "kb.admin",
+    );
     add("/api/v1/admin/routes", "get", "Admin: routes", "kb.admin");
-    add("/api/v1/admin/routes", "post", "Admin: create route", "kb.admin");
+    add(
+        "/api/v1/admin/routes",
+        "post",
+        "Admin: create route",
+        "kb.admin",
+    );
     add("/api/v1/admin/quotas", "get", "Admin: quotas", "kb.admin");
-    add("/api/v1/admin/quotas", "post", "Admin: create quota", "kb.admin");
-    add("/api/v1/admin/usage", "get", "Admin: usage events", "kb.admin");
-    add("/api/v1/admin/usage/aggregate", "get", "Admin: usage aggregates", "kb.admin");
+    add(
+        "/api/v1/admin/quotas",
+        "post",
+        "Admin: create quota",
+        "kb.admin",
+    );
+    add(
+        "/api/v1/admin/usage",
+        "get",
+        "Admin: usage events",
+        "kb.admin",
+    );
+    add(
+        "/api/v1/admin/usage/aggregate",
+        "get",
+        "Admin: usage aggregates",
+        "kb.admin",
+    );
     add("/api/v1/connectors", "get", "List connectors", "kb.admin");
     add("/api/v1/connectors", "post", "Create connector", "kb.admin");
-    add("/api/v1/connectors/{connector_id}", "patch", "Update connector", "kb.admin");
-    add("/api/v1/connectors/{connector_id}", "delete", "Delete connector", "kb.admin");
-    add("/api/v1/connectors/{connector_id}/test", "post", "Test connector", "kb.admin");
-    add("/api/v1/connectors/{connector_id}/sync", "post", "Queue connector sync", "kb.admin");
-    add("/api/v1/connectors/{connector_id}/jobs", "get", "Connector jobs", "kb.admin");
-    add("/api/v1/external-refs", "get", "External references", "kb.admin");
-    add("/api/v1/admin/audit", "get", "Admin: audit events", "kb.admin");
-    add("/api/v1/admin/quota-overrides", "post", "Admin: quota override", "kb.admin");
+    add(
+        "/api/v1/connectors/{connector_id}",
+        "patch",
+        "Update connector",
+        "kb.admin",
+    );
+    add(
+        "/api/v1/connectors/{connector_id}",
+        "delete",
+        "Delete connector",
+        "kb.admin",
+    );
+    add(
+        "/api/v1/connectors/{connector_id}/test",
+        "post",
+        "Test connector",
+        "kb.admin",
+    );
+    add(
+        "/api/v1/connectors/{connector_id}/sync",
+        "post",
+        "Queue connector sync",
+        "kb.admin",
+    );
+    add(
+        "/api/v1/connectors/{connector_id}/jobs",
+        "get",
+        "Connector jobs",
+        "kb.admin",
+    );
+    add(
+        "/api/v1/external-refs",
+        "get",
+        "External references",
+        "kb.admin",
+    );
+    add(
+        "/api/v1/admin/audit",
+        "get",
+        "Admin: audit events",
+        "kb.admin",
+    );
+    add(
+        "/api/v1/admin/quota-overrides",
+        "post",
+        "Admin: quota override",
+        "kb.admin",
+    );
 
     let schemas = json!({
         "Answer": {"type": "object", "required": ["mode"], "properties": {

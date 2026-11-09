@@ -93,12 +93,13 @@ pub fn resolve(
             }
         }
     }
-    for candidate in [user_preference, tenant_default, Some(config_default)] {
-        if let Some(candidate) = candidate {
-            if let Some(normalized) = normalize_tag(candidate) {
-                if locale_is_supported(normalized, supported) {
-                    return normalized.to_string();
-                }
+    for candidate in [user_preference, tenant_default, Some(config_default)]
+        .into_iter()
+        .flatten()
+    {
+        if let Some(normalized) = normalize_tag(candidate) {
+            if locale_is_supported(normalized, supported) {
+                return normalized.to_string();
             }
         }
     }
@@ -113,82 +114,186 @@ fn lookup(locale: &str, key: &str) -> Option<&'static str> {
     let zh = normalize_tag(locale) == Some("zh-CN");
     Some(match key {
         "error.unauthorized" => {
-            if zh { "未认证或凭据无效" } else { "Unauthorized or invalid credentials" }
+            if zh {
+                "未认证或凭据无效"
+            } else {
+                "Unauthorized or invalid credentials"
+            }
         }
         "error.forbidden" => {
-            if zh { "无权执行该操作" } else { "Forbidden" }
+            if zh {
+                "无权执行该操作"
+            } else {
+                "Forbidden"
+            }
         }
         "error.bad_request" => {
-            if zh { "请求参数无效" } else { "Invalid request" }
+            if zh {
+                "请求参数无效"
+            } else {
+                "Invalid request"
+            }
         }
         "error.not_found" => {
-            if zh { "资源不存在" } else { "Not found" }
+            if zh {
+                "资源不存在"
+            } else {
+                "Not found"
+            }
         }
         "error.conflict" => {
-            if zh { "资源状态冲突" } else { "Conflict" }
+            if zh {
+                "资源状态冲突"
+            } else {
+                "Conflict"
+            }
         }
         "error.internal" => {
-            if zh { "内部错误" } else { "Internal error" }
+            if zh {
+                "内部错误"
+            } else {
+                "Internal error"
+            }
         }
         "error.rate_limited" => {
-            if zh { "请求过于频繁，请稍后重试" } else { "Rate limit exceeded; retry later" }
+            if zh {
+                "请求过于频繁，请稍后重试"
+            } else {
+                "Rate limit exceeded; retry later"
+            }
         }
         "error.queue_full" => {
-            if zh { "服务繁忙，队列已满" } else { "Queue is full" }
+            if zh {
+                "服务繁忙，队列已满"
+            } else {
+                "Queue is full"
+            }
         }
         "error.feature_disabled" => {
-            if zh { "该功能未启用" } else { "Feature is disabled" }
+            if zh {
+                "该功能未启用"
+            } else {
+                "Feature is disabled"
+            }
         }
         "error.payment_not_configured" => {
-            if zh { "支付渠道未配置" } else { "Payment provider is not configured" }
+            if zh {
+                "支付渠道未配置"
+            } else {
+                "Payment provider is not configured"
+            }
         }
         "error.payment_provider_unavailable" => {
-            if zh { "支付渠道不可用" } else { "Payment provider is unavailable" }
+            if zh {
+                "支付渠道不可用"
+            } else {
+                "Payment provider is unavailable"
+            }
         }
         "error.invalid_query" => {
-            if zh { "查询过长或格式无效" } else { "Invalid query" }
+            if zh {
+                "查询过长或格式无效"
+            } else {
+                "Invalid query"
+            }
         }
         "error.invalid_top_k" => {
-            if zh { "top_k 超出上限" } else { "top_k exceeds the limit" }
+            if zh {
+                "top_k 超出上限"
+            } else {
+                "top_k exceeds the limit"
+            }
         }
         "error.space_quota_exceeded" => {
-            if zh { "空间配额已超限" } else { "Space quota exceeded" }
+            if zh {
+                "空间配额已超限"
+            } else {
+                "Space quota exceeded"
+            }
         }
         "error.tenant_quota_exceeded" => {
-            if zh { "租户配额已超限" } else { "Tenant quota exceeded" }
+            if zh {
+                "租户配额已超限"
+            } else {
+                "Tenant quota exceeded"
+            }
         }
         "error.last_space_owner_protected" => {
-            if zh { "不能移除或降级最后一个空间所有者" } else { "Cannot remove or demote the last space owner" }
+            if zh {
+                "不能移除或降级最后一个空间所有者"
+            } else {
+                "Cannot remove or demote the last space owner"
+            }
         }
         "error.last_group_admin_protected" => {
-            if zh { "不能移除或降级最后一个组管理员" } else { "Cannot remove or demote the last group admin" }
+            if zh {
+                "不能移除或降级最后一个组管理员"
+            } else {
+                "Cannot remove or demote the last group admin"
+            }
         }
         "error.space_not_active" => {
-            if zh { "空间已归档或删除，只读" } else { "Space is archived or deleted" }
+            if zh {
+                "空间已归档或删除，只读"
+            } else {
+                "Space is archived or deleted"
+            }
         }
         "error.acl_denied" => {
-            if zh { "文档权限不允许访问" } else { "Document ACL denied access" }
+            if zh {
+                "文档权限不允许访问"
+            } else {
+                "Document ACL denied access"
+            }
         }
         "error.timeout" => {
-            if zh { "请求超时" } else { "Request timed out" }
+            if zh {
+                "请求超时"
+            } else {
+                "Request timed out"
+            }
         }
         "error.storage_unavailable" => {
-            if zh { "存储不可用" } else { "Storage unavailable" }
+            if zh {
+                "存储不可用"
+            } else {
+                "Storage unavailable"
+            }
         }
         "cli.auth.logged_in" => {
-            if zh { "已登录" } else { "Logged in" }
+            if zh {
+                "已登录"
+            } else {
+                "Logged in"
+            }
         }
         "cli.auth.logged_out" => {
-            if zh { "已退出登录（本地凭据已删除）" } else { "Logged out (local credentials removed)" }
+            if zh {
+                "已退出登录（本地凭据已删除）"
+            } else {
+                "Logged out (local credentials removed)"
+            }
         }
         "cli.auth.device_not_implemented" => {
-            if zh { "设备码登录将在 P1 提供；请使用 --token" } else { "Device-code login is a P1 item; use --token" }
+            if zh {
+                "设备码登录将在 P1 提供；请使用 --token"
+            } else {
+                "Device-code login is a P1 item; use --token"
+            }
         }
         "cli.billing.disabled" => {
-            if zh { "计费功能未启用" } else { "Billing is disabled" }
+            if zh {
+                "计费功能未启用"
+            } else {
+                "Billing is disabled"
+            }
         }
         "payment.not_configured" => {
-            if zh { "支付渠道未配置" } else { "Payment provider is not configured" }
+            if zh {
+                "支付渠道未配置"
+            } else {
+                "Payment provider is not configured"
+            }
         }
         _ => return None,
     })
@@ -229,9 +334,7 @@ pub fn format_date(locale: &str, value: &str) -> String {
         .map(|date| date.with_timezone(&Utc))
         .ok();
     match parsed {
-        Some(date) if normalize_tag(locale) == Some("en") => {
-            date.format("%b %d, %Y").to_string()
-        }
+        Some(date) if normalize_tag(locale) == Some("en") => date.format("%b %d, %Y").to_string(),
         Some(date) => date.format("%Y-%m-%d").to_string(),
         None => value.to_string(),
     }
@@ -247,11 +350,7 @@ pub fn format_currency(locale: &str, minor_units: i64, currency: &str) -> String
         "GBP" => "£",
         _ => "",
     };
-    if normalize_tag(locale) == Some("en") {
-        format!("{symbol}{number} {currency}")
-    } else {
-        format!("{symbol}{number} {currency}")
-    }
+    format!("{symbol}{number} {currency}")
 }
 
 pub fn plural(locale: &str, count: i64, one: &str, other: &str) -> String {

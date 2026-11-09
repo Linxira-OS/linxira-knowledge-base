@@ -49,7 +49,12 @@ fn period_start(period: &str, now: chrono::DateTime<chrono::Utc>) -> String {
     }
 }
 
-fn applies(quota: &TokenQuotaRecord, principal: &Principal, space: Option<&str>, role: &str) -> bool {
+fn applies(
+    quota: &TokenQuotaRecord,
+    principal: &Principal,
+    space: Option<&str>,
+    role: &str,
+) -> bool {
     match quota.scope_type.as_str() {
         "tenant" => quota.scope_id == principal.tenant_id,
         "space" => space.map(|space| quota.scope_id == space).unwrap_or(false),
@@ -59,9 +64,18 @@ fn applies(quota: &TokenQuotaRecord, principal: &Principal, space: Option<&str>,
     }
 }
 
-fn exceeded(quota: &TokenQuotaRecord, counter: &crate::store::QuotaCounter, estimate: &Estimate) -> Option<&'static str> {
+fn exceeded(
+    quota: &TokenQuotaRecord,
+    counter: &crate::store::QuotaCounter,
+    estimate: &Estimate,
+) -> Option<&'static str> {
     if let Some(limit) = quota.limit_tokens {
-        if counter.used_tokens + counter.reserved_tokens + estimate.input_tokens + estimate.max_output_tokens > limit {
+        if counter.used_tokens
+            + counter.reserved_tokens
+            + estimate.input_tokens
+            + estimate.max_output_tokens
+            > limit
+        {
             return Some("tokens");
         }
     }
@@ -108,7 +122,12 @@ pub async fn reserve(
     for quota in &applicable {
         let start = period_start(&quota.period, now);
         let counter = store
-            .get_quota_counter(&principal.tenant_id, &quota.scope_type, &quota.scope_id, &start)
+            .get_quota_counter(
+                &principal.tenant_id,
+                &quota.scope_type,
+                &quota.scope_id,
+                &start,
+            )
             .await
             .map_err(internal)?
             .unwrap_or_else(|| crate::store::QuotaCounter {
@@ -151,11 +170,19 @@ pub async fn reserve(
             continue;
         }
         if let Some(limit) = quota.limit_tokens {
-            if counter.used_tokens + counter.reserved_tokens + estimate.input_tokens + estimate.max_output_tokens > limit {
+            if counter.used_tokens
+                + counter.reserved_tokens
+                + estimate.input_tokens
+                + estimate.max_output_tokens
+                > limit
+            {
                 return Err(TokenQuotaError {
                     status: StatusCode::TOO_MANY_REQUESTS,
                     code: "quota_exceeded",
-                    message: format!("token quota exceeded for {}/{}", quota.scope_type, quota.scope_id),
+                    message: format!(
+                        "token quota exceeded for {}/{}",
+                        quota.scope_type, quota.scope_id
+                    ),
                     retry_after: Some(60),
                 });
             }
@@ -165,17 +192,25 @@ pub async fn reserve(
                 return Err(TokenQuotaError {
                     status: StatusCode::TOO_MANY_REQUESTS,
                     code: "quota_exceeded",
-                    message: format!("request quota exceeded for {}/{}", quota.scope_type, quota.scope_id),
+                    message: format!(
+                        "request quota exceeded for {}/{}",
+                        quota.scope_type, quota.scope_id
+                    ),
                     retry_after: Some(60),
                 });
             }
         }
         if let Some(limit) = quota.limit_cost_micros {
-            if counter.used_cost_micros + counter.reserved_cost_micros + estimate.cost_micros > limit {
+            if counter.used_cost_micros + counter.reserved_cost_micros + estimate.cost_micros
+                > limit
+            {
                 return Err(TokenQuotaError {
                     status: StatusCode::TOO_MANY_REQUESTS,
                     code: "quota_exceeded",
-                    message: format!("cost quota exceeded for {}/{}", quota.scope_type, quota.scope_id),
+                    message: format!(
+                        "cost quota exceeded for {}/{}",
+                        quota.scope_type, quota.scope_id
+                    ),
                     retry_after: Some(60),
                 });
             }
@@ -186,7 +221,10 @@ pub async fn reserve(
     for quota in applicable {
         let start = period_start(&quota.period, now);
         let reservation = QuotaReservation {
-            reservation_id: format!("qres_{}_{}_{}", request_id, quota.scope_type, quota.scope_id),
+            reservation_id: format!(
+                "qres_{}_{}_{}",
+                request_id, quota.scope_type, quota.scope_id
+            ),
             request_id: request_id.to_string(),
             tenant_id: principal.tenant_id.clone(),
             scope_type: quota.scope_type.clone(),

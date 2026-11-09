@@ -49,11 +49,10 @@ pub struct AppError {
 }
 
 impl AppError {
-
     pub fn new(status: StatusCode, code: &'static str, message: impl Into<String>) -> Self {
         let fallback = message.into();
-        let message = crate::i18n::error_message(&crate::i18n::current_locale(), code)
-            .unwrap_or(fallback);
+        let message =
+            crate::i18n::error_message(&crate::i18n::current_locale(), code).unwrap_or(fallback);
         Self {
             status,
             code,
@@ -126,7 +125,9 @@ impl IntoResponse for AppError {
         response.extensions_mut().insert(ErrorCode(self.code));
         if let Some(seconds) = retry_after {
             if let Ok(value) = axum::http::HeaderValue::from_str(&seconds.to_string()) {
-                response.headers_mut().insert(axum::http::header::RETRY_AFTER, value);
+                response
+                    .headers_mut()
+                    .insert(axum::http::header::RETRY_AFTER, value);
             }
         }
         response
@@ -144,7 +145,9 @@ impl From<StoreError> for AppError {
     fn from(err: StoreError) -> Self {
         match err {
             StoreError::FtsUnavailable => AppError::internal("keyword index unavailable"),
-            StoreError::Conflict(message) => AppError::new(StatusCode::CONFLICT, "conflict", message),
+            StoreError::Conflict(message) => {
+                AppError::new(StatusCode::CONFLICT, "conflict", message)
+            }
             StoreError::Invalid(message) => AppError::bad_request(message),
             StoreError::NotFound(message) => AppError::not_found(message),
             StoreError::Timeout(message) => {

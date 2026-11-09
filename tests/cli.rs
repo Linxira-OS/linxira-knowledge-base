@@ -20,7 +20,11 @@ fn config_check_prints_masked_effective_config() {
         .env("LKB_PROFILE", "solo")
         .output()
         .unwrap();
-    assert!(output.status.success(), "stderr: {}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("profile = solo"));
     assert!(stdout.contains("storage.backend = sqlite"));
@@ -40,7 +44,11 @@ fn cli_user_import_search_export_and_tokens() {
         .env("LKB_USER_PASSWORD", "correct horse battery staple")
         .output()
         .unwrap();
-    assert!(user.status.success(), "stderr: {}", String::from_utf8_lossy(&user.stderr));
+    assert!(
+        user.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&user.stderr)
+    );
     assert!(String::from_utf8_lossy(&user.stdout).contains("user added: alice"));
 
     let import = lkb()
@@ -49,7 +57,11 @@ fn cli_user_import_search_export_and_tokens() {
         .env("LKB_PROFILE", "solo")
         .output()
         .unwrap();
-    assert!(import.status.success(), "stderr: {}", String::from_utf8_lossy(&import.stderr));
+    assert!(
+        import.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&import.stderr)
+    );
     let report: Value = serde_json::from_slice(&import.stdout).unwrap();
     assert!(report["imported"].as_u64().unwrap() >= 7, "{report}");
 
@@ -59,7 +71,11 @@ fn cli_user_import_search_export_and_tokens() {
         .env("LKB_PROFILE", "solo")
         .output()
         .unwrap();
-    assert!(search.status.success(), "stderr: {}", String::from_utf8_lossy(&search.stderr));
+    assert!(
+        search.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&search.stderr)
+    );
     let response: Value = serde_json::from_slice(&search.stdout).unwrap();
     assert!(
         !response["hits"].as_array().unwrap().is_empty(),
@@ -73,7 +89,11 @@ fn cli_user_import_search_export_and_tokens() {
         .env("LKB_PROFILE", "solo")
         .output()
         .unwrap();
-    assert!(export.status.success(), "stderr: {}", String::from_utf8_lossy(&export.stderr));
+    assert!(
+        export.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&export.stderr)
+    );
     let lines = std::fs::read_to_string(&export_path).unwrap();
     assert!(lines.lines().count() >= 7);
 
@@ -83,7 +103,11 @@ fn cli_user_import_search_export_and_tokens() {
         .env("LKB_PROFILE", "solo")
         .output()
         .unwrap();
-    assert!(token.status.success(), "stderr: {}", String::from_utf8_lossy(&token.stderr));
+    assert!(
+        token.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&token.stderr)
+    );
     let token_stdout = String::from_utf8_lossy(&token.stdout);
     let raw = token_stdout
         .lines()
