@@ -58,6 +58,20 @@ jobs:
         with:
           workspaces: desktop/src-tauri -> target
           key: ci-desktop
+      - name: Provide desktop build inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          # tauri-build requires the externalBin/resources paths to exist even
+          # for `cargo check`; the real sidecar binary is produced by the
+          # release workflow, so CI only needs placeholders here.
+          case "${RUNNER_OS}" in
+            Windows) triple="x86_64-pc-windows-msvc"; ext=".exe" ;;
+            *) triple="x86_64-unknown-linux-gnu"; ext="" ;;
+          esac
+          mkdir -p desktop/src-tauri/binaries desktop/src-tauri/resources/web
+          : > "desktop/src-tauri/binaries/lkb-${triple}${ext}"
+          : > desktop/src-tauri/resources/web/index.html
       - name: Check
         run: cargo check --locked --manifest-path desktop/src-tauri/Cargo.toml
       - name: Test
