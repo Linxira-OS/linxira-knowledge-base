@@ -11,6 +11,7 @@
 | `lkb.enterprise.toml.example` | 企业部署示例配置（PostgreSQL、enterprise profile） |
 | `.env.example` | compose 的变量示例（复制为 `.env`，已被 gitignore） |
 | `solo/` | 个人版示例配置与归档内说明（`solo/lkb.toml.example`、`solo/README.md`） |
+| `desktop/` | 桌面版便携包组装脚本：`desktop/portable-zip.sh`（Windows）、`desktop/portable-tar.sh`（Linux） |
 
 发布产物、版本规则、校验与回滚见 [document/release-process.md](../document/release-process.md)。
 
@@ -34,7 +35,7 @@ docker compose -f deploy/compose.yaml up -d
 ## 2. 镜像
 
 ```
-ghcr.io/linxira-os/linxira-knowledge-base:<version>      # 例：0.2.0
+ghcr.io/linxira-os/linxira-knowledge-base:<version>      # 例：0.2.1
 ghcr.io/linxira-os/linxira-knowledge-base:<major.minor>  # 例：0.2
 ghcr.io/linxira-os/linxira-knowledge-base:latest         # 仅正式 release 推送
 ```
@@ -44,8 +45,8 @@ ghcr.io/linxira-os/linxira-knowledge-base:latest         # 仅正式 release 推
 - 正式发布构建带 buildx provenance 与 SBOM attestation：
 
 ```bash
-docker buildx imagetools inspect ghcr.io/linxira-os/linxira-knowledge-base:0.2.0
-docker scout attest get --predicate-type=https://spdx.dev/Document ghcr.io/linxira-os/linxira-knowledge-base:0.2.0
+docker buildx imagetools inspect ghcr.io/linxira-os/linxira-knowledge-base:0.2.1
+docker scout attest get --predicate-type=https://spdx.dev/Document ghcr.io/linxira-os/linxira-knowledge-base:0.2.1
 ```
 
 - 只用镜像跑单机 SQLite（不经 compose 的评估用法）：
@@ -53,7 +54,7 @@ docker scout attest get --predicate-type=https://spdx.dev/Document ghcr.io/linxi
 ```bash
 docker run -d --name lkb -p 127.0.0.1:7331:7331 \
   -v lkb-data:/data \
-  ghcr.io/linxira-os/linxira-knowledge-base:0.2.0
+  ghcr.io/linxira-os/linxira-knowledge-base:0.2.1
 # 绑定非 loopback 的地址需要 [auth] 从 none 改为 session（solo 校验会拒绝公网 + none）
 ```
 
@@ -82,7 +83,7 @@ docker run -d --name lkb -p 127.0.0.1:7331:7331 \
 发布资产 `linxira-knowledge-base-enterprise-v<version>.tar.gz` 解压后与仓库同构：
 
 ```
-linxira-knowledge-base-enterprise-v0.2.0/
+linxira-knowledge-base-enterprise-v0.2.1/
   deploy/{compose.yaml,nginx.conf,lkb.enterprise.toml.example,.env.example,README.md}
   web/dist/          # SPA（compose 里为 ../web/dist）
   LICENSE
@@ -91,11 +92,27 @@ linxira-knowledge-base-enterprise-v0.2.0/
 
 按第 1 节的命令即可启动；无需源码、无需 Rust 工具链。
 
-## 6. 校验与反馈
+## 6. 桌面安装包（Windows / Linux）
+
+桌面版（Tauri 2 外壳 + 同一个 `lkb` sidecar）由 `release.yml` 的 `desktop-windows` / `desktop-linux` 作业产出，**macOS 不发布**：
+
+| 资产 | 说明 |
+| --- | --- |
+| `lkb-solo-v<version>-windows-x64-setup.exe` | NSIS 安装包（用户级安装），安装后从开始菜单启动 |
+| `lkb-solo-v<version>-windows-x64-portable.zip` | 便携包：解压 `lkb/` 后直接运行 `lkb-desktop.exe` |
+| `lkb-solo-v<version>-linux-amd64.deb` | Debian/Ubuntu 包：`sudo dpkg -i` 或 `apt install ./<file>.deb` |
+| `lkb-solo-v<version>-linux-amd64.AppImage` | 单文件 AppImage：`chmod +x` 后直接运行 |
+| `lkb-solo-v<version>-linux-amd64.tar.gz` | 便携包（与便携 zip 同布局） |
+
+- 便携包内容：`lkb/lkb-desktop[.exe]`、`lkb/lkb[.exe]`（sidecar）、`lkb/resources/web/**`（内嵌 SPA）、`LICENSE`、`README.md`；Windows 上可能另有 `WebView2Loader.dll`。
+- 桌面壳按统一 `lkb` 路径存放配置与数据（Windows `%APPDATA%\lkb` / `%LOCALAPPDATA%\lkb`，Linux XDG），详见 [`desktop/README.md`](../desktop/README.md)。
+- 本地构建等价物：`scripts/build-sidecar.{sh,ps1}` 生成 sidecar 与 `resources/web`；`deploy/desktop/portable-zip.sh` / `deploy/desktop/portable-tar.sh` 组装便携包。所有安装包未签名，Windows 可能出现 SmartScreen 提示。
+
+## 7. 校验与反馈
 
 ```bash
 sha256sum -c SHA256SUMS
-gh attestation verify linxira-knowledge-base-enterprise-v0.2.0.tar.gz --repo Linxira-OS/linxira-knowledge-base
+gh attestation verify linxira-knowledge-base-enterprise-v0.2.1.tar.gz --repo Linxira-OS/linxira-knowledge-base
 ```
 
 - 仓库：https://github.com/Linxira-OS/linxira-knowledge-base

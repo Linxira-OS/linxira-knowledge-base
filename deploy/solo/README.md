@@ -5,7 +5,7 @@
 归档内容：
 
 ```
-lkb                # Linux/macOS 可执行文件（Windows 为 lkb.exe）
+lkb                # Linux x86_64 可执行文件（Windows 归档内为 lkb.exe）
 LICENSE
 README.md
 CHANGELOG.md
@@ -17,12 +17,12 @@ deploy/solo/README.md          # 本文件
 
 ```bash
 # Linux x86_64（ubuntu-22.04 构建，glibc ≥ 2.35；Debian 12+/Ubuntu 22.04+ 可用）
-tar -xzf lkb-solo-v0.2.0-x86_64-unknown-linux-gnu.tar.gz
-cd lkb-solo-v0.2.0-x86_64-unknown-linux-gnu
+tar -xzf lkb-solo-v0.2.1-x86_64-unknown-linux-gnu.tar.gz
+cd lkb-solo-v0.2.1-x86_64-unknown-linux-gnu
 ./lkb serve                     # 打开 http://127.0.0.1:7331/
 ```
 
-Windows 解压 `.zip` 后在 PowerShell 中运行 `.\lkb.exe serve`；macOS 解压 `.tar.gz` 后 `./lkb serve`（首次运行如提示出自 Gatekeeper，可在「系统设置 → 隐私与安全性」中允许）。macOS arm64 归档在 Apple Silicon 上原生运行；x86_64 归档同样可运行。
+Windows 解压 `.zip` 后在 PowerShell 中运行 `.\lkb.exe serve`。偏好图形界面时，也可以直接使用桌面版安装包（Windows NSIS / portable zip、Linux deb / AppImage，见 `deploy/README.md`；macOS 不在发布范围）。
 
 首次启动会在 `data/lkb.sqlite` 建库、执行内嵌迁移，并把内置的 24 篇中英文产品文档 seed 到 `space=product`（幂等，不覆盖你的修改）。默认仅绑定回环地址、`auth.mode = "none"`——这是 solo 的安全边界：只能本机访问。
 
@@ -82,4 +82,4 @@ gh attestation verify <文件> --repo Linxira-OS/linxira-knowledge-base   # 构�
 - 安全漏洞（私密上报）：https://github.com/Linxira-OS/linxira-knowledge-base/security/advisories/new
 - 发布流程与升级/回滚：https://github.com/Linxira-OS/linxira-knowledge-base/blob/main/document/release-process.md
 
-当前版本不包含桌面安装包（Tauri/NSIS/MSI 等），该能力见发布流程文档中的 P1 待办。
+桌面版安装包与便携包随同一 release 发布（Windows / Linux），macOS 不发布；构建与本地组装方式见仓库的 `desktop/README.md` 与 `deploy/README.md`。

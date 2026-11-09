@@ -1,6 +1,33 @@
 # Changelog
 
-本文件记录 `lkb`（Layered Knowledge Base）的版本变更。版本号与 `Cargo.toml` / `web/package.json` 保持一致；格式参考 [Keep a Changelog](https://keepachangelog.com/)，日期为 ISO 8601。
+本文件记录 `lkb`（Layered Knowledge Base）的版本变更。版本号与 `Cargo.toml` / `web/package.json` / `desktop/src-tauri` 保持一致；格式参考 [Keep a Changelog](https://keepachangelog.com/)，日期为 ISO 8601。
+
+## [0.2.1] - 2026-11-09
+
+0.2.z 线发布：只递增 patch。本版把桌面壳、管理面与静态 SPA 托管补齐到可发布状态；**macOS 不在发布范围**。
+
+### Added — 桌面应用（Windows / Linux）
+
+- **Tauri 2 桌面壳**（`desktop/`）：首启向导（SQLite / PostgreSQL）→ 启动内置 sidecar `lkb serve`（随机回环端口）→ `/health` 通过后打开主窗口；单实例运行，关闭窗口或退出即停止 sidecar。
+- **安装包与便携包**：Windows NSIS 安装包与 portable zip；Linux deb、AppImage 与 portable tar.gz。sidecar 与 CLI 归档复用**同一个** `lkb` 二进制构建（不是第二套代码），资源内嵌 `web/dist`。
+- **路径规范（统一 `lkb` 目录，无品牌名路径）**：配置 `%APPDATA%\lkb\lkb.toml`（Linux `$XDG_CONFIG_HOME/lkb/lkb.toml`）；数据 `%LOCALAPPDATA%\lkb\data\lkb.sqlite`（Linux XDG data 目录）；日志 `%LOCALAPPDATA%\lkb\logs`（Linux `$XDG_STATE_HOME/lkb/logs`）。
+- **CLI 默认 OS 路径**：`lkb` 的配置/数据/日志默认路径与桌面壳统一（`src/paths.rs`），未显式传 `--config` 时按 `<config_dir>/lkb.toml` 解析。
+
+### Added — 管理 API 与 Admin UI
+
+- **管理 API 补全**：`/api/v1/admin/overview`、`admin/users`（列表/角色/禁用/重置密码）、`admin/billing/plans` CRUD、`admin/providers/{id}/test`、`admin/audit`，OpenAPI 3.1 同步。
+- **Admin UI**：概览面板、CRUD 表单、空态与确认流程、可拖拽三栏布局。
+
+### Added — 静态 SPA 托管
+
+- `lkb serve` 可托管静态 SPA（`server.web_dir` / `LKB_WEB_DIR`），桌面壳与自托管部署共用同一套 `web/dist`。
+
+### 发布产物（Release）
+
+- 个人用户版（solo CLI）：`lkb-solo-v0.2.1-x86_64-unknown-linux-gnu.tar.gz`、`lkb-solo-v0.2.1-x86_64-pc-windows-msvc.zip`。
+- 桌面版（Windows / Linux）：`lkb-solo-v0.2.1-windows-x64-setup.exe`、`lkb-solo-v0.2.1-windows-x64-portable.zip`、`lkb-solo-v0.2.1-linux-amd64.deb`、`lkb-solo-v0.2.1-linux-amd64.AppImage`、`lkb-solo-v0.2.1-linux-amd64.tar.gz`；**macOS 不发布**。
+- 企业部署版（enterprise）：`ghcr.io/linxira-os/linxira-knowledge-base:0.2.1` 与 `linxira-knowledge-base-enterprise-v0.2.1.tar.gz`；另有 `lkb-web-v0.2.1.tar.gz`、`SHA256SUMS` 与 SPDX SBOM。
+- 同一二进制同时支持 SQLite 与 PostgreSQL（配置切换），不发布单独的 SQLite / PostgreSQL 包；所有安装包未签名（Windows 可能出现 SmartScreen 提示）。版本规则、tag 流程、校验与回滚见 [document/release-process.md](document/release-process.md)。
 
 ## [0.2.0] - 2026-11-09
 
@@ -43,5 +70,4 @@
 
 ### 发布产物（Release）
 
-- 个人用户版（solo）：`lkb-solo-v0.2.0-<target>.tar.gz` / Windows `.zip`（Linux x86_64、Windows x64、macOS x86_64/arm64，同一二进制）；企业部署版（enterprise）：`ghcr.io/linxira-os/linxira-knowledge-base:0.2.0` 与 `linxira-knowledge-base-enterprise-v0.2.0.tar.gz`；另有可选 `lkb-web-v0.2.0.tar.gz`、`SHA256SUMS` 与 SPDX SBOM。
-- 单一二进制同时支持 SQLite 与 PostgreSQL（配置切换），不发布单独的 SQLite / PostgreSQL 包；桌面安装包尚未提供（P1）。版本规则、tag 流程、校验与回滚见 [document/release-process.md](document/release-process.md)。
+- 发布资产清单（solo CLI / 桌面版 / enterprise）见 0.2.1 段与 [document/release-process.md](document/release-process.md)；桌面安装包在 0.2.1 首次提供（macOS 不发布）。

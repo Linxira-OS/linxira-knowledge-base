@@ -1,7 +1,7 @@
 {
   "name": "lkb-web",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Layered Knowledge Base · web front end (Wiki, unified search/QA, admin)",
   "type": "module",
   "scripts": {

@@ -1,6 +1,6 @@
 # Repository Guidelines
 
-面向在本仓库工作的 AI 编码助手。仓库当前状态：P0 文档已定稿，P1（Rust 实现）已落地，并通过 `stable-x86_64-pc-windows-gnu` 的 `cargo check --all-targets` / `cargo build --release` / `cargo test`（115 tests passed；PostgreSQL 集成已通过 WSL PostgreSQL 18.6 实测、不再 SKIP，详见 `document/wsl-postgres.md`；未设置 `LKB_TEST_PG_URL` 时仍打印 SKIP）。默认 MSVC 工具链仍缺可用链接器。本文只给工作所需的指针，不重复 `document/architecture.md` 的论述。
+面向在本仓库工作的 AI 编码助手。仓库当前状态：P0 文档已定稿，P1（Rust 实现）已落地，并通过 `stable-x86_64-pc-windows-gnu` 的 `cargo check --all-targets` / `cargo build --release` / `cargo test`（139 tests passed；PostgreSQL 集成已通过 WSL PostgreSQL 18.6 实测、不再 SKIP，详见 `document/wsl-postgres.md`；未设置 `LKB_TEST_PG_URL` 时仍打印 SKIP）。默认 MSVC 工具链仍缺可用链接器。本文只给工作所需的指针，不重复 `document/architecture.md` 的论述。
 
 ## 1. Project Overview
 
@@ -10,7 +10,7 @@
   - `solo`：SQLite 单文件，单进程，默认 `auth.mode = none` 且只绑 loopback，零外部服务依赖。
   - `team`：PostgreSQL 后端，会话/Bearer 认证，共享空间。
   - `enterprise`：PostgreSQL 多租户；当前代码行为与 `team` 相同，仅名称与配置不同（多租户靠独立配置/数据库或外部路由，HTTP 层不解析租户）。
-- **当前阶段**：P1 solo 闭环（导入 → 检索 → 带引用回答 → CLI/本地 Web + 最小 Wiki + 认证 + 导入导出 + 内置种子知识库）已实现并通过 GNU 工具链验证；PostgreSQL 后端同时提供，并已通过 WSL PostgreSQL 18.6 实测（115 tests，PG 集成不再 SKIP；本机凭据在 `.lkb/pg.env`，已 gitignore；无 PG 环境时仍 SKIP）。所有“能构建/能通过”的结论仍以实际命令输出为准。
+- **当前阶段**：P1 solo 闭环（导入 → 检索 → 带引用回答 → CLI/本地 Web + 最小 Wiki + 认证 + 导入导出 + 内置种子知识库）已实现并通过 GNU 工具链验证；PostgreSQL 后端同时提供，并已通过 WSL PostgreSQL 18.6 实测（139 tests，PG 集成不再 SKIP；本机凭据在 `.lkb/pg.env`，已 gitignore；无 PG 环境时仍 SKIP）。所有“能构建/能通过”的结论仍以实际命令输出为准。
 - **素材现状**：`examples/docs/` 有 20 篇 Markdown，`examples/questions.jsonl` 有 20 条问题（满足 roadmap 的 P1 评测素材数量要求）。
 
 ## 2. Architecture & Data Flow
@@ -23,11 +23,11 @@
 | `governance` | `Principal` / `TokenScope` / `Policy` / `Acl` / `GovernanceFields`；生成唯一召回可见性谓词并做进程内二次校验 |
 | `store` | `Store` trait + `SqliteStore` / `PostgresStore`；记录类型与迁移执行 |
 | `ingest` | `Source`（文件系统 / JSONL）、`import_path`、`export_jsonl`、`doc_id`、分块、HTML 抽取 |
-| `seed` | 编译期嵌入 `docs/zh|en`、frontmatter 校验、Page/Revision + Document/Chunk 写入、幂等/用户修改保护、`seed_meta` |
+| `seed` | 编译期嵌入 `docs/zh / docs/en`、frontmatter 校验、Page/Revision + Document/Chunk 写入、幂等/用户修改保护、`seed_meta` |
 | `access` | 租户/组/空间三层有效角色求值、`allowed_space_ids`、显式成员/组派生/owner 优先级 |
 | `audit` | `audit_events` 写入与查询，best-effort 不掩盖业务响应 |
 | `quota` | 空间存储配额检查/预留/释放/重算，tenant→group→space→user 层级与 `quota_overrides` |
-| `logging` | `LKB_LOG_FORMAT=json|text` 事件格式化、request_id/access 日志、CLI 事件、concurrency 计数 |
+| `logging` | `LKB_LOG_FORMAT=json / text` 事件格式化、request_id/access 日志、CLI 事件、concurrency 计数 |
 | `limits` | 进程内令牌桶/并发/每日计数，429+Retry-After、503 queue_full、输入长度/top_k 校验 |
 | `metrics` | `/metrics` Prometheus 低基数计数器 |
 | `i18n` | Accept-Language/配置 locale 回退、稳定消息键、数字/日期/货币/复数格式化 |
@@ -80,7 +80,7 @@ examples/docs/               20 篇示例语料
 examples/questions.jsonl     20 条评测问题
 document/                    内部文档（维护者/Agent）：architecture、tier-matrix、roadmap、
                              build-policy、knowledge-freshness、oss-landscape、sag-assessment、
-                             desktop-app-and-notes、adr/0001–0013、knowledge/model-ledger.yaml
+                             product-spec、desktop-app-and-notes、adr/0001–0014、knowledge/model-ledger.yaml
 docs/                        产品使用文档（zh/en 各 12 篇）；编译期作为 `lkb seed` 种子源
 ```
 
@@ -89,7 +89,7 @@ docs/                        产品使用文档（zh/en 各 12 篇）；编译�
 
 ## 4. Development Commands
 
-> **构建门禁仍然有效**：执行任何 `cargo`/`rustup`/清理命令前先获得用户明确确认。当前已实际执行 `cargo +stable-x86_64-pc-windows-gnu check --all-targets`、`build --release` 与 `test`（115 passed；PG 集成已实测、不再 SKIP）；下列命令中未实际执行的项目仍不得当作已通过。
+> **构建门禁仍然有效**：执行任何 `cargo`/`rustup`/清理命令前先获得用户明确确认。当前已实际执行 `cargo +stable-x86_64-pc-windows-gnu check --all-targets`、`build --release` 与 `test`（139 passed；PG 集成已实测、不再 SKIP）；下列命令中未实际执行的项目仍不得当作已通过。
 
 **构建门禁（强制）**
 
@@ -186,7 +186,7 @@ Windows 二进制为 `target\release\lkb.exe`；PowerShell 设环境变量用 `$
 ## 7. Runtime & Tooling Preferences
 
 - **Rust stable ≥ 1.82**，edition 2021，Cargo。仓库无 `rust-toolchain.toml`、无 `.cargo/`；根 `Cargo.lock` 已生成（构建产物）。
-- 日志：`LKB_LOG_FORMAT=json|text`，`LKB_LOG_LEVEL`；JSON 写 stderr；`LKB_SERVICE` 可覆盖 service。
+- 日志：`LKB_LOG_FORMAT=json / text`，`LKB_LOG_LEVEL`；JSON 写 stderr；`LKB_SERVICE` 可覆盖 service。
 - 部署模式/门禁只在 config、路由与装配层判断；领域逻辑只调用 `Config::feature_enabled`。`deployment.mode` 与 profile 必须匹配；solo 禁止 billing；enterprise_external 必须 signup+billing+multi_tenant+public_api。
 - Agent CLI 本地凭据：`<config_dir>/config.toml`（`LKB_CONFIG_DIR` 可覆盖）；`LKB_TOKEN`/`LKB_API_TOKEN`；`LKB_CONFIG_FILE` 选择主配置 `lkb.toml`。
 - **SQLite bundled**：`sqlx` 0.8 的 `sqlite` feature 链接 bundled libsqlite3；不得启用 `sqlite-unbundled`。bundled 仍需要本机 C 编译器/链接器。
@@ -199,7 +199,7 @@ Windows 二进制为 `target\release\lkb.exe`；PowerShell 设环境变量用 `$
 ## 8. Testing & QA
 
 ```text
-cargo test                                   # 已执行（GNU，115 passed；仍需用户确认后重跑）
+cargo test                                   # 已执行（GNU，139 passed；仍需用户确认后重跑）
 cargo test --test integration_sqlite         # 已执行
 cargo test --test axum_oneshot               # 已执行
 cargo test --test cli                        # 已执行
@@ -208,7 +208,7 @@ cargo test --test event_entity               # 已执行
 cargo test --test postgres_integration       # 已执行（WSL PG 18.6 实测通过；无 LKB_TEST_PG_URL 时 SKIP）
 ```
 
-**测试布局**（16 个集成测试文件 + 各模块 `#[cfg(test)]` 单测，`cargo test` 合计 115 个）：
+**测试布局**（17 个集成测试文件 + 各模块 `#[cfg(test)]` 单测，`cargo test` 合计 139 个）：
 
 | 文件 | 覆盖 |
 | --- | --- |
@@ -221,17 +221,17 @@ cargo test --test postgres_integration       # 已执行（WSL PG 18.6 实测通
 | `tests/limits_observability.rs` | 100 并发请求、token QPS 429+Retry-After、吊销 401、超长 query/top_k 400、配额并发不 oversell、JSON 日志字段/脱敏 |
 | `tests/p0f_modes_i18n_payment.rs` | mode feature 矩阵/覆盖/启动校验、feature_disabled、payment_not_configured、locale 回退/API 本地化/CLI locale、features endpoint |
 | `tests/gateway_p0c.rs` | fake HTTP provider 双路由 failover、alias 隐藏、provider usage、usage_events、hard token quota 429、alias unavailable、admin providers redaction/quota creation |
+| `tests/admin_management.rs` | 用户创建/409/重置密码/软禁用/last_login、plans CRUD+plan_in_use、subscriptions、provider-model PATCH/DELETE+provider test、overview 聚合、audit 详情/过滤/cursor |
 | `tests/sso_trusted_header.rs` | 可信 peer 自动建用户/组角色映射/会话/重复幂等、不可信 peer/缺 user/禁用/域名/auto_provision off/伪造内部头拒绝、审计、严格启动校验/空 proxies 警告与 401 |
 | `tests/connectors.rs` | filesystem_export 同步/深链/ACL/幂等、http_json fake server、stub not_configured、external_refs/jobs API |
 | `tests/pg_sql_guard.rs` | Postgres 字面量 SQL 与 `.bind()` 链静态守卫（140 条）+ 自检用例 |
 | `tests/p2a_billing.rs` | 钱包/双分录/幂等/余额不足、并发不超扣、套餐状态机+entitlement、Stripe 签名验签/重放、HTTP 手工充值+webhook+退款重放、订阅 HTTP、外部引擎不本地扣费（含 judge）、网关 402 |
 | `tests/p1a_openapi_mcp.rs` | OpenAPI 路径/schema 校验、MCP tools 列表与 kb_search/kb_list_spaces/scope 拒绝、MCP stdio 子进程 smoke、admin 列表/审计/usage 聚合、契约 search/answer/page JSON CRUD+If-Match 409、JSON 保存后立即可搜/更新旧内容消失/删除不可搜/恢复可搜、页面列表 cursor/过滤/越界 403、revision body、JSON 登录 CSRF/Origin/401/成功/me/logout、会话 undelete |
-| `tests/admin_management.rs` | 用户创建/409/重置密码/软禁用/last_login、plans CRUD+plan_in_use、subscriptions、provider-model PATCH/DELETE+provider test、overview 聚合、audit 详情/过滤/cursor |
 | `tests/summary_conversations.rs` | 上游 SSE 多 chunk 真流式、断开取消+usage cancelled、非流式回退 degraded、 fake LLM 摘要 JSON/usage source summary、有限重试后 status=failed+抽取式回退、job 幂等、query search/both、网关多轮改写、SSE 事件顺序、会话 cursor 分页/external_session 绑定、judge 网关 usage、conversation 历史/owner 403 |
 | `tests/event_entity.rs` | event-entity 通道、ACL/租户/有效期过滤、抽取失败降级、hybrid RRF |
 
 - 测试数据来自仓库 `examples/`（通过 `env!("CARGO_MANIFEST_DIR")` 定位）；临时库放在 `tempfile::tempdir()`。
-- **PG SKIP 语义**：`LKB_TEST_PG_URL` 未设置或为空白时，测试打印 `SKIP postgres integration test: ... refusing to pretend it passed` 后直接 `return`；Cargo 仍记为 passed。无 PG 环境时报告必须写“未验证/SKIP”，不得写成“PostgreSQL 测试通过”；本机已通过 WSL PostgreSQL 18.6 实测（115 tests，PG 集成不再 SKIP，见 `document/wsl-postgres.md`）。设置 URL 时也只覆盖导入+搜索，并非与 SQLite 同一组用例。
+- **PG SKIP 语义**：`LKB_TEST_PG_URL` 未设置或为空白时，测试打印 `SKIP postgres integration test: ... refusing to pretend it passed` 后直接 `return`；Cargo 仍记为 passed。无 PG 环境时报告必须写“未验证/SKIP”，不得写成“PostgreSQL 测试通过”；本机已通过 WSL PostgreSQL 18.6 实测（139 tests，PG 集成不再 SKIP，见 `document/wsl-postgres.md`）。设置 URL 时也只覆盖导入+搜索，并非与 SQLite 同一组用例。
 - 测试默认不触网；但代码中没有“无出站请求”的断言。
 
 **P1 出口标准（`document/roadmap.md`，验收以此为准）**：Recall@5 ≥ 0.8（20 条问题）；20/20 引用可回跳到源文件行号且文本包含答案；断网可完成全流程；删索引重建后 doc_id 集合一致且 Recall 下降 ≤ 0.05；能力未启用/不可用必须在 `degraded[]` 声明；重复导入幂等；未认证 401、缺 CSRF 403、loopback 启动保护；模型 stub/timeout/retry 生效；Wiki revision +1 且旧版可读、新版可检索；导入导出计数 20/0/0；干净目录单二进制启动；设置 `LKB_TEST_PG_URL` 时与 SQLite 跑同一组用例。

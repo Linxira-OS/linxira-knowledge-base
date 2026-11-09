@@ -32,6 +32,37 @@ jobs:
       - name: Test
         run: cargo test --locked
 
+  # Desktop shell (Tauri 2) is a standalone crate under desktop/src-tauri.
+  # `cargo check`/`cargo test` only compile it: they do not bundle, so the
+  # sidecar binaries and resources/web build inputs are not needed (verified:
+  # check/test pass on a clean tree). The real deb/AppImage/NSIS packaging is
+  # exercised by the release workflow.
+  desktop:
+    name: desktop (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, windows-latest]
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install Tauri system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev \
+            patchelf libssl-dev libxdo-dev file
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri -> target
+          key: ci-desktop
+      - name: Check
+        run: cargo check --locked --manifest-path desktop/src-tauri/Cargo.toml
+      - name: Test
+        run: cargo test --locked --manifest-path desktop/src-tauri/Cargo.toml
+
   web:
     name: web (ubuntu-latest)
     runs-on: ubuntu-latest

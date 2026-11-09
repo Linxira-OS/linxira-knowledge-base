@@ -1,8 +1,11 @@
 name: Release
 
-# Build and publish the two release shapes of the single `lkb` binary:
+# Build and publish the release artifacts of the single `lkb` binary:
 #
-#   * personal (solo)  -> native archives per target (+ the web/dist SPA archive)
+#   * personal (solo)  -> native CLI archives per target (+ the web/dist SPA archive)
+#   * desktop          -> Tauri installers/portables (Windows NSIS + portable zip,
+#                         Linux deb/AppImage + portable tar.gz). macOS is NOT
+#                         built or published (see document/release-process.md).
 #   * enterprise       -> GHCR container image + compose/nginx bundle
 #
 # The same binary serves every profile (solo SQLite through enterprise
@@ -19,8 +22,8 @@ on:
       - "v*"
   workflow_dispatch:
     inputs:
-      tag:
-        description: "Release tag, e.g. v0.2.0 (must match Cargo.toml and web/package.json)"
+      release_tag:
+        description: "Release tag, e.g. v0.2.1 (must match Cargo.toml and web/package.json)"
         required: true
         type: string
       dry_run:
@@ -36,7 +39,7 @@ permissions:
   attestations: write
 
 concurrency:
-  group: release-${{ github.event_name == 'push' && github.ref_name || inputs.tag }}
+  group: release-${{ github.event_name == 'push' && github.ref_name || inputs.release_tag }}
   cancel-in-progress: false
 
 env:
@@ -68,7 +71,7 @@ jobs:
       - name: Resolve tag, versions, notes and matrix
         id: meta
         env:
-          INPUT_TAG: ${{ inputs.tag }}
+          INPUT_TAG: ${{ inputs.release_tag }}
           INPUT_DRY_RUN: ${{ inputs.dry_run }}
         run: |
           set -euo pipefail
@@ -114,20 +117,25 @@ jobs:
             [ -z "$lock_version" ] || [ "$lock_version" = "$version" ] || fail "web/package-lock.json version '${lock_version}' != tag '${tag}'"
           done <<< "$lock_versions"
 
+          # The desktop shell ships in the same release: keep its crate, lockfile
+          # and Tauri bundle version pinned to the tag.
+          desktop_version="$(sed -n 's/^version *= *"\([^"]*\)".*/\1/p' desktop/src-tauri/Cargo.toml | head -n 1)"
+          desktop_lock_version="$(awk '/^name = "lkb-desktop"/{p=1;next} p && /^version = /{gsub(/[^0-9.]/,"");print;exit}' desktop/src-tauri/Cargo.lock)"
+          desktop_tauri_version="$(python3 -c "import json;print(json.load(open('desktop/src-tauri/tauri.conf.json'))['version'])")"
+          [ "$desktop_version" = "$version" ] || fail "desktop/src-tauri/Cargo.toml version '${desktop_version}' != tag '${tag}'"
+          [ "$desktop_lock_version" = "$version" ] || fail "desktop/src-tauri/Cargo.lock version '${desktop_lock_version}' != tag '${tag}'"
+          [ "$desktop_tauri_version" = "$version" ] || fail "desktop/src-tauri/tauri.conf.json version '${desktop_tauri_version}' != tag '${tag}'"
+
           # A release without its CHANGELOG section is not publishable.
           bash scripts/release-notes.sh "$tag" --out release-notes.md
 
-          # Runtime labels below are the current GitHub-hosted images:
+          # Runtime labels below are the current GitHub-hosted images. macOS is
+          # intentionally not built or published (see document/release-process.md).
           #   ubuntu-22.04    -> Linux x86_64 on glibc 2.35 (older-glibc compatible)
           #   windows-latest  -> Windows Server 2025, MSVC toolchain
-          #   macos-15-intel  -> macOS x86_64 (macos-13/macos-14 are retired; this is
-          #                      the official Intel label until August 2027)
-          #   macos-15        -> macOS arm64
           matrix='{"include":[
             {"target":"x86_64-unknown-linux-gnu","os":"ubuntu-22.04","bin":"lkb","archive":"tar.gz"},
-            {"target":"x86_64-pc-windows-msvc","os":"windows-latest","bin":"lkb.exe","archive":"zip"},
-            {"target":"x86_64-apple-darwin","os":"macos-15-intel","bin":"lkb","archive":"tar.gz"},
-            {"target":"aarch64-apple-darwin","os":"macos-15","bin":"lkb","archive":"tar.gz"}
+            {"target":"x86_64-pc-windows-msvc","os":"windows-latest","bin":"lkb.exe","archive":"zip"}
           ]}'
 
           {
@@ -385,6 +393,171 @@ jobs:
           if-no-files-found: error
 
   # ---------------------------------------------------------------------------
+  # desktop-windows: Tauri shell for Windows (NSIS installer + portable zip).
+  # Inputs come from the `rust` (sidecar binary) and `web` (SPA) jobs, so the
+  # desktop package always carries the same engine as the CLI archives.
+  # Tauri CLI is pinned to the 2.x line; bump deliberately.
+  # ---------------------------------------------------------------------------
+  desktop-windows:
+    name: desktop (windows x64)
+    needs: [prepare, rust, web]
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.ref }}
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri -> target
+          key: desktop-x86_64-pc-windows-msvc
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - uses: actions/download-artifact@v8
+        with:
+          name: lkb-x86_64-pc-windows-msvc
+          path: artifacts
+      - uses: actions/download-artifact@v8
+        with:
+          name: web-dist
+          path: web-dist
+      - name: Prepare desktop inputs (sidecar + web resources)
+        run: |
+          set -euo pipefail
+          # Same layout `scripts/build-sidecar.ps1` produces, reusing the binary
+          # the `rust` job already built for this target: Tauri expects
+          # binaries/lkb-<triple>.exe and resources/web/.
+          mkdir -p desktop/src-tauri/binaries
+          cp artifacts/lkb.exe desktop/src-tauri/binaries/lkb-x86_64-pc-windows-msvc.exe
+          chmod +x desktop/src-tauri/binaries/lkb-x86_64-pc-windows-msvc.exe
+          if [ -f web-dist/dist/index.html ]; then src=web-dist/dist; else src=web-dist; fi
+          rm -rf desktop/src-tauri/resources/web
+          mkdir -p desktop/src-tauri/resources/web
+          cp -R "$src/." desktop/src-tauri/resources/web/
+          test -f desktop/src-tauri/resources/web/index.html
+      - name: Build NSIS installer
+        working-directory: desktop
+        run: npx --yes @tauri-apps/cli@2.12.4 build --bundles nsis
+      - name: Assemble portable zip (PowerShell; Git Bash has no `zip`)
+        shell: pwsh
+        run: |
+          $version = "${{ needs.prepare.outputs.version }}"
+          $release = "desktop/src-tauri/target/release"
+          $stage = "staging/lkb"
+          Remove-Item -Recurse -Force staging -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path "$stage/resources" | Out-Null
+          Copy-Item "$release/lkb-desktop.exe" "$stage/lkb-desktop.exe"
+          # Take the sidecar/web resources from the prepared inputs instead of
+          # relying on what `tauri build` copies next to the executable.
+          Copy-Item "desktop/src-tauri/binaries/lkb-x86_64-pc-windows-msvc.exe" "$stage/lkb.exe"
+          Copy-Item -Recurse -Force "desktop/src-tauri/resources/web" "$stage/resources/web"
+          if (Test-Path "$release/WebView2Loader.dll") { Copy-Item "$release/WebView2Loader.dll" $stage }
+          Copy-Item LICENSE, README.md -Destination $stage
+          New-Item -ItemType Directory -Force -Path dist-assets | Out-Null
+          Compress-Archive -Path $stage -DestinationPath "dist-assets/lkb-solo-v$version-windows-x64-portable.zip" -Force
+      - name: Collect desktop assets
+        run: |
+          set -euo pipefail
+          version="${{ needs.prepare.outputs.version }}"
+          setup="$(find desktop/src-tauri/target/release/bundle/nsis -maxdepth 1 -type f -name '*setup.exe' -print -quit)"
+          [ -n "$setup" ] || { echo "::error::NSIS setup.exe not found"; exit 1; }
+          cp "$setup" "dist-assets/lkb-solo-v${version}-windows-x64-setup.exe"
+          bash scripts/check-archive.sh "dist-assets/lkb-solo-v${version}-windows-x64-portable.zip" desktop-portable
+          ls -l dist-assets
+      - uses: actions/upload-artifact@v7
+        with:
+          name: asset-desktop-windows
+          path: dist-assets/*
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # desktop-linux: Tauri shell for Linux (deb + AppImage + portable tar.gz).
+  # ---------------------------------------------------------------------------
+  desktop-linux:
+    name: desktop (linux x86_64)
+    needs: [prepare, rust, web]
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.ref }}
+          fetch-depth: 0
+      - name: Install Tauri system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev \
+            patchelf libssl-dev libxdo-dev file libfuse2
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri -> target
+          key: desktop-x86_64-unknown-linux-gnu
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - uses: actions/download-artifact@v8
+        with:
+          name: lkb-x86_64-unknown-linux-gnu
+          path: artifacts
+      - uses: actions/download-artifact@v8
+        with:
+          name: web-dist
+          path: web-dist
+      - name: Prepare desktop inputs (sidecar + web resources)
+        run: |
+          set -euo pipefail
+          mkdir -p desktop/src-tauri/binaries
+          cp artifacts/lkb desktop/src-tauri/binaries/lkb-x86_64-unknown-linux-gnu
+          chmod +x desktop/src-tauri/binaries/lkb-x86_64-unknown-linux-gnu
+          if [ -f web-dist/dist/index.html ]; then src=web-dist/dist; else src=web-dist; fi
+          rm -rf desktop/src-tauri/resources/web
+          mkdir -p desktop/src-tauri/resources/web
+          cp -R "$src/." desktop/src-tauri/resources/web/
+          test -f desktop/src-tauri/resources/web/index.html
+      - name: Build deb + AppImage
+        working-directory: desktop
+        env:
+          # linuxdeploy/appimagetool ship as AppImages; extract instead of
+          # mounting so the build works on runners without FUSE.
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+        run: npx --yes @tauri-apps/cli@2.12.4 build --bundles deb,appimage
+      - name: Collect desktop assets
+        run: |
+          set -euo pipefail
+          version="${{ needs.prepare.outputs.version }}"
+          bundle="desktop/src-tauri/target/release/bundle"
+          deb="$(find "$bundle/deb" -maxdepth 1 -type f -name '*.deb' -print -quit)"
+          appimage="$(find "$bundle/appimage" -maxdepth 1 -type f -name '*.AppImage' -print -quit)"
+          [ -n "$deb" ] || { echo "::error::deb not found"; exit 1; }
+          [ -n "$appimage" ] || { echo "::error::AppImage not found"; exit 1; }
+          [ "$(dpkg-deb -f "$deb" Architecture)" = "amd64" ] || { echo "::error::unexpected deb architecture"; exit 1; }
+          [ "$(dpkg-deb -f "$deb" Version)" = "$version" ] || { echo "::error::deb version != ${version}"; exit 1; }
+          cp "$deb" "dist-assets/lkb-solo-v${version}-linux-amd64.deb"
+          cp "$appimage" "dist-assets/lkb-solo-v${version}-linux-amd64.AppImage"
+          # portable-tar.sh expects the sidecar (suffix stripped) and the web
+          # resources next to the executable; stage them from the prepared
+          # inputs so the assembly never depends on `tauri build`'s copy step.
+          release_dir="desktop/src-tauri/target/release"
+          cp desktop/src-tauri/binaries/lkb-x86_64-unknown-linux-gnu "$release_dir/lkb"
+          rm -rf "$release_dir/resources"
+          mkdir -p "$release_dir/resources"
+          cp -R desktop/src-tauri/resources/web "$release_dir/resources/web"
+          bash deploy/desktop/portable-tar.sh "$release_dir" dist-assets "$version"
+          bash scripts/check-archive.sh "dist-assets/lkb-solo-v${version}-linux-amd64.tar.gz" desktop-portable
+          ls -l dist-assets
+      - uses: actions/upload-artifact@v7
+        with:
+          name: asset-desktop-linux
+          path: dist-assets/*
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
   # docker: enterprise image. Pushed only for a real release; a dry run still
   # builds it, loads it locally and smokes the container.
   # ---------------------------------------------------------------------------
@@ -471,7 +644,7 @@ jobs:
   # ---------------------------------------------------------------------------
   release:
     name: release
-    needs: [prepare, quality, package, assets, docker]
+    needs: [prepare, quality, package, assets, desktop-windows, desktop-linux, docker]
     runs-on: ubuntu-latest
     steps:
       - name: Download release assets

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Verify the file manifest of a release archive before it is published.
 #
-# Usage: scripts/check-archive.sh <archive> <solo|web|enterprise>
+# Usage: scripts/check-archive.sh <archive> <solo|web|enterprise|desktop-portable>
 #
 # Checks that
 #   - the archive is readable, has exactly one top-level directory,
@@ -12,7 +12,7 @@ set -euo pipefail
 
 usage() {
     cat >&2 <<'EOF'
-usage: scripts/check-archive.sh <archive.tar.gz|archive.zip> <solo|web|enterprise>
+usage: scripts/check-archive.sh <archive.tar.gz|archive.zip> <solo|web|enterprise|desktop-portable>
 EOF
 }
 
@@ -27,8 +27,8 @@ if [ ! -f "$archive" ]; then
     exit 1
 fi
 case "$kind" in
-    solo|web|enterprise) : ;;
-    *) echo "error: unknown kind '$kind' (expected solo, web or enterprise)" >&2; exit 2 ;;
+    solo|web|enterprise|desktop-portable) : ;;
+    *) echo "error: unknown kind '$kind' (expected solo, web, enterprise or desktop-portable)" >&2; exit 2 ;;
 esac
 
 tmp="$(mktemp)"
@@ -93,6 +93,21 @@ case "$kind" in
         require deploy/README.md
         require web/dist/index.html
         require LICENSE
+        ;;
+    desktop-portable)
+        # Tauri portable layout (Windows zip / Linux tar.gz): the app, the
+        # renamed sidecar, the bundled SPA resources and the licence/readme.
+        if ! has lkb-desktop && ! has lkb-desktop.exe; then
+            echo "error: $archive has neither $root/lkb-desktop nor $root/lkb-desktop.exe" >&2
+            exit 1
+        fi
+        if ! has lkb && ! has lkb.exe; then
+            echo "error: $archive is missing the sidecar ($root/lkb or $root/lkb.exe)" >&2
+            exit 1
+        fi
+        require resources/web/index.html
+        require LICENSE
+        require README.md
         ;;
 esac
 
