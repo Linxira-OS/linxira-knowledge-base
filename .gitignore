@@ -1,0 +1,26 @@
+__pycache__/
+.venv/
+target/
+target-*/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+.lkb/
+data/
+blobs/
+
+# 本地环境变量文件不入库（密钥只从环境变量读取，见 README 安全要点）
+.env
+.env.local
+
+# experiments/ui-shells: 原型依赖与构建/运行产物不入库
+node_modules/
+experiments/**/dist/
+experiments/**/release/
+experiments/**/target/
+experiments/**/src-tauri/target/
+experiments/**/.vite/
+experiments/**/profiles/
+experiments/**/edge-*
+
+# 注意：web/dist（React SPA 构建产物）有意提交，供独立静态部署；请勿为其添加忽略规则

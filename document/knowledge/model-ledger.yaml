@@ -1,0 +1,109 @@
+# Model ledger consumed by agents and code.
+# Field semantics, staleness rules, and review cadence are defined in
+# document/knowledge-freshness.md. Keep both files in sync.
+
+schema_version: "1.0"
+last_verified_at: "2026-11-08"
+next_review_at: "2027-02-06"
+
+entries:
+  - id: jev
+    name: "Jev"
+    vendor: "TypeSafe AI"
+    version: "1.14"
+    category: decision
+
+    primitives:
+      - choice
+      - score
+      - noul
+
+    modalities:
+      - name: text
+        status: supported
+      - name: image
+        status: experimental
+
+    box_output:
+      supported: true
+      status: experimental
+
+    long_context_tokens:
+      value: 262144
+      status: experimental
+
+    pricing:
+      current:
+        input:
+          amount: 0.084
+          currency: USD
+          unit: per_million_tokens
+        output:
+          amount: 0
+          currency: USD
+          unit: per_million_tokens
+          status: free
+        source_url: "https://jevai.net/"
+        verified_at: "2026-11-08"
+      historical:
+        status: earlier
+        input:
+          amount: 0.042
+          currency: USD
+          unit: per_million_tokens
+        note: "Earlier price; must not be presented as current."
+        source_url: "https://jev.kuhung.me/"
+        verified_at: "2026-11-08"
+
+    latency:
+      official:
+        min_ms: 70
+        max_ms: 500
+        source_url: "https://jev.kuhung.me/"
+        verified_at: "2026-11-08"
+        note: "Public guidance reported by an independent analysis; not re-verified on the official site."
+      measured:
+        value_ms: 161
+        scope: single_task
+        note: "Independent measurement; not a general latency guarantee."
+        source_url: "https://jev.kuhung.me/"
+        verified_at: "2026-11-08"
+
+    capabilities:
+      - classification
+      - routing
+      - scoring
+      - extraction
+      - content_moderation
+      - guardrails
+      - fact_checking
+      - quality_gate
+
+    limits:
+      - no_long_form_generation
+      - no_multi_turn_dialogue
+      - not_a_generation_model_replacement
+      - cannot_recover_documents_missed_during_retrieval
+
+    sources:
+      - url: "https://jevai.net/"
+        verified_at: "2026-11-08"
+        role: official_product_site
+      - url: "https://jev.kuhung.me/"
+        verified_at: "2026-11-08"
+        role: independent_analysis
+      - url: "https://aifabrice.github.io/jev-rag/zh/jev-rag-guide.html"
+        verified_at: "2026-11-08"
+        role: community_rag_guide
+
+    verified_at: "2026-11-08"
+    expires_at: "2027-02-06"
+
+    notes:
+      - "Decision model; not autoregressive."
+      - "RLCD: Reinforcement Learning for Calibrated Decisions."
+      - "Experimental capabilities: PNG/JPEG image input, Box output, 262144-token long context."
+      - "Current price is USD 0.084 per million input tokens; output tokens are free."
+      - "Historical price USD 0.042 per million input tokens is earlier and must not be presented as current."
+      - "Latency 70-500ms is public guidance reported by an independent analysis; not re-verified on the official site. 161ms is a single-task independent measurement and must not be generalized."
+      - "BEIR NFCorpus nDCG@10 numbers from aifabrice/jev-rag are independent self-tests, not official MTEB."

@@ -1,0 +1,1 @@
+var e={viewer:1,editor:2,space_admin:3,space_owner:4};function t(t,n){if(!t)return!1;let r=e[t];return r!==void 0&&r>=e[n]}export{t};

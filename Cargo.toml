@@ -1,0 +1,56 @@
+[package]
+name = "lkb"
+version = "0.2.0"
+edition = "2021"
+rust-version = "1.82"
+description = "Layered knowledge base: one kernel, three profiles, files as source of truth"
+license = "MIT"
+
+[features]
+default = []
+# Optional, pure-Rust PDF text extraction. It is not part of the default build.
+pdf = ["dep:pdf-extract"]
+
+[dependencies]
+anyhow = "1"
+argon2 = "0.5"
+async-trait = "0.1"
+ammonia = "4"
+axum = "0.8"
+chrono = { version = "0.4", features = ["serde"] }
+clap = { version = "4", features = ["derive"] }
+futures-util = "0.3"
+hex = "0.4"
+hmac = "0.12"
+pdf-extract = { version = "0.7", optional = true }
+pulldown-cmark = "0.12"
+rand = "0.8"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+sqlx = { version = "0.8", default-features = false, features = [
+    # In sqlx 0.8 the `sqlite` feature links the bundled libsqlite3 build.
+    # `sqlite-unbundled` is the opt-out; do not enable it.
+    "runtime-tokio-rustls",
+    "any",
+    "sqlite",
+    "postgres",
+    "chrono",
+    "uuid",
+    "migrate",
+] }
+thiserror = "2"
+tokio = { version = "1", features = ["full"] }
+tokio-stream = { version = "0.1", features = ["sync"] }
+toml = "0.8"
+tower = { version = "0.5", features = ["util"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[dev-dependencies]
+assert_cmd = "2"
+tempfile = "3"
+
+[profile.release]
+lto = "thin"

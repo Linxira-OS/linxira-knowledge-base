@@ -1,0 +1,20 @@
+{"query": "单内核三档 profile 的差异为什么只能出现在装配层", "expected_paths": ["docs/01-分层架构.md"]}
+{"query": "治理信封包含哪些字段，solo 档的 tenant_id 和 space_id 取什么值", "expected_paths": ["docs/02-治理字段.md"]}
+{"query": "召回期 ACL 的 SQL 条件由哪几部分组成", "expected_paths": ["docs/03-召回期ACL.md"]}
+{"query": "SQLite FTS5 的 trigram 如何切分中文查询", "expected_paths": ["docs/04-FTS5与中文trigram.md"]}
+{"query": "hybrid 模式什么时候真正启用，RRF 的分数公式是什么", "expected_paths": ["docs/05-hybrid与RRF.md"]}
+{"query": "doc_id 如何派生，重建后是否稳定", "expected_paths": ["docs/06-文档身份与重建.md"]}
+{"query": "Recall@K 和 MRR 分别怎么计算", "expected_paths": ["docs/07-评测Recall与MRR.md"]}
+{"query": "Jev 重排只作用于多少条候选，失败时写什么降级码", "expected_paths": ["docs/08-Jev重排.md"]}
+{"query": "not_enabled 与 unavailable 有什么区别，安全能力为什么不降级", "expected_paths": ["docs/09-降级语义.md"]}
+{"query": "浏览器会话 cookie 如何存储，CSRF 缺失返回什么状态码", "expected_paths": ["docs/10-认证与会话.md"]}
+{"query": "编辑 Wiki 页面后 version 和 revision 如何变化", "expected_paths": ["docs/11-Wiki与revision.md"]}
+{"query": "lkb import 接受哪些输入，导入报告包含哪些计数", "expected_paths": ["docs/12-导入导出.md"]}
+{"query": "模型密钥怎么配置，lkb config check 会显示密钥原文吗", "expected_paths": ["docs/13-配置与密钥.md"]}
+{"query": "SQLite 与 PostgreSQL 的关键词打分算法有什么区别", "expected_paths": ["docs/14-SQLite与PostgreSQL.md"]}
+{"query": "solo 部署需要哪些文件，/health 返回哪些字段", "expected_paths": ["docs/15-单二进制与部署.md"]}
+{"query": "ACL JSON 解析失败和 FTS5 不可用分别如何处理", "expected_paths": ["docs/16-错误处理与fail-closed.md"]}
+{"query": "knowledge_as_of 字段的含义是什么，模型价格版本应该查哪里", "expected_paths": ["docs/17-知识时效与台账.md"]}
+{"query": "SAG 的 event 和 entity 分别是什么，P1 为什么只把它当参考", "expected_paths": ["docs/18-SAG事件实体参考.md"]}
+{"query": "P1 出口标准对 Recall@5 和引用回跳的要求是什么", "expected_paths": ["docs/19-路线图与验收.md"]}
+{"query": "为什么不能把 chunk_id 当作长期引用锚点", "expected_paths": ["docs/20-常见误用.md"]}

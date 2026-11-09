@@ -1,0 +1,363 @@
+@import 'tailwindcss';
+
+/* ---------------------------------------------------------------------------
+   Design tokens — 现代极简 / iOS(HIG) 取向：中性底色 + 1px 边框 + 唯一强调色
+   （iOS 系统绿）。深色是主工作面，浅色是同等公民。token 名称与
+   document/frontend-shell-comparison.md §8.2 一致。
+   --------------------------------------------------------------------------- */
+@theme inline {
+  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI Variable Text', 'Segoe UI',
+    system-ui, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'Cascadia Code', 'Segoe UI Mono', Menlo, Consolas, monospace;
+
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-panel: var(--panel);
+  --color-raise: var(--raise);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-fg: var(--fg);
+  --color-fg-2: var(--fg-2);
+  --color-fg-3: var(--fg-3);
+  --color-accent: var(--accent);
+  --color-accent-weak: var(--accent-weak);
+  --color-accent-line: var(--accent-line);
+  --color-on-accent: var(--on-accent);
+  --color-warn: var(--warn);
+  --color-warn-weak: var(--warn-weak);
+  --color-danger: var(--danger);
+  --color-danger-weak: var(--danger-weak);
+  --color-code-bg: var(--code-bg);
+  --color-code-fg: var(--code-fg);
+}
+
+:root {
+  color-scheme: light;
+  --canvas: #f5f5f7;
+  --surface: #ffffff;
+  --panel: #fbfbfc;
+  --raise: #ffffff;
+  --line: #e6e6e9;
+  --line-strong: #d8d8dd;
+  --fg: #15151a;
+  --fg-2: #52525b;
+  --fg-3: #6f6f76;
+  --accent: #1a7f37;
+  --accent-weak: #edf6f0;
+  --accent-line: #cfe6d6;
+  --on-accent: #ffffff;
+  --warn: #9a5b00;
+  --warn-weak: #fdf6e7;
+  --danger: #b3261e;
+  --danger-weak: #fdecea;
+  --code-bg: #f7f7f9;
+  --code-fg: #27272a;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --canvas: #0d0d0f;
+  --surface: #131316;
+  --panel: #101012;
+  --raise: #1a1a1e;
+  --line: #26262b;
+  --line-strong: #35353b;
+  --fg: #f4f4f5;
+  --fg-2: #a1a1aa;
+  --fg-3: #8a8a93;
+  --accent: #32d74b;
+  --accent-weak: #16281b;
+  --accent-line: #24432c;
+  --on-accent: #08130a;
+  --warn: #ffb340;
+  --warn-weak: #2a2114;
+  --danger: #ff6b60;
+  --danger-weak: #2c1614;
+  --code-bg: #0b0b0d;
+  --code-fg: #e4e4e7;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    font-family: var(--font-sans);
+    background: var(--canvas);
+    color: var(--fg);
+    font-size: 14px;
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background: var(--accent-weak);
+    color: var(--fg);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  code,
+  pre,
+  kbd {
+    font-family: var(--font-mono);
+  }
+
+  /* Form controls share one look; no framework dependency. */
+  input,
+  textarea,
+  select,
+  button {
+    font: inherit;
+    color: inherit;
+  }
+
+  input[type='text'],
+  input[type='search'],
+  input[type='password'],
+  input[type='number'],
+  input[type='url'],
+  input:not([type]),
+  textarea,
+  select {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 13px;
+    outline: none;
+    transition: border-color 150ms ease;
+    width: 100%;
+  }
+
+  input:hover,
+  textarea:hover,
+  select:hover {
+    border-color: var(--line-strong);
+  }
+
+  input:focus,
+  textarea:focus,
+  select:focus {
+    border-color: var(--accent-line);
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--fg-3);
+  }
+
+  input:disabled,
+  textarea:disabled,
+  select:disabled,
+  button:disabled {
+    opacity: 0.55;
+  }
+}
+
+.thin-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+.thin-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.thin-scroll::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border-radius: 999px;
+}
+
+.thin-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Streaming caret — the only animation besides the 150ms colour transition. */
+@keyframes lkb-caret {
+  0%,
+  45% {
+    opacity: 1;
+  }
+  55%,
+  100% {
+    opacity: 0;
+  }
+}
+
+.streaming-caret::after {
+  content: '▌';
+  margin-left: 1px;
+  color: var(--accent);
+  animation: lkb-caret 1s steps(1) infinite;
+}
+
+/* ---------------------------------------------------------------------------
+   Article typography (`prose-lkb`): applied to backend-rendered HTML and to
+   the local markdown preview, so read / preview share one look.
+   --------------------------------------------------------------------------- */
+.prose-lkb {
+  color: var(--fg);
+  font-size: 14px;
+  line-height: 1.8;
+  overflow-wrap: break-word;
+}
+
+.prose-lkb > *:first-child {
+  margin-top: 0;
+}
+
+.prose-lkb h1,
+.prose-lkb h2,
+.prose-lkb h3,
+.prose-lkb h4 {
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+  margin: 1.6em 0 0.6em;
+}
+
+.prose-lkb h1 {
+  font-size: 22px;
+  letter-spacing: -0.02em;
+}
+
+.prose-lkb h2 {
+  font-size: 17px;
+  padding-bottom: 0.35em;
+  border-bottom: 1px solid var(--line);
+}
+
+.prose-lkb h3 {
+  font-size: 15px;
+}
+
+.prose-lkb h4 {
+  font-size: 13.5px;
+  color: var(--fg-2);
+}
+
+.prose-lkb p,
+.prose-lkb ul,
+.prose-lkb ol,
+.prose-lkb blockquote,
+.prose-lkb table,
+.prose-lkb pre {
+  margin: 0.85em 0;
+}
+
+.prose-lkb ul,
+.prose-lkb ol {
+  padding-left: 1.4em;
+}
+
+.prose-lkb ul {
+  list-style: disc;
+}
+
+.prose-lkb ol {
+  list-style: decimal;
+}
+
+.prose-lkb li {
+  margin: 0.25em 0;
+}
+
+.prose-lkb a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+}
+
+.prose-lkb strong {
+  font-weight: 600;
+}
+
+.prose-lkb code {
+  background: var(--code-bg);
+  color: var(--code-fg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0.1em 0.35em;
+  font-size: 12.5px;
+}
+
+.prose-lkb pre {
+  background: var(--code-bg);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 14px;
+  overflow-x: auto;
+}
+
+.prose-lkb pre code {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  font-size: 12.5px;
+  line-height: 1.65;
+}
+
+.prose-lkb blockquote {
+  border-left: 2px solid var(--accent-line);
+  padding: 0.1em 0 0.1em 0.9em;
+  color: var(--fg-2);
+}
+
+.prose-lkb table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.prose-lkb th,
+.prose-lkb td {
+  border: 1px solid var(--line);
+  padding: 6px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.prose-lkb th {
+  background: var(--panel);
+  font-weight: 600;
+}
+
+.prose-lkb hr {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 1.5em 0;
+}
+
+.prose-lkb img {
+  max-width: 100%;
+  border-radius: 12px;
+}
+
+.prose-lkb .muted {
+  color: var(--fg-3);
+  font-size: 12px;
+}
+
+/* Citation jump highlight in the reader. */
+.lkb-hit {
+  background: var(--accent-weak);
+  border-bottom: 1px solid var(--accent-line);
+  border-radius: 3px;
+  scroll-margin-top: 24px;
+}

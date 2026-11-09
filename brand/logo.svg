@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="144" height="54" viewBox="0 0 144 54" role="img" aria-labelledby="lkb-logo-title">
+  <title id="lkb-logo-title">lkb — Layered Knowledge Base</title>
+  <desc>Three stacked knowledge layers forming a capital L, with a single green dot for retrieval.</desc>
+  <!-- mark：32 网格直接放大 1.5 倍，左下角落在基线上 -->
+  <g transform="translate(2 6) scale(1.5)">
+    <g fill="#0d0d0f">
+      <rect x="4" y="4" width="8" height="7.25" rx="2"/>
+      <path d="M6 12.75H10A2 2 0 0 1 12 14.75V18.8A1.2 1.2 0 0 0 13.2 20H26A2 2 0 0 1 28 22V26A2 2 0 0 1 26 28H6A2 2 0 0 1 4 26V14.75A2 2 0 0 1 6 12.75Z"/>
+    </g>
+    <circle cx="20" cy="12" r="3.5" fill="#1a7f37"/>
+  </g>
+  <!-- 小写 lkb：几何笔画，全部为路径，不依赖任何字体 -->
+  <g transform="translate(58 0)" fill="none" stroke="#0d0d0f" stroke-width="6.5">
+    <path d="M9.25 6V48"/>
+    <path d="M23.75 6V48"/>
+    <path d="M23.75 33 36.45 20.3"/>
+    <path d="M23.75 33 36.45 45.7"/>
+    <path d="M51 6V48"/>
+    <circle cx="62.75" cy="33" r="11.75"/>
+  </g>
+</svg>

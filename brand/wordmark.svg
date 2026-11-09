@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="84" height="54" viewBox="0 0 84 54" role="img" aria-labelledby="lkb-wordmark-title">
+  <title id="lkb-wordmark-title">lkb</title>
+  <desc>Geometric lowercase lkb: x-height 30, ascender 42, stroke 6.5, circular bowl on the b.</desc>
+  <!-- 与主标同一套单位：基线 48、x-height 30（y18–48）、上伸 42（y6–48） -->
+  <g fill="none" stroke="#0d0d0f" stroke-width="6.5">
+    <path d="M9.25 6V48"/>
+    <path d="M23.75 6V48"/>
+    <path d="M23.75 33 36.45 20.3"/>
+    <path d="M23.75 33 36.45 45.7"/>
+    <path d="M51 6V48"/>
+    <circle cx="62.75" cy="33" r="11.75"/>
+  </g>
+</svg>
