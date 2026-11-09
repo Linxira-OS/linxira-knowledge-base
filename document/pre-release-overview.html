@@ -1,0 +1,1872 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta name="description" content="Linxira Knowledge Base 0.2.z 发布前说明：三档 profile、配置边界、检索加权链路、零模型基线、云控制台风格与权限组页面示意。">
+<title>Linxira Knowledge Base · 0.2.z 发布前说明</title>
+<style>
+/* ---------------------------------------------------------------------------
+   Tokens mirror web/src/index.css (dark). The only accent is iOS system green.
+   This file is intentionally self-contained: no fonts, images, scripts, CDNs.
+   --------------------------------------------------------------------------- */
+:root {
+  --canvas: #0d0d0f;
+  --surface: #131316;
+  --panel: #101012;
+  --raise: #1a1a1e;
+  --line: #26262b;
+  --line-strong: #35353b;
+  --fg: #f4f4f5;
+  --fg-2: #a1a1aa;
+  --fg-3: #8a8a93;
+  --accent: #32d74b;
+  --accent-weak: #16281b;
+  --accent-line: #24432c;
+  --on-accent: #08130a;
+  --warn: #ffb340;
+  --warn-weak: #2a2114;
+  --danger: #ff6b60;
+  --danger-weak: #2c1614;
+  --code-bg: #0b0b0d;
+  --code-fg: #e4e4e7;
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text", "Segoe UI", system-ui, "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Code", "Segoe UI Mono", Menlo, Consolas, monospace;
+  --maxw: 1240px;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--canvas);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+a { color: inherit; text-decoration: none; }
+button, input, select, textarea { font: inherit; color: inherit; }
+::selection { background: var(--accent-weak); color: var(--fg); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+code, pre, kbd { font-family: var(--font-mono); }
+code {
+  background: var(--code-bg);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: .88em;
+  color: var(--code-fg);
+  white-space: nowrap;
+}
+pre {
+  margin: 0;
+  background: var(--code-bg);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 14px 16px;
+  overflow-x: auto;
+  font-size: 11.5px;
+  line-height: 1.75;
+  color: var(--code-fg);
+}
+.wrap { width: 100%; max-width: var(--maxw); margin: 0 auto; padding: 0 32px; }
+.mono { font-family: var(--font-mono); }
+.muted { color: var(--fg-3); }
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+}
+
+/* Sticky document bar ------------------------------------------------------- */
+.docbar {
+  position: sticky; top: 0; z-index: 30;
+  background: rgba(13, 13, 15, .9);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--line);
+}
+.docbar-inner {
+  min-height: 56px; display: flex; align-items: center; justify-content: space-between;
+  gap: 24px;
+}
+.brand { display: flex; align-items: center; gap: 9px; font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+.brand .dot {
+  width: 7px; height: 7px; border-radius: 50%; background: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-weak); flex: 0 0 auto;
+}
+.brand .sub { color: var(--fg-3); font-weight: 400; }
+.docnav { display: flex; align-items: center; gap: 18px; overflow-x: auto; scrollbar-width: none; }
+.docnav::-webkit-scrollbar { display: none; }
+.docnav a { font-size: 11.5px; color: var(--fg-3); white-space: nowrap; }
+.docnav a:hover { color: var(--fg); }
+.docver {
+  display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+  font: 500 10px var(--font-mono); letter-spacing: .06em;
+  border: 1px solid var(--accent-line); background: var(--accent-weak);
+  color: var(--accent); border-radius: 999px; padding: 4px 8px;
+}
+
+/* Hero --------------------------------------------------------------------- */
+.hero { padding: 86px 0 62px; border-bottom: 1px solid var(--line); }
+.hero-grid {
+  display: grid; grid-template-columns: minmax(0, 1.42fr) minmax(310px, .58fr);
+  gap: 64px; align-items: end;
+}
+.eyebrow {
+  font: 500 10px var(--font-mono); letter-spacing: .17em; text-transform: uppercase;
+  color: var(--accent); display: flex; align-items: center; gap: 9px;
+}
+.eyebrow::before { content: ""; width: 18px; height: 1px; background: var(--accent); display: block; }
+h1 {
+  margin: 20px 0 0; font-size: clamp(42px, 5.6vw, 68px); line-height: 1.01;
+  letter-spacing: -.045em; font-weight: 600;
+}
+h1 .line { display: block; color: var(--fg-2); }
+.hero .lead {
+  max-width: 58ch; margin: 24px 0 0; font-size: 16.5px; line-height: 1.62;
+  color: var(--fg-2); letter-spacing: -.005em;
+}
+.hero .sub { max-width: 62ch; margin: 13px 0 0; font-size: 12.5px; color: var(--fg-3); }
+.hero-pills { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 26px; }
+.pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 1px solid var(--line-strong); border-radius: 999px;
+  padding: 4px 9px; font: 500 10px var(--font-mono); color: var(--fg-2);
+  background: var(--surface); white-space: nowrap;
+}
+.pill.green { color: var(--accent); border-color: var(--accent-line); background: var(--accent-weak); }
+.fact-panel { border-top: 1px solid var(--line-strong); padding-top: 2px; }
+.fact-head {
+  font: 500 9.5px var(--font-mono); letter-spacing: .14em; color: var(--fg-3);
+  padding: 12px 0 9px;
+}
+.fact-row {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 18px;
+  padding: 9px 0; border-bottom: 1px solid var(--line);
+}
+.fact-row .k { font-size: 11px; color: var(--fg-3); white-space: nowrap; }
+.fact-row .v { font: 10.5px var(--font-mono); color: var(--fg-2); text-align: right; line-height: 1.55; }
+.fact-row .v b { color: var(--fg); font-weight: 500; }
+
+/* Sections ------------------------------------------------------------------ */
+.section { padding: 70px 0; border-bottom: 1px solid var(--line); }
+.sec-head {
+  display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 30px;
+  margin-bottom: 30px; align-items: start;
+}
+.sec-num { font: 500 10px var(--font-mono); letter-spacing: .15em; color: var(--accent); padding-top: 8px; }
+.sec-title {
+  margin: 0; font-size: clamp(25px, 2.9vw, 34px); line-height: 1.14;
+  letter-spacing: -.032em; font-weight: 600;
+}
+.sec-title .en { color: var(--fg-3); font-weight: 400; font-size: .55em; letter-spacing: -.01em; display: block; margin-top: 5px; }
+.sec-lede { max-width: 88ch; margin: 12px 0 0; color: var(--fg-2); font-size: 13.5px; line-height: 1.7; }
+.footnote { margin: 12px 0 0; font-size: 11px; line-height: 1.65; color: var(--fg-3); }
+.footnote code { font-size: 10px; white-space: normal; overflow-wrap: anywhere; }
+.sec-lede code, .note code { white-space: normal; overflow-wrap: anywhere; }
+.note {
+  border-left: 2px solid var(--accent-line); padding: 2px 0 2px 14px;
+  color: var(--fg-2); font-size: 12px; line-height: 1.7;
+}
+.note b { color: var(--fg); font-weight: 600; }
+
+/* Tables -------------------------------------------------------------------- */
+.legend {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 16px;
+  margin: 0 0 12px; font-size: 11px; color: var(--fg-3);
+}
+.legend span { display: inline-flex; align-items: center; gap: 5px; }
+.legend b { color: var(--fg-2); font-weight: 500; }
+.sym { display: inline-block; width: 15px; text-align: center; font-size: 13px; line-height: 1; }
+.sym.y { color: var(--accent); }
+.sym.n { color: var(--fg-2); }
+.sym.x { color: var(--fg-3); }
+.table-wrap {
+  width: 100%; overflow-x: auto; border: 1px solid var(--line);
+  border-radius: 11px; background: var(--surface);
+}
+table { width: 100%; border-collapse: collapse; font-size: 12px; line-height: 1.55; }
+table.fixed { table-layout: fixed; }
+table.fixed td, table.fixed th { overflow-wrap: anywhere; }
+table.fixed td code { white-space: normal; overflow-wrap: anywhere; }
+th {
+  font: 500 9px var(--font-mono); letter-spacing: .09em; text-transform: uppercase;
+  color: var(--fg-3); text-align: left; padding: 10px 12px;
+  border-bottom: 1px solid var(--line-strong); background: var(--panel);
+  vertical-align: bottom; white-space: nowrap;
+}
+td { padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+tbody tr:last-child td { border-bottom: 0; }
+tbody tr:hover { background: rgba(255, 255, 255, .018); }
+th[scope="row"] { color: var(--fg); font: 500 12px var(--font-sans); white-space: nowrap; }
+th[scope="row"] .en { display: block; color: var(--fg-3); font: 9.5px var(--font-mono); margin-top: 2px; font-weight: 400; }
+td.key { font: 10.5px var(--font-mono); color: var(--fg); white-space: nowrap; }
+td.key.wrap { white-space: normal; overflow-wrap: anywhere; }
+td.key .sub { display: block; color: var(--fg-3); font-size: 9.5px; }
+.cell-note { display: block; color: var(--fg-3); font-size: 10px; line-height: 1.5; margin-top: 2px; }
+.cell-note.green { color: var(--accent); }
+.tag {
+  display: inline-flex; align-items: center; gap: 4px;
+  border: 1px solid var(--line-strong); border-radius: 999px;
+  padding: 2px 6px; font: 500 8.5px var(--font-mono); letter-spacing: .05em;
+  color: var(--fg-2); white-space: nowrap; line-height: 1.5;
+}
+.tag.ok { color: var(--accent); border-color: var(--accent-line); background: var(--accent-weak); }
+.tag.flag { color: var(--fg-3); border-style: dashed; }
+.tag.plan { color: var(--fg-3); border-style: dotted; }
+.pill2 {
+  display: inline-flex; align-items: center; gap: 4px;
+  border: 1px solid var(--line); border-radius: 4px;
+  padding: 1px 5px; font: 500 9px var(--font-mono); color: var(--fg-2);
+  white-space: nowrap; line-height: 1.55;
+}
+.pill2.can { border-color: var(--line-strong); color: var(--fg); }
+.pill2.lock { color: var(--fg-3); }
+.pill2.flag { border-style: dashed; color: var(--fg-3); }
+.pill2.on { color: var(--accent); border-color: var(--accent-line); background: var(--accent-weak); }
+sup { font: 8px var(--font-mono); color: var(--fg-3); vertical-align: super; line-height: 0; }
+
+/* Lock rules / callouts ------------------------------------------------------ */
+.lock-grid {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px; background: var(--line); border: 1px solid var(--line);
+  border-radius: 10px; overflow: hidden; margin: 0 0 22px;
+}
+.lock-cell { background: var(--surface); padding: 14px 15px; }
+.lock-cell .k {
+  font: 500 9px var(--font-mono); letter-spacing: .1em; text-transform: uppercase;
+  color: var(--accent); margin-bottom: 5px;
+}
+.lock-cell p { margin: 0; color: var(--fg-2); font-size: 11.5px; line-height: 1.65; }
+.lock-cell code { font-size: 10px; }
+
+/* Feature sub-table ---------------------------------------------------------- */
+.subhead {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 18px;
+  margin: 30px 0 10px; flex-wrap: wrap;
+}
+.subhead h3 { margin: 0; font-size: 14px; font-weight: 600; letter-spacing: -.01em; }
+.subhead p { margin: 0; font-size: 11px; color: var(--fg-3); }
+.ftable td, .ftable th { padding: 8px 10px; }
+.ftable td:first-child { font: 10.5px var(--font-mono); color: var(--fg); white-space: nowrap; }
+.ftable td { font-size: 10.5px; }
+
+/* Mini config rows ----------------------------------------------------------- */
+.mini-table td:first-child { font: 10.5px var(--font-mono); color: var(--fg); white-space: nowrap; }
+.mini-table td { font-size: 10.5px; }
+
+/* Retrieval ------------------------------------------------------------------ */
+.flow-wrap {
+  border: 1px solid var(--line); border-radius: 12px; background: var(--surface);
+  padding: 14px 14px 8px; overflow: hidden;
+}
+.flow-wrap svg { display: block; width: 100%; height: auto; }
+.node { fill: var(--surface); stroke: var(--line-strong); stroke-width: 1; }
+.node.required { stroke: var(--accent-line); }
+.node.target { fill: var(--panel); stroke-dasharray: 4 4; }
+.node-kicker { font: 500 8.5px var(--font-mono); letter-spacing: .11em; fill: var(--fg-3); }
+.node-title { font: 600 13.5px var(--font-sans); fill: var(--fg); }
+.node-sub { font: 9.5px var(--font-sans); fill: var(--fg-3); }
+.node-code { font: 9px var(--font-mono); fill: var(--fg-2); }
+.edge { stroke: var(--line-strong); stroke-width: 1.2; fill: none; }
+.edge.strong { stroke: var(--fg-3); }
+.edge.target { stroke-dasharray: 4 4; }
+.edge-label { font: 9px var(--font-mono); fill: var(--fg-3); }
+.edge-label.green { fill: var(--accent); }
+.rail { stroke: var(--line); stroke-width: 1; stroke-dasharray: 2 4; }
+.rail-label { font: 9px var(--font-mono); fill: var(--fg-3); }
+.flow-caption { margin: 8px 2px 0; font-size: 10.5px; line-height: 1.65; color: var(--fg-3); }
+.flow-caption b { color: var(--fg-2); font-weight: 500; }
+
+.auto-grid {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px; background: var(--line); border: 1px solid var(--line);
+  border-radius: 10px; overflow: hidden; margin-top: 18px;
+}
+.auto-cell { background: var(--surface); padding: 13px 15px; }
+.auto-cell .k {
+  font: 500 9px var(--font-mono); letter-spacing: .1em; text-transform: uppercase;
+  color: var(--accent); margin-bottom: 4px;
+}
+.auto-cell p { margin: 0; color: var(--fg-2); font-size: 11.5px; line-height: 1.65; }
+.auto-cell code { font-size: 10px; }
+.auto-cell .warn { color: var(--fg); font-weight: 600; }
+
+.formula {
+  display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 22px;
+  align-items: start; margin-top: 26px;
+}
+.formula-main {
+  border: 1px solid var(--line-strong); border-radius: 10px; background: var(--panel);
+  padding: 16px 18px; font: 12px/1.7 var(--font-mono); color: var(--fg);
+  overflow-x: auto;
+}
+.formula-main .small { display: block; color: var(--fg-3); font-size: 9.5px; margin-top: 7px; letter-spacing: .02em; }
+.formula-side p { margin: 0 0 8px; font-size: 11px; color: var(--fg-3); line-height: 1.65; }
+.calc { font-size: 10.5px; line-height: 1.8; }
+.calc .dim { color: var(--fg-3); }
+.calc .hi { color: var(--accent); }
+
+/* Zero-model ---------------------------------------------------------------- */
+.zero-panel {
+  background: var(--accent-weak); border: 1px solid var(--accent-line);
+  border-left: 3px solid var(--accent); border-radius: 0 12px 12px 0;
+  padding: 24px 26px; margin-bottom: 24px;
+}
+.zero-k { font: 500 9.5px var(--font-mono); letter-spacing: .14em; color: var(--accent); }
+.zero-panel h3 {
+  margin: 8px 0 6px; font-size: clamp(22px, 2.6vw, 30px); line-height: 1.15;
+  letter-spacing: -.03em; font-weight: 600; color: var(--fg);
+}
+.zero-panel p { margin: 0; max-width: 88ch; color: var(--fg-2); font-size: 12.5px; line-height: 1.7; }
+.zero-panel code { background: rgba(0,0,0,.2); border-color: var(--accent-line); }
+.model-grid {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px; background: var(--line); border: 1px solid var(--line);
+  border-radius: 11px; overflow: hidden;
+}
+.model { background: var(--surface); padding: 20px 20px 18px; }
+.model .idx { font: 500 9px var(--font-mono); letter-spacing: .1em; color: var(--accent); }
+.model h3 { margin: 5px 0 1px; font-size: 16px; font-weight: 600; letter-spacing: -.015em; }
+.model .en { font: 9.5px var(--font-mono); color: var(--fg-3); }
+.model dl { margin: 14px 0 0; }
+.model dt {
+  font: 500 8.5px var(--font-mono); letter-spacing: .07em; text-transform: uppercase;
+  color: var(--fg-3); margin-top: 10px;
+}
+.model dd { margin: 2px 0 0; color: var(--fg-2); font-size: 11.5px; line-height: 1.62; }
+.model dd code { font-size: 9.5px; }
+.extractor-note {
+  margin-top: 14px; border: 1px dashed var(--line-strong); border-radius: 9px;
+  padding: 12px 15px; color: var(--fg-2); font-size: 11.5px; line-height: 1.65;
+}
+.extractor-note b { color: var(--fg); font-weight: 600; }
+.path-row {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
+  margin-top: 18px; font-size: 11px; color: var(--fg-3);
+}
+.path-row .step {
+  border: 1px solid var(--line-strong); border-radius: 999px; padding: 5px 10px;
+  background: var(--surface); color: var(--fg-2); white-space: nowrap;
+}
+.path-row .step.on { border-color: var(--accent-line); background: var(--accent-weak); color: var(--fg); }
+.path-row .arr { color: var(--fg-3); }
+.path-cost { margin-top: 9px; font-size: 10.5px; color: var(--fg-3); }
+
+/* Admin direction ------------------------------------------------------------
+   The page should read as a console brief, not a stack of marketing cards. */
+.verdict {
+  border-top: 1px solid var(--line-strong); border-bottom: 1px solid var(--line);
+  padding: 18px 0 20px; margin-bottom: 26px;
+}
+.verdict .k { font: 500 9px var(--font-mono); letter-spacing: .14em; color: var(--accent); }
+.verdict p { margin: 6px 0 0; font-size: 19px; line-height: 1.45; letter-spacing: -.015em; color: var(--fg); }
+.verdict p b { font-weight: 600; }
+.verdict .zh { color: var(--fg-2); font-size: 13px; margin-top: 4px; }
+.compare td:first-child { width: 28%; }
+.compare td:nth-child(2) { width: 36%; color: var(--fg-2); }
+.compare td:nth-child(3) { color: var(--fg-2); }
+.compare td { font-size: 11px; }
+.principles {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 44px; border-top: 1px solid var(--line); margin-top: 26px;
+}
+.principle {
+  display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 10px;
+  padding: 16px 0; border-bottom: 1px solid var(--line);
+}
+.principle .n { font: 500 10px var(--font-mono); color: var(--accent); padding-top: 2px; }
+.principle h3 { margin: 0 0 3px; font-size: 12.5px; font-weight: 600; letter-spacing: -.005em; }
+.principle p { margin: 0; color: var(--fg-2); font-size: 11.5px; line-height: 1.67; }
+.principle code { font-size: 9.5px; }
+.no-list {
+  margin: 18px 0 0; padding: 12px 14px; border: 1px dashed var(--line-strong);
+  border-radius: 8px; color: var(--fg-3); font-size: 11px; line-height: 1.65;
+}
+.no-list b { color: var(--fg-2); font-weight: 500; }
+
+.tokens { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-top: 20px; }
+.token { border: 1px solid var(--line); border-radius: 8px; background: var(--surface); padding: 8px; }
+.swatch { height: 26px; border-radius: 5px; border: 1px solid var(--line-strong); margin-bottom: 7px; }
+.token .name { display: block; font: 500 9.5px var(--font-mono); color: var(--fg-2); }
+.token .hex { display: block; font: 9px var(--font-mono); color: var(--fg-3); margin-top: 1px; }
+
+/* Mockup -------------------------------------------------------------------- */
+.mockup-frame {
+  border: 1px solid var(--line-strong); border-radius: 13px; overflow: hidden;
+  background: var(--surface); box-shadow: 0 30px 90px rgba(0,0,0,.5);
+}
+.mk-chrome {
+  display: flex; align-items: center; gap: 10px; height: 32px; padding: 0 11px;
+  background: var(--panel); border-bottom: 1px solid var(--line);
+}
+.mk-dots { display: flex; gap: 5px; }
+.mk-dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--line-strong); display: block; }
+.mk-url {
+  flex: 1; text-align: center; font: 9.5px var(--font-mono); color: var(--fg-3);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.mk-static {
+  font: 8px var(--font-mono); letter-spacing: .08em; color: var(--accent);
+  border: 1px solid var(--accent-line); background: var(--accent-weak);
+  border-radius: 999px; padding: 2px 6px; white-space: nowrap;
+}
+.mk-app { background: var(--canvas); }
+.mk-app svg { fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.mk-topbar {
+  height: 50px; display: flex; align-items: center; gap: 12px; padding: 0 14px;
+  background: var(--surface); border-bottom: 1px solid var(--line);
+}
+.mk-brand { display: flex; align-items: center; gap: 7px; font-size: 11.5px; font-weight: 600; white-space: nowrap; }
+.mk-brand .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px var(--accent-weak); }
+.mk-brand .sub { color: var(--fg-3); font-weight: 400; }
+.mk-org {
+  display: flex; align-items: center; gap: 6px; font-size: 9.5px; color: var(--fg-2);
+  border: 1px solid var(--line); border-radius: 6px; padding: 3px 7px; background: var(--panel);
+  white-space: nowrap;
+}
+.mk-env {
+  font: 8px var(--font-mono); color: var(--accent); border: 1px solid var(--accent-line);
+  background: var(--accent-weak); border-radius: 4px; padding: 1px 4px;
+}
+.mk-search {
+  flex: 1; max-width: 330px; margin-left: 4px; display: flex; align-items: center; gap: 6px;
+  height: 26px; padding: 0 8px; border: 1px solid var(--line); border-radius: 6px;
+  background: var(--panel); color: var(--fg-3); font-size: 9.5px; white-space: nowrap;
+  overflow: hidden;
+}
+.mk-search .kbd { margin-left: auto; font: 8px var(--font-mono); color: var(--fg-3); border: 1px solid var(--line); border-radius: 3px; padding: 0 3px; }
+.mk-top-actions { display: flex; align-items: center; gap: 9px; margin-left: auto; color: var(--fg-3); }
+.mk-avatar {
+  width: 24px; height: 24px; border-radius: 50%; background: var(--accent-weak);
+  border: 1px solid var(--accent-line); color: var(--accent);
+  display: grid; place-items: center; font: 600 8px var(--font-mono);
+}
+.mk-body { display: flex; min-height: 560px; }
+.mk-nav {
+  width: 190px; flex: 0 0 190px; border-right: 1px solid var(--line);
+  background: var(--panel); padding: 10px 7px 12px; display: flex; flex-direction: column; gap: 1px;
+}
+.mk-nav-group {
+  font: 500 8px var(--font-mono); letter-spacing: .1em; color: var(--fg-3);
+  padding: 10px 8px 4px;
+}
+.mk-nav-item {
+  position: relative; display: flex; align-items: center; gap: 7px;
+  height: 27px; padding: 0 7px; border-radius: 5px;
+  font-size: 10.5px; color: var(--fg-2);
+}
+.mk-nav-item .ic { width: 12px; height: 12px; opacity: .85; flex: 0 0 auto; }
+.mk-nav-item .count { margin-left: auto; font: 8.5px var(--font-mono); color: var(--fg-3); }
+.mk-nav-item.active { background: var(--accent-weak); color: var(--fg); }
+.mk-nav-item.active::before {
+  content: ""; position: absolute; left: -7px; top: 5px; bottom: 5px;
+  width: 2px; border-radius: 2px; background: var(--accent);
+}
+.mk-nav-item.active .ic { color: var(--accent); opacity: 1; }
+.mk-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.mk-content { padding: 12px 14px 16px; min-width: 0; }
+.mk-crumb {
+  font: 9px var(--font-mono); color: var(--fg-3); display: flex; align-items: center;
+  gap: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.mk-crumb .sep { color: var(--line-strong); }
+.mk-pagehead { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin-top: 9px; }
+.mk-title {
+  display: flex; align-items: center; gap: 7px; font-size: 18px; line-height: 1.2;
+  letter-spacing: -.02em; font-weight: 600;
+}
+.mk-badge {
+  font: 8px var(--font-mono); letter-spacing: .07em; color: var(--fg-2);
+  border: 1px solid var(--line-strong); border-radius: 3px; padding: 1px 4px;
+}
+.mk-meta { margin-top: 4px; font-size: 9px; color: var(--fg-3); }
+.mk-head-actions { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
+.mk-btn {
+  display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 8px;
+  border: 1px solid var(--line-strong); border-radius: 5px; background: var(--surface);
+  color: var(--fg-2); font-size: 9.5px; white-space: nowrap;
+}
+.mk-btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
+.mk-tabs {
+  display: flex; gap: 14px; border-bottom: 1px solid var(--line);
+  margin-top: 12px; font-size: 9.5px; color: var(--fg-3);
+}
+.mk-tab { position: relative; padding: 6px 0; white-space: nowrap; }
+.mk-tab.active { color: var(--fg); }
+.mk-tab.active::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: -1px;
+  height: 2px; border-radius: 2px; background: var(--accent);
+}
+.mk-tab .n { font: 8px var(--font-mono); color: var(--fg-3); margin-left: 3px; }
+.mk-grid {
+  display: grid; grid-template-columns: 190px minmax(0, 1fr) 266px;
+  gap: 10px; margin-top: 10px; align-items: start;
+}
+.mk-panel {
+  border: 1px solid var(--line); border-radius: 7px; background: var(--surface);
+  min-width: 0; overflow: hidden;
+}
+.mk-panel-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 6px;
+  padding: 7px 8px; border-bottom: 1px solid var(--line);
+  font-size: 9.5px; font-weight: 600; color: var(--fg-2);
+}
+.mk-panel-head .minor { font: 8px var(--font-mono); color: var(--fg-3); font-weight: 400; }
+.mk-panel-head .x { color: var(--fg-3); font-size: 11px; line-height: 1; }
+.mk-searchline { padding: 6px 7px; border-bottom: 1px solid var(--line); }
+.mk-input {
+  display: flex; align-items: center; gap: 5px; height: 22px; padding: 0 6px;
+  border: 1px solid var(--line); border-radius: 4px; background: var(--panel);
+  color: var(--fg-3); font-size: 9px; white-space: nowrap; overflow: hidden;
+}
+.mk-group {
+  display: flex; align-items: center; gap: 6px; padding: 6px 7px;
+  border-bottom: 1px solid var(--line); font-size: 10px; color: var(--fg-2);
+}
+.mk-group:last-child { border-bottom: 0; }
+.mk-group.active { background: var(--accent-weak); color: var(--fg); box-shadow: inset 2px 0 0 var(--accent); }
+.mk-group .gdot { width: 4px; height: 4px; border-radius: 50%; background: var(--line-strong); flex: 0 0 auto; }
+.mk-group.active .gdot { background: var(--accent); }
+.mk-group .gname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mk-group .gcount { font: 8px var(--font-mono); color: var(--fg-3); }
+.mk-group .glock { font-size: 8px; color: var(--fg-3); }
+.mk-toolbar {
+  display: flex; align-items: center; gap: 5px; padding: 6px 7px;
+  border-bottom: 1px solid var(--line); flex-wrap: wrap;
+}
+.mk-toolbar .mk-input { flex: 1; min-width: 80px; }
+.mk-chip {
+  font: 8px var(--font-mono); color: var(--fg-3); border: 1px solid var(--line);
+  border-radius: 3px; padding: 2px 5px; white-space: nowrap;
+}
+.mk-table-wrap { overflow-x: auto; }
+.mk-table { width: 100%; border-collapse: collapse; font-size: 9.5px; table-layout: fixed; min-width: 0; }
+.mk-table th {
+  font: 500 7.5px var(--font-mono); letter-spacing: .05em; text-transform: uppercase;
+  color: var(--fg-3); text-align: left; padding: 5px 6px; border-bottom: 1px solid var(--line);
+  background: var(--panel); white-space: nowrap;
+}
+.mk-table td {
+  padding: 6px; border-bottom: 1px solid var(--line); vertical-align: middle;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.mk-table tr:last-child td { border-bottom: 0; }
+.mk-member { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.mk-av {
+  width: 19px; height: 19px; border-radius: 50%; background: var(--raise);
+  border: 1px solid var(--line); display: grid; place-items: center;
+  font: 600 7px var(--font-mono); color: var(--fg-2); flex: 0 0 auto;
+}
+.mk-av.owner { background: var(--accent-weak); border-color: var(--accent-line); color: var(--accent); }
+.mk-member .nm { font-size: 9.5px; color: var(--fg); line-height: 1.2; }
+.mk-member .em { font-size: 8px; color: var(--fg-3); line-height: 1.2; }
+.mk-role {
+  display: inline-flex; align-items: center; gap: 3px; border: 1px solid var(--line-strong);
+  border-radius: 3px; padding: 1px 4px; font: 8px var(--font-mono); color: var(--fg-2);
+  white-space: nowrap;
+}
+.mk-role.owner { color: var(--accent); border-color: var(--accent-line); background: var(--accent-weak); }
+.mk-role .chev { color: var(--fg-3); font-size: 7px; }
+.mk-check { color: var(--accent); font-size: 10px; }
+.mk-dash { color: var(--fg-3); }
+.mk-foot {
+  display: flex; align-items: center; justify-content: space-between; gap: 6px;
+  padding: 6px 7px; font-size: 8px; color: var(--fg-3);
+}
+.mk-page { display: flex; align-items: center; gap: 2px; }
+.mk-page span {
+  min-width: 14px; height: 14px; display: grid; place-items: center;
+  border: 1px solid var(--line); border-radius: 2px; font-size: 7px;
+}
+.mk-page span.on { color: var(--accent); border-color: var(--accent-line); background: var(--accent-weak); }
+.mk-scope {
+  display: flex; align-items: center; justify-content: space-between; gap: 5px;
+  padding: 6px 7px; border-bottom: 1px solid var(--line); font-size: 8.5px; color: var(--fg-3);
+}
+.mk-scope .val {
+  display: inline-flex; align-items: center; gap: 4px; color: var(--fg-2);
+  border: 1px solid var(--line); border-radius: 3px; padding: 1px 4px;
+  font: 8px var(--font-mono);
+}
+.mk-inherit { padding: 7px; border-bottom: 1px solid var(--line); font-size: 8.5px; line-height: 1.6; color: var(--fg-3); }
+.mk-chips { display: flex; flex-wrap: wrap; gap: 3px; margin-bottom: 4px; }
+.mk-chip2 {
+  font: 7.5px var(--font-mono); border: 1px solid var(--line); border-radius: 3px;
+  padding: 0 3px; color: var(--fg-2); white-space: nowrap;
+}
+.mk-chip2.on { color: var(--accent); border-color: var(--accent-line); background: var(--accent-weak); }
+.mk-matrix { width: 100%; border-collapse: collapse; font-size: 8px; }
+.mk-matrix th {
+  font: 500 7px var(--font-mono); letter-spacing: .04em; color: var(--fg-3);
+  text-align: center; padding: 4px 3px; border-bottom: 1px solid var(--line);
+  background: var(--panel); white-space: nowrap;
+}
+.mk-matrix th.cap, .mk-matrix td.cap { text-align: left; }
+.mk-matrix td { padding: 4px 3px; border-bottom: 1px solid var(--line); text-align: center; vertical-align: middle; }
+.mk-matrix tr:last-child td { border-bottom: 0; }
+.mk-matrix td.cap { color: var(--fg-2); white-space: nowrap; font-size: 8.5px; }
+.mk-matrix .yes { color: var(--accent); font-size: 9px; }
+.mk-matrix .no { color: var(--fg-3); font-size: 8px; }
+.mk-matrix .na { color: var(--line-strong); font-size: 8px; }
+.mk-audit {
+  display: flex; gap: 5px; padding: 7px; border-top: 1px solid var(--line);
+  font-size: 8px; line-height: 1.55; color: var(--fg-3);
+}
+.mk-audit .ic { width: 11px; height: 11px; color: var(--accent); flex: 0 0 auto; margin-top: 1px; }
+.mk-danger {
+  padding: 6px 7px; border-top: 1px solid var(--line); font-size: 8.5px;
+  color: var(--fg-3); display: flex; align-items: center; gap: 4px;
+}
+.mk-danger .ic { width: 10px; height: 10px; opacity: .8; }
+.mock-caption { margin: 12px 2px 0; font-size: 10.5px; line-height: 1.7; color: var(--fg-3); }
+.mock-caption b { color: var(--fg-2); font-weight: 500; }
+.mock-caption code { font-size: 9.5px; }
+
+/* Footer -------------------------------------------------------------------- */
+.footer { padding: 46px 0 40px; background: var(--panel); border-top: 1px solid var(--line); }
+.footer-grid {
+  display: grid; grid-template-columns: 1.2fr 1fr 1.35fr; gap: 40px;
+}
+.footer .brand { margin-bottom: 9px; }
+.footer p { margin: 0; color: var(--fg-3); font-size: 10.5px; line-height: 1.7; }
+.footer .k {
+  font: 500 8.5px var(--font-mono); letter-spacing: .12em; color: var(--fg-3);
+  margin: 0 0 4px;
+}
+.footer .v { font: 10px var(--font-mono); color: var(--fg-2); line-height: 1.7; }
+.footer a { color: var(--fg-2); text-decoration: underline; text-underline-offset: 2px; text-decoration-color: var(--line-strong); }
+.footer a:hover { color: var(--accent); }
+.footer-note {
+  margin-top: 30px; padding-top: 14px; border-top: 1px solid var(--line);
+  font-size: 9.5px; color: var(--fg-3);
+}
+
+/* Responsive ---------------------------------------------------------------- */
+@media (max-width: 1120px) {
+  .hero-grid { gap: 40px; }
+  .sec-head { grid-template-columns: 120px minmax(0, 1fr); gap: 22px; }
+  .mk-grid { grid-template-columns: 168px minmax(0, 1fr) 240px; }
+  .mk-nav { width: 168px; flex-basis: 168px; }
+  .formula { grid-template-columns: minmax(0, 1fr) 260px; }
+}
+@media (max-width: 900px) {
+  .wrap { padding: 0 22px; }
+  .hero { padding: 60px 0 42px; }
+  .hero-grid { grid-template-columns: 1fr; gap: 34px; align-items: start; }
+  .fact-panel { max-width: 520px; }
+  .section { padding: 52px 0; }
+  .sec-head { grid-template-columns: 1fr; gap: 8px; }
+  .sec-num { padding-top: 0; }
+  .sec-title .en { display: inline; margin-left: 8px; }
+  .lock-grid, .auto-grid, .model-grid { grid-template-columns: 1fr; }
+  .formula { grid-template-columns: 1fr; gap: 12px; }
+  .principles { grid-template-columns: 1fr; }
+  .tokens { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .docnav { display: none; }
+  table.fixed { min-width: 760px; }
+  .footer-grid { grid-template-columns: 1fr; gap: 22px; }
+  .mockup-frame { border-radius: 10px; }
+  .mk-nav { display: none; }
+  .mk-grid { grid-template-columns: 160px minmax(0, 1fr); }
+  .mk-policy { grid-column: 1 / -1; }
+  .mk-body { min-height: 0; }
+  .mk-search { max-width: none; }
+  .mk-topbar { gap: 8px; }
+  .mk-org { display: none; }
+}
+@media (max-width: 620px) {
+  .wrap { padding: 0 16px; }
+  h1 { font-size: 38px; }
+  .hero .lead { font-size: 15px; }
+  .tokens { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .mk-grid { grid-template-columns: 1fr; }
+  .mk-groups { display: none; }
+  .mk-title { font-size: 16px; }
+  .mk-head-actions .mk-btn:first-child { display: none; }
+  .mk-tabs { gap: 10px; overflow-x: auto; }
+  th, td { padding: 8px 9px; }
+  table { font-size: 11px; }
+}
+
+/* Print: light paper, no sticky chrome, no hidden overflow, no card shadows. */
+@media print {
+  @page { size: A4 landscape; margin: 10mm 10mm 12mm; }
+  :root {
+    --canvas: #ffffff;
+    --surface: #ffffff;
+    --panel: #f7f7f8;
+    --raise: #ffffff;
+    --line: #dedee2;
+    --line-strong: #c7c7cf;
+    --fg: #111114;
+    --fg-2: #3f3f46;
+    --fg-3: #5f5f68;
+    --accent: #1a7f37;
+    --accent-weak: #eef7f1;
+    --accent-line: #c9e3d2;
+    --on-accent: #ffffff;
+    --code-bg: #f4f4f5;
+    --code-fg: #1f1f23;
+  }
+  html, body { background: #fff; color: var(--fg); font-size: 9.5pt; }
+  .docbar, .no-print { display: none !important; }
+  .wrap { max-width: 100%; padding: 0; }
+  .hero { padding: 0 0 18px; }
+  .hero-grid { grid-template-columns: 1.35fr .65fr; gap: 18px; }
+  h1 { font-size: 34pt; }
+  .hero .lead { font-size: 10.5pt; }
+  .hero .sub { font-size: 8.5pt; }
+  .fact-panel { padding-right: 8px; }
+  .fact-row .v { font-size: 7.4pt; white-space: normal; }
+  .section { padding: 20px 0; }
+  .sec-head { grid-template-columns: 100px 1fr; gap: 16px; margin-bottom: 12px; }
+  .sec-num { font-size: 8pt; letter-spacing: .08em; white-space: nowrap; }
+  .sec-title { font-size: 18pt; }
+  .sec-lede { font-size: 9pt; }
+  .table-wrap { overflow: visible; border-radius: 0; }
+  table { font-size: 7.8pt; }
+  th, td { padding: 4px 5px; }
+  .tag, .pill2, .pill { font-size: 6.8pt; }
+  .cell-note { font-size: 7pt; }
+  .footnote { padding-right: 8px; }
+  .lock-grid, .auto-grid, .model-grid { break-inside: avoid; }
+  .model-grid { grid-template-columns: repeat(3, 1fr); }
+  .model { padding: 8px 9px; }
+  .model h3 { font-size: 13pt; }
+  .model .en { font-size: 7pt; }
+  .model dt { font-size: 6.3pt; margin-top: 6px; }
+  .model dd { font-size: 7.3pt; line-height: 1.5; }
+  .principles { column-gap: 22px; }
+  .principle { padding: 8px 0; break-inside: avoid; }
+  .principle p { font-size: 8pt; }
+  .tokens { grid-template-columns: repeat(5, 1fr); gap: 6px; }
+  .token { padding: 5px; }
+  .swatch { height: 16px; }
+  .flow-wrap { padding: 4px 4px 0; }
+  .flow-caption { font-size: 7.5pt; }
+  .formula { grid-template-columns: 1fr 210px; gap: 12px; break-inside: avoid; }
+  .zero-panel { padding: 10px 12px; break-inside: avoid; }
+  .zero-panel h3 { font-size: 15pt; }
+  .extractor-note { padding: 8px 10px; font-size: 8pt; }
+  .mockup-frame { box-shadow: none; break-inside: avoid; }
+  .mk-body { min-height: 0; }
+  .mk-chrome { display: none; }
+  .mk-nav { display: flex; width: 132px; flex-basis: 132px; }
+  .mk-org { display: flex; }
+  .mk-groups { display: block; }
+  .mk-grid { grid-template-columns: 132px minmax(0, 1fr) 208px; gap: 6px; }
+  .mk-policy { grid-column: auto; }
+  .mk-table { font-size: 7pt; min-width: 0; }
+  .mk-table th { font-size: 5.8pt; padding: 3px 4px; }
+  .mk-table td { padding: 3px 4px; }
+  .mk-optional { display: none; }
+  .mk-topbar { height: 34px; }
+  .mk-content { padding: 7px 8px 8px; }
+  .mk-title { font-size: 12pt; }
+  .mk-btn { height: 18px; font-size: 6.5pt; }
+  .mk-tabs { margin-top: 6px; font-size: 6.5pt; }
+  .mk-grid { margin-top: 6px; }
+  .mk-panel-head { padding: 4px 5px; font-size: 6.5pt; }
+  .mk-group { padding: 4px 5px; font-size: 6.5pt; }
+  .mk-input { height: 16px; font-size: 6pt; }
+  .mk-matrix { font-size: 5.8pt; }
+  .mk-matrix td.cap { font-size: 6pt; }
+  .mk-audit, .mk-inherit, .mk-scope, .mk-danger { font-size: 5.8pt; }
+  .footer { padding: 10px 0 6px; }
+  .footer-grid { grid-template-columns: 1.2fr 1fr 1.35fr; gap: 18px; }
+  .footer-note { display: none; }
+  a { color: inherit; text-decoration: none; }
+  tr { break-inside: avoid; }
+  h2, h3 { break-after: avoid; }
+}
+</style>
+</head>
+<body>
+
+<!-- Local icon sprite: inline, no network. -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5"/><path d="M16 5.5a3 3 0 0 1 0 5.8"/><path d="M17 15c2 .5 3.2 2.2 3.6 4.6"/></symbol>
+    <symbol id="i-groups" viewBox="0 0 24 24"><circle cx="8" cy="9" r="2.6"/><circle cx="16" cy="7.5" r="2.2"/><path d="M3 19c.5-2.8 2.4-4.5 5-4.5s4.5 1.7 5 4.5"/><path d="M14 18.5c.4-2.2 1.8-3.6 3.8-3.6 1.9 0 3.2 1.2 3.7 3.1"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l7 3v5.5c0 4.4-2.8 7.8-7 9.5-4.2-1.7-7-5.1-7-9.5V6l7-3z"/><path d="M9 12l2 2 4-4"/></symbol>
+    <symbol id="i-layers" viewBox="0 0 24 24"><path d="M12 3l8 4.5-8 4.5-8-4.5L12 3z"/><path d="M4 12l8 4.5 8-4.5"/><path d="M4 16.5l8 4.5 8-4.5"/></symbol>
+    <symbol id="i-plug" viewBox="0 0 24 24"><path d="M9 3v5"/><path d="M15 3v5"/><path d="M7 8h10v3.5a5 5 0 0 1-10 0V8z"/><path d="M12 16.5V21"/></symbol>
+    <symbol id="i-cpu" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><rect x="9.5" y="9.5" width="5" height="5" rx="1"/><path d="M9 3v3M15 3v3M9 18v3M15 18v3M3 9h3M3 15h3M18 9h3M18 15h3"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></symbol>
+    <symbol id="i-gauge" viewBox="0 0 24 24"><path d="M4 18a8 8 0 1 1 16 0"/><path d="M12 18l3.5-5"/><circle cx="12" cy="18" r="1.2"/></symbol>
+    <symbol id="i-card" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18"/><path d="M7 15h4"/></symbol>
+    <symbol id="i-audit" viewBox="0 0 24 24"><path d="M6 3h9l3 3v15H6z"/><path d="M15 3v3h3"/><path d="M9 11h6M9 15h6M9 7h3"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="5.5"/><path d="M15 15l5 5"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 17h12l-1.5-2.5V10a4.5 4.5 0 0 0-9 0v4.5L6 17z"/><path d="M10 20h4"/></symbol>
+    <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M9.8 9.5a2.3 2.3 0 1 1 3.4 2c-.8.5-1.2 1-1.2 1.9"/><path d="M12 17h.01"/></symbol>
+    <symbol id="i-chev" viewBox="0 0 24 24"><path d="M8 10l4 4 4-4"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-filter" viewBox="0 0 24 24"><path d="M3 5h18l-7 8v6l-4 2v-8L3 5z"/></symbol>
+    <symbol id="i-columns" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16M15 4v16"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12l4.5 4.5L19 7"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  </defs>
+</svg>
+
+<header class="docbar">
+  <div class="wrap docbar-inner">
+    <div class="brand"><span class="dot"></span>Linxira Knowledge Base <span class="sub">/ pre-release</span></div>
+    <nav class="docnav" aria-label="页面目录">
+      <a href="#capability">能力矩阵</a>
+      <a href="#config">配置边界</a>
+      <a href="#retrieval">检索链路</a>
+      <a href="#zero-model">零模型</a>
+      <a href="#admin">后台方向</a>
+      <a href="#mockup">权限组示意</a>
+    </nav>
+    <span class="docver">0.2.z · DRAFT</span>
+  </div>
+</header>
+
+<main>
+  <section class="hero" id="top">
+    <div class="wrap hero-grid">
+      <div>
+        <div class="eyebrow">Pre-release brief · 0.2.z</div>
+        <h1>Linxira<span class="line">Knowledge Base</span></h1>
+        <p class="lead">一个内核，三档 profile。同一份 <code>lkb</code> 二进制，用配置与适配器装配成个人库、团队库或企业知识基础设施。</p>
+        <p class="sub">这页把设想的功能、可配置边界、检索加权逻辑放在一页里；后半部分给出管理后台的风格判断与权限组页面示意。技术读者优先，不写营销话术。</p>
+        <div class="hero-pills">
+          <span class="pill green">lkb 0.2.z</span>
+          <span class="pill">one kernel</span>
+          <span class="pill">three profiles</span>
+          <span class="pill">zero-model baseline</span>
+          <span class="pill">SQLite / PostgreSQL</span>
+        </div>
+      </div>
+      <aside class="fact-panel" aria-label="发布事实">
+        <div class="fact-head">RELEASE FACTS</div>
+        <div class="fact-row"><span class="k">版本线</span><span class="v"><b>0.2.z</b> · patch-only</span></div>
+        <div class="fact-row"><span class="k">当前 release</span><span class="v">v0.2.1 · 2026-11-09</span></div>
+        <div class="fact-row"><span class="k">工作树</span><span class="v">main 0.2.2</span></div>
+        <div class="fact-row"><span class="k">发布形态</span><span class="v">Windows · Linux · Docker</span></div>
+        <div class="fact-row"><span class="k">macOS</span><span class="v">不发布</span></div>
+        <div class="fact-row"><span class="k">默认检索</span><span class="v">auto → bm25 · 零模型</span></div>
+        <div class="fact-row"><span class="k">许可证</span><span class="v">0.2.1 MIT · v0.2.2 起 AGPL core</span></div>
+        <div class="fact-row"><span class="k">本页</span><span class="v">静态单文件 · 发布前评审</span></div>
+      </aside>
+    </div>
+  </section>
+
+  <section class="section" id="capability">
+    <div class="wrap">
+      <div class="sec-head">
+        <div class="sec-num">01 / CAPABILITY</div>
+        <div>
+          <h2 class="sec-title">三档能力矩阵<span class="en">solo · team · enterprise</span></h2>
+          <p class="sec-lede">先看档位边界。符号只回答“能不能改”：<b>● 可配置</b>、<b>○ 固定</b>、<b>— 不适用</b>。最后一列才区分“代码已实现”“运行时门禁”“仅 feature flag”“规范目标”。固定表示启动校验或归一化不允许改，不是前端灰掉。</p>
+        </div>
+      </div>
+
+      <div class="legend" aria-label="图例">
+        <span><span class="sym y">●</span><b>可配置</b></span>
+        <span><span class="sym n">○</span><b>固定</b></span>
+        <span><span class="sym x">—</span><b>不适用</b></span>
+        <span class="muted">状态列：已实现 / 门禁 / 仅 flag / 部署级</span>
+      </div>
+
+      <div class="table-wrap">
+        <table class="fixed">
+          <caption class="sr-only">solo、team、enterprise 三档能力矩阵</caption>
+          <colgroup>
+            <col style="width:14.5%">
+            <col style="width:24%">
+            <col style="width:24%">
+            <col style="width:24%">
+            <col style="width:13.5%">
+          </colgroup>
+          <thead>
+            <tr>
+              <th scope="col">能力域</th>
+              <th scope="col">solo</th>
+              <th scope="col">team</th>
+              <th scope="col">enterprise</th>
+              <th scope="col">实现状态</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">存储 <span class="en">storage</span></th>
+              <td><span class="sym y">●</span> <b>SQLite / PostgreSQL</b><span class="cell-note">可选；PG 需 <code>storage.url_env</code>（默认 <code>LKB_DATABASE_URL</code>）<sup>†1</sup></span></td>
+              <td><span class="sym n">○</span> <b>PostgreSQL</b><span class="cell-note">固定 PG；SQLite 拒绝启动</span></td>
+              <td><span class="sym n">○</span> <b>PostgreSQL</b><span class="cell-note">固定 PG；HA / 外部网关由部署层决定</span></td>
+              <td><span class="tag ok">已实现</span></td>
+            </tr>
+            <tr>
+              <th scope="row">身份 <span class="en">identity</span></th>
+              <td><span class="sym y">●</span> <b>none / session</b><span class="cell-note">默认 <code>none</code>；只允许 loopback</span></td>
+              <td><span class="sym y">●</span> <b>session / SSO</b><span class="cell-note">默认 <code>none</code>；非 loopback 必须 session；SSO 走可信 Header</span></td>
+              <td><span class="sym y">●</span> <b>session / SSO</b><span class="cell-note">同上；<code>features.sso</code> 默认开</span></td>
+              <td><span class="tag ok">已实现</span><span class="cell-note">OIDC / SAML / SCIM 为规划</span></td>
+            </tr>
+            <tr>
+              <th scope="row">多租户 <span class="en">multi-tenant</span></th>
+              <td><span class="sym x">—</span> 单机单用户<span class="cell-note">机器就是边界</span></td>
+              <td><span class="sym n">○</span> 单租户 / 进程<span class="cell-note"><code>tenant_id</code> 可设，但无跨租户检索</span></td>
+              <td><span class="sym y">●</span> 部署级多租户<span class="cell-note">每租户一套进程 + DB（或 schema）；flag 仅声明</span></td>
+              <td><span class="tag ok">部署级</span><span class="cell-note">不是共享进程内的租户切换</span></td>
+            </tr>
+            <tr>
+              <th scope="row">计费 <span class="en">billing</span></th>
+              <td><span class="sym x">—</span> 校验禁止<span class="cell-note">solo 打开 <code>features.billing</code> 即拒绝启动</span></td>
+              <td><span class="sym y">●</span> 默认关<span class="cell-note"><code>billing.enabled</code> 可开；路由有门禁</span></td>
+              <td><span class="sym y">●</span> internal 默认关<span class="cell-note">external 必须开，并要求 payment</span></td>
+              <td><span class="tag ok">门禁</span><span class="cell-note">billing routes 实际检查</span></td>
+            </tr>
+            <tr>
+              <th scope="row">连接器 <span class="en">connectors</span></th>
+              <td><span class="sym y">●</span> 默认关<span class="cell-note">校验未锁死；显式打开可生效 <sup>†2</sup></span></td>
+              <td><span class="sym y">●</span> 默认开<span class="cell-note">filesystem / jsonl / http_json 实装；SaaS 为 stub</span></td>
+              <td><span class="sym y">●</span> 默认开<span class="cell-note">同上；按租户配额与源 ACL</span></td>
+              <td><span class="tag ok">门禁</span><span class="cell-note">connectors API 检查 flag</span></td>
+            </tr>
+            <tr>
+              <th scope="row">审计 <span class="en">audit</span></th>
+              <td><span class="sym y">●</span> 默认开<span class="cell-note">flag 可关，但只停 audit API；写入仍执行 <sup>†4</sup></span></td>
+              <td><span class="sym y">●</span> 默认开<span class="cell-note">同上；集中日志默认 90 天</span></td>
+              <td><span class="sym n">○</span> 强制开<span class="cell-note">校验拒绝关闭；WORM / SIEM 为规范目标，0.2.z 未实现</span></td>
+              <td><span class="tag ok">门禁</span><span class="cell-note">audit routes；写入不受 flag 控制</span></td>
+            </tr>
+            <tr>
+              <th scope="row">配额 <span class="en">quotas</span></th>
+              <td><span class="sym y">●</span> 宽松默认<span class="cell-note">进程内限流；单机</span></td>
+              <td><span class="sym y">●</span> 默认收紧<span class="cell-note">仅覆盖仍为默认值的 <code>limits</code></span></td>
+              <td><span class="sym y">●</span> 按租户 / 空间<span class="cell-note">基础配额已实现；多实例需共享锁；合同 / 策略引擎规划</span></td>
+              <td><span class="tag ok">已实现</span><span class="cell-note">基础配额；进程内计数；策略引擎未实现</span></td>
+            </tr>
+            <tr>
+              <th scope="row">公开分享 <span class="en">public share</span></th>
+              <td><span class="sym x">—</span> 无路由<span class="cell-note">链接分享 P2</span></td>
+              <td><span class="sym x">—</span> 无路由<span class="cell-note">P2</span></td>
+              <td><span class="sym y">●</span> flag 默认开<span class="cell-note">external 默认 true；可覆盖；仍无分享路由</span></td>
+              <td><span class="tag flag">仅 flag</span><span class="cell-note">不产生行为；规划中</span></td>
+            </tr>
+            <tr>
+              <th scope="row">MCP / API <span class="en">interface</span></th>
+              <td><span class="sym y">●</span> <code>/api/v1</code> 常开<span class="cell-note"><code>lkb mcp</code> 可用；feature flag 不门禁</span></td>
+              <td><span class="sym y">●</span> 同上<span class="cell-note">认证与空间 ACL 仍生效</span></td>
+              <td><span class="sym y">●</span> 同上<span class="cell-note">网关 / 租户策略在外层</span></td>
+              <td><span class="tag ok">已实现</span><span class="cell-note">REST + MCP stdio</span></td>
+            </tr>
+            <tr>
+              <th scope="row">桌面 / 部署 <span class="en">delivery</span></th>
+              <td><span class="sym y">●</span> 桌面壳 + CLI + 浏览器<span class="cell-note">Windows / Linux installer、portable</span></td>
+              <td><span class="sym n">○</span> 服务 + Web / CLI<span class="cell-note">无桌面壳</span></td>
+              <td><span class="sym n">○</span> 容器 / 网关 + Web / CLI<span class="cell-note">无桌面壳</span></td>
+              <td><span class="tag ok">已实现</span><span class="cell-note">同一 <code>web/dist</code></span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p class="footnote"><sup>†1</sup> 历史说明：0.2.1 及更早的 <code>validate()</code> 拒绝 <code>solo + postgres</code>；0.2.2 已允许 solo 使用 PostgreSQL（team / enterprise 仍强制 PG）。PG 需要 <code>storage.url_env</code> 指向的环境变量中有 URL；URL 不写入配置。</p>
+      <p class="footnote"><sup>†2</sup> <code>features.connectors</code> 在 solo 默认 <code>false</code>，但校验没有禁止显式打开；这与“solo 关闭连接器”的规范表述不一致。若产品要求锁死，应在 <code>validate()</code> 加规则，而不是只靠默认值。</p>
+      <p class="footnote"><sup>†3</sup> 身份当前只有 <code>none</code> / <code>session</code> / <code>trusted_header</code>。OIDC、SAML、SCIM、工作负载身份是规范目标，不在 0.2.z 实现内；不要把 <code>features.sso</code> 当成 SSO 已完整实现的证据。enterprise 当前与 team 共享实现；真正的多租户路由、配额策略引擎与 WORM 审计仍未实现。</p>
+      <p class="footnote"><sup>†4</sup> <code>features.audit=false</code> 只让 <code>/admin/audit</code> 路由返回未启用；<code>audit::record</code> 仍会写核心审计事件。如果产品语义是“关闭审计”，当前实现不一致，需要改代码或改表述。</p>
+    </div>
+  </section>
+
+  <section class="section" id="config">
+    <div class="wrap">
+      <div class="sec-head">
+        <div class="sec-num">02 / CONFIG</div>
+        <div>
+          <h2 class="sec-title">配置项矩阵<span class="en">what each profile may change</span></h2>
+          <p class="sec-lede">锁定 = 启动校验或归一化拒绝，不是 UI 不能改。所有配置都在启动时读取；没有热更新。`features.*` 是覆盖层，默认值由 <code>deployment.mode</code> 决定；改 profile / backend 属于迁移，不是运行时切换。</p>
+        </div>
+      </div>
+
+      <div class="lock-grid">
+        <div class="lock-cell">
+          <div class="k">Normalize</div>
+          <p>solo 强制 <code>tenant_id=t_local</code>、<code>default_space=s_default</code>，并关闭自助建空间 / 建组。team / enterprise 只在值仍等于默认值时收紧 <code>limits</code>，不覆盖显式配置。</p>
+        </div>
+        <div class="lock-cell">
+          <div class="k">Validate</div>
+          <p>profile 与 backend 不匹配（team / enterprise + sqlite）、solo 开 billing、enterprise 关 audit、enterprise_external 缺 signup/billing/multi_tenant/public_api、非回环 + <code>auth.mode=none</code>、PG 无 URL——都直接拒绝启动。</p>
+        </div>
+        <div class="lock-cell">
+          <div class="k">Runtime</div>
+          <p>模型 <code>provider=none</code> 不是配置错误：对应通道被裁剪，写入 <code>degraded[]</code>，其他通道继续。功能 flag 也不都等于实现；只有 billing / connectors / audit 有运行时门禁，且 audit 只门禁查询 API <sup>†4</sup>。</p>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table class="fixed">
+          <caption class="sr-only">配置项、默认值与三档可改性</caption>
+          <colgroup>
+            <col style="width:13.5%">
+            <col style="width:13.5%">
+            <col style="width:7%">
+            <col style="width:7%">
+            <col style="width:8.5%">
+            <col style="width:50.5%">
+          </colgroup>
+          <thead>
+            <tr>
+              <th scope="col">配置键</th>
+              <th scope="col">默认值</th>
+              <th scope="col">solo</th>
+              <th scope="col">team</th>
+              <th scope="col">enterprise</th>
+              <th scope="col">校验 / 说明</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="key">profile</td>
+              <td><code>未设置 → 推断</code><span class="cell-note">SQLite → solo；PG → team；显式 profile 优先</span></td>
+              <td><span class="pill2 can">可改</span></td>
+              <td><span class="pill2 can">可改</span></td>
+              <td><span class="pill2 can">可改</span></td>
+              <td>启动时；solo 可选 SQLite 或 PG，team / enterprise 只 PG。切换档位需要迁移数据与重建索引，不是改一个字符串。</td>
+            </tr>
+            <tr>
+              <td class="key">storage.backend</td>
+              <td><code>sqlite</code></td>
+              <td><span class="pill2 can">可改</span><span class="cell-note">sqlite / postgres</span></td>
+              <td><span class="pill2 lock">锁定</span><span class="cell-note">postgres</span></td>
+              <td><span class="pill2 lock">锁定</span><span class="cell-note">postgres</span></td>
+              <td>0.2.2 起 solo 两者均可 <sup>†1</sup>；team / enterprise + sqlite 仍拒绝启动。PG 需要 <code>storage.url_env</code> 指向的环境变量中有 URL；URL 不写入配置。</td>
+            </tr>
+            <tr>
+              <td class="key">auth.mode</td>
+              <td><code>none</code></td>
+              <td><span class="pill2 can">可改</span></td>
+              <td><span class="pill2 can">可改</span></td>
+              <td><span class="pill2 can">可改</span></td>
+              <td><code>none</code> 只允许 loopback；非回环绑定必须 <code>session</code>。<code>cookie_secure</code>、<code>session_ttl_hours</code>、<code>csrf</code> 可调。</td>
+            </tr>
+            <tr>
+              <td class="key">sso.*</td>
+              <td><code>mode=off</code><span class="cell-note">headers 有默认值</span></td>
+              <td><span class="pill2 can">可改</span></td>
+              <td><span class="pill2 can">可改</span></td>
+              <td><span class="pill2 can">可改</span></td>
+              <td>仅 <code>off</code> / <code>trusted_header</code>。可配 user/email/groups header、trusted proxies、auto-provision、默认 role、组映射、邮箱域、session TTL。没有 OIDC/SAML <sup>†3</sup>。</td>
+            </tr>
+            <tr>
+              <td class="key">features.*</td>
+              <td><code>按 mode 默认</code></td>
+              <td><span class="pill2 lock">部分锁</span><span class="cell-note">billing 禁止</span></td>
+              <td><span class="pill2 can">可改</span></td>
+              <td><span class="pill2 lock">部分锁</span><span class="cell-note">audit 禁止关</span></td>
+              <td>10 个布尔覆盖。solo 禁止 billing；enterprise 强制 audit；enterprise_external 强制 signup + billing + multi_tenant + public_api。只有 billing / connectors / audit 有运行时门禁；audit 只门禁查询 API <sup>†4</sup>。</td>
+            </tr>
+            <tr>
+              <td class="key">retrieval.mode</td>
+              <td><code>auto</code></td>
+              <td><span class="pill2 can">可改</span></td>
+              <td><span class="pill2 can">可改</span></td>
+              <td><span class="pill2 can">可改</span></td>
+              <td><code>bm25</code> / <code>bm25_judge</code> / <code>event</code> / <code>hybrid</code> / <code>auto</code>；<code>keyword</code>、<code>event_entity</code> 是别名。PG 的 <code>auto</code> → <code>hybrid</code>；SQLite 的 <code>auto</code> 按可见向量 / events 解析。</td>
+            </tr>
+            <tr>
+              <td class="key">retrieval.rrf_*</td>
+              <td><code>1.0 / 1.0 / 1.0</code><span class="cell-note">bm25 / dense / event</span></td>
+              <td><span class="pill2 can">可改</span></td>
+              <td><span class="pill2 can">可改</span></td>
+              <td><span class="pill2 can">可改</span></td>
+              <td>三个权重必须是有限非负数；0 合法（通道仍运行，但不贡献分数）。<b>k=60 是代码常量，不可配</b>。</td>
+            </tr>
+            <tr>
+              <td class="key wrap">retrieval.<br>judge_after_<br>hybrid</td>
+              <td><code>true</code></td>
+              <td><span class="pill2 can">可改</span></td>
+              <td><span class="pill2 can">可改</span></td>
+              <td><span class="pill2 can">可改</span></td>
+              <td>仅 <code>hybrid</code> 生效；judge 已配置才调用，未配置则跳过且不写 degraded。配置后失败写 <code>decision_unavailable</code>；<code>bm25_judge</code> 仍无条件尝试 judge。</td>
+            </tr>
+            <tr>
+              <td class="key">retrieval.event_*</td>
+              <td><code>1 / 10 / 50 / 800ms / 0.25</code></td>
+              <td><span class="pill2 can">可改</span></td>
+              <td><span class="pill2 can">可改</span></td>
+              <td><span class="pill2 can">可改</span></td>
+              <td><code>depth</code> 1–2；<code>max_seeds</code> 1–50；<code>max_events</code> 1–500；<code>timeout</code> 1–10000ms；<code>text_weight</code> 有限非负。</td>
+            </tr>
+            <tr>
+              <td class="key">models.embedding</td>
+              <td><code>provider=none</code></td>
+              <td><span class="pill2 can">可改</span></td>
+              <td><span class="pill2 can">可改</span></td>
+              <td><span class="pill2 can">可改</span></td>
+              <td>启用需 <code>base_url</code> + <code>model</code>；OpenAI 兼容协议。缺失时 dense 通道写 <code>dense_not_enabled</code>。</td>
+            </tr>
+            <tr>
+              <td class="key">models.judge</td>
+              <td><code>provider=none</code></td>
+              <td><span class="pill2 can">可改</span></td>
+              <td><span class="pill2 can">可改</span></td>
+              <td><span class="pill2 can">可改</span></td>
+              <td>对 Top 30 候选打 0–1 分；<code>judge_alias</code> 默认 <code>default</code>。<code>hybrid</code> 还受 <code>judge_after_hybrid</code> 控制；未配置 judge 时 hybrid 静默跳过，<code>bm25_judge</code> 未配置才写 <code>decision_unavailable</code>。</td>
+            </tr>
+            <tr>
+              <td class="key">models.llm</td>
+              <td><code>provider=none</code></td>
+              <td><span class="pill2 can">可改</span></td>
+              <td><span class="pill2 can">可改</span></td>
+              <td><span class="pill2 can">可改</span></td>
+              <td>生成、改写、摘要共用；失败回抽取式答案并写 <code>llm_unavailable</code>。不是检索的前置条件。</td>
+            </tr>
+            <tr>
+              <td class="key">models.extractor</td>
+              <td><code>provider=none</code></td>
+              <td><span class="pill2 can">可改</span></td>
+              <td><span class="pill2 can">可改</span></td>
+              <td><span class="pill2 can">可改</span></td>
+              <td>摄入期抽事件 / 实体；启用后需要重索引。未配置时 event 通道写 <code>event_not_enabled</code>（显式请求时）。</td>
+            </tr>
+            <tr>
+              <td class="key">limits.*</td>
+              <td><code>1000 / 100 / 500 / 200 …</code></td>
+              <td><span class="pill2 can">可改</span></td>
+              <td><span class="pill2 can">可改</span><span class="cell-note">默认收紧</span></td>
+              <td><span class="pill2 can">可改</span><span class="cell-note">默认收紧</span></td>
+              <td>非 solo 只在值仍为默认时收紧；显式值保留。限流状态在进程内；多实例需要共享计数器。</td>
+            </tr>
+            <tr>
+              <td class="key">billing.*</td>
+              <td><code>enabled=false</code><span class="cell-note">engine=local · USD · trial 14</span></td>
+              <td><span class="pill2 lock">锁定关</span></td>
+              <td><span class="pill2 can">可改</span></td>
+              <td><span class="pill2 can">可改</span><span class="cell-note">external 必开</span></td>
+              <td>solo 校验禁止；enterprise_external 要求 billing + payment。billing routes 有运行时门禁。</td>
+            </tr>
+            <tr>
+              <td class="key">connectors</td>
+              <td><code>features.connectors</code><span class="cell-note">solo false · team/ent true</span></td>
+              <td><span class="pill2 can">可改</span><span class="cell-note">默认关 <sup>†2</sup></span></td>
+              <td><span class="pill2 can">可改</span></td>
+              <td><span class="pill2 can">可改</span></td>
+              <td>实装：<code>filesystem_export</code>、<code>jsonl</code>、<code>http_json</code>。SaaS 连接器是 stub，不是可用集成。</td>
+            </tr>
+            <tr>
+              <td class="key">public_share</td>
+              <td><code>false</code><span class="cell-note">enterprise_external true</span></td>
+              <td><span class="pill2 flag">仅 flag</span></td>
+              <td><span class="pill2 flag">仅 flag</span></td>
+              <td><span class="pill2 flag">仅 flag</span></td>
+              <td>没有分享路由；flag 只出现在 <code>GET /api/v1/features</code>。链接分享是 P2，不应对外承诺。</td>
+            </tr>
+            <tr>
+              <td class="key">i18n.*</td>
+              <td><code>zh-CN</code><span class="cell-note">[zh-CN, en]</span></td>
+              <td><span class="pill2 can">可改</span></td>
+              <td><span class="pill2 can">可改</span></td>
+              <td><span class="pill2 can">可改</span></td>
+              <td>必须包含 <code>en</code>；最多 28 个；运行时实际识别 zh-CN / en，其他标签按回退链处理。</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="subhead">
+        <h3><code>features.*</code> 默认值与 0.2.z 门禁</h3>
+        <p>默认值来自 <code>DeploymentMode::default_features</code>；显式布尔覆盖后仍受启动校验约束。</p>
+      </div>
+      <div class="table-wrap">
+        <table class="ftable">
+          <caption class="sr-only">features 默认值与运行时门禁</caption>
+          <thead>
+            <tr>
+              <th scope="col">flag</th>
+              <th scope="col">solo</th>
+              <th scope="col">team</th>
+              <th scope="col">ent-internal</th>
+              <th scope="col">ent-external</th>
+              <th scope="col">行为</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>signup</td><td><code>false</code></td><td><code>false</code></td><td><code>false</code></td><td><code>true</code></td><td>仅展示；没有注册路由。</td></tr>
+            <tr><td>billing</td><td><code>false</code></td><td><code>false</code></td><td><code>false</code></td><td><code>true</code></td><td>运行时门禁 billing routes；solo 禁止。</td></tr>
+            <tr><td>connectors</td><td><code>false</code></td><td><code>true</code></td><td><code>true</code></td><td><code>true</code></td><td>运行时门禁 connectors API；solo 仅默认关。</td></tr>
+            <tr><td>sso</td><td><code>false</code></td><td><code>false</code></td><td><code>true</code></td><td><code>true</code></td><td>由 <code>[sso].mode</code> 控制；flag 不门禁。</td></tr>
+            <tr><td>multi_tenant</td><td><code>false</code></td><td><code>false</code></td><td><code>true</code></td><td><code>true</code></td><td>仅展示；隔离靠每租户进程 / DB。</td></tr>
+            <tr><td>public_api</td><td><code>false</code></td><td><code>false</code></td><td><code>true</code></td><td><code>true</code></td><td>仅展示；<code>/api/v1</code> 始终存在。</td></tr>
+            <tr><td>mcp</td><td><code>false</code></td><td><code>false</code></td><td><code>true</code></td><td><code>true</code></td><td>仅展示；<code>lkb mcp</code> 始终可用。</td></tr>
+            <tr><td>audit</td><td><code>true</code></td><td><code>true</code></td><td><code>true</code></td><td><code>true</code></td><td>门禁 audit 查询 API；enterprise 禁止关；核心写入仍执行 <sup>†4</sup>。</td></tr>
+            <tr><td>rate_limit</td><td><code>true</code></td><td><code>true</code></td><td><code>true</code></td><td><code>true</code></td><td>始终按 <code>[limits]</code> 生效，不受 flag 关闭。</td></tr>
+            <tr><td>public_share</td><td><code>false</code></td><td><code>false</code></td><td><code>false</code></td><td><code>true</code></td><td>仅展示；无分享路由，P2。</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="subhead">
+        <h3><code>limits</code> 默认值</h3>
+        <p>team / enterprise 的收紧只覆盖仍等于默认值的项。</p>
+      </div>
+      <div class="table-wrap">
+        <table class="ftable">
+          <caption class="sr-only">limits 默认值</caption>
+          <thead>
+            <tr><th scope="col">键</th><th scope="col">solo 默认</th><th scope="col">team / ent</th><th scope="col">说明</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>qps_instance</td><td><code>1000</code></td><td><code>500</code></td><td>实例级 QPS。</td></tr>
+            <tr><td>qps_ip</td><td><code>100</code></td><td><code>30</code></td><td>按来源 IP。</td></tr>
+            <tr><td>qps_user</td><td><code>500</code></td><td><code>100</code></td><td>按 principal。</td></tr>
+            <tr><td>qps_token</td><td><code>200</code></td><td><code>60</code></td><td>按 API token。</td></tr>
+            <tr><td>qps_tenant / qps_space</td><td><code>1000 / 500</code></td><td><code>300 / 120</code></td><td>租户 / 空间维度。</td></tr>
+            <tr><td>max_concurrency_instance / queue</td><td><code>256 / 512</code></td><td><code>128 / 128</code></td><td>队列长度在运行时未读取。</td></tr>
+            <tr><td>daily_requests_token</td><td><code>1,000,000</code></td><td><code>200,000</code></td><td>按 token 的日请求数。</td></tr>
+            <tr><td>max_query_chars / max_top_k</td><td><code>8192 / 100</code></td><td>不变</td><td>查询长度与 TopK 上限。</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="subhead">
+        <h3>其余系统项（摘要）</h3>
+        <p>不在上面的矩阵展开，但同样影响档位行为。</p>
+      </div>
+      <div class="table-wrap">
+        <table class="mini-table">
+          <caption class="sr-only">其余系统配置</caption>
+          <thead>
+            <tr><th scope="col">键</th><th scope="col">默认</th><th scope="col">solo</th><th scope="col">team / enterprise</th><th scope="col">说明</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>spaces.* / groups.*</td><td><code>allow=true · max=10</code></td><td><span class="pill2 lock">锁定</span> 自助关闭</td><td><span class="pill2 can">可改</span></td><td>solo 归一化强制 <code>allow_user_creation=false</code>；团队可开。</td></tr>
+            <tr><td>server.bind</td><td><code>127.0.0.1:7331</code></td><td><span class="pill2 can">可改</span></td><td><span class="pill2 can">可改</span></td><td>必须是 <code>host:port</code>；非回环 + <code>auth.none</code> 拒绝启动。</td></tr>
+            <tr><td>seed.* / summary.* / query.*</td><td><code>on · auto · product</code></td><td><span class="pill2 can">可改</span></td><td><span class="pill2 can">可改</span></td><td>种子导入、摘要（1200 字 / batch 8 / 3 次重试）、多轮改写（context 6）。</td></tr>
+            <tr><td>payment.*</td><td><code>none · USD · test</code></td><td><span class="pill2 lock">不适用</span></td><td><span class="pill2 can">可改</span></td><td>只在 billing 开启时有意义；currency 必须是 3 位 ISO 4217。</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="retrieval">
+    <div class="wrap">
+      <div class="sec-head">
+        <div class="sec-num">03 / RETRIEVAL</div>
+        <div>
+          <h2 class="sec-title">检索链路与加权<span class="en">keyword first, optional channels, rank fusion</span></h2>
+          <p class="sec-lede">BM25 是基线，dense 与 event-entity 是可选通道。RRF 只比较名次，不比较不同通道的原始分数；judge 只重排已召回候选，不改变候选集。通道缺失写 <code>degraded[]</code>；hybrid 未配置 judge 是例外——不写 degraded，配置后失败才写 <code>decision_unavailable</code>。</p>
+        </div>
+      </div>
+
+      <div class="flow-wrap">
+        <svg viewBox="0 0 1088 486" role="img" aria-labelledby="flowTitle flowDesc">
+          <title id="flowTitle">检索链路：Query、BM25、dense、event-entity、RRF、judge、Answer</title>
+          <desc id="flowDesc">Query 进入必需的 BM25，可选进入 dense 与 event-entity；三路候选经 k=60 的 RRF 融合；若 judge 已配置且 judge_after_hybrid 为真，可选 judge 对 Top 30 重排；最后进入 LLM 生成或抽取式答案。缺失通道写入 degraded 数组。</desc>
+          <defs>
+            <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--line-strong)"></path>
+            </marker>
+            <marker id="arrG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--accent)"></path>
+            </marker>
+          </defs>
+
+          <text x="0" y="14" class="node-kicker">RETRIEVAL · 0.2.z</text>
+          <text x="1088" y="14" text-anchor="end" class="edge-label">solid = implemented · optional edges labeled</text>
+
+          <!-- Query -->
+          <rect x="0" y="190" width="120" height="84" rx="9" class="node required"></rect>
+          <text x="14" y="211" class="node-kicker">INPUT</text>
+          <text x="14" y="233" class="node-title">Query</text>
+          <text x="14" y="249" class="node-sub">问句 / 术语归一</text>
+          <text x="14" y="263" class="node-sub">ACL policy 已绑定</text>
+
+          <!-- BM25 -->
+          <rect x="180" y="190" width="150" height="84" rx="9" class="node required"></rect>
+          <text x="194" y="211" class="node-kicker">REQUIRED</text>
+          <text x="194" y="233" class="node-title">BM25 keyword</text>
+          <text x="194" y="249" class="node-sub">FTS5 / tsvector</text>
+          <text x="194" y="263" class="node-code">Top limit × 3 → limit</text>
+
+          <!-- Dense -->
+          <rect x="180" y="72" width="150" height="78" rx="9" class="node"></rect>
+          <text x="194" y="93" class="node-kicker">OPTIONAL</text>
+          <text x="194" y="115" class="node-title">Dense</text>
+          <text x="194" y="131" class="node-sub">embedding · cosine</text>
+          <text x="194" y="145" class="node-code">vector candidates</text>
+
+          <!-- Event -->
+          <rect x="180" y="322" width="150" height="78" rx="9" class="node"></rect>
+          <text x="194" y="343" class="node-kicker">OPTIONAL</text>
+          <text x="194" y="365" class="node-title">Event-entity</text>
+          <text x="194" y="381" class="node-sub">extractor · seeds</text>
+          <text x="194" y="395" class="node-code">depth 1–2 · timeout</text>
+
+          <!-- RRF -->
+          <rect x="410" y="190" width="150" height="84" rx="9" class="node required"></rect>
+          <text x="424" y="211" class="node-kicker">HYBRID CORE</text>
+          <text x="424" y="233" class="node-title">RRF</text>
+          <text x="424" y="249" class="node-sub">k = 60 · rank only</text>
+          <text x="424" y="263" class="node-code">judge_after_hybrid=true</text>
+
+          <!-- Judge -->
+          <rect x="640" y="190" width="170" height="84" rx="9" class="node"></rect>
+          <text x="654" y="211" class="node-kicker">OPTIONAL · IF JUDGE</text>
+          <text x="654" y="233" class="node-title">Judge rerank</text>
+          <text x="654" y="249" class="node-sub">Top 30 · 0–1 score</text>
+          <text x="654" y="263" class="node-code">same candidate set</text>
+
+          <!-- Answer -->
+          <rect x="888" y="190" width="200" height="84" rx="9" class="node required"></rect>
+          <text x="902" y="211" class="node-kicker">OUTPUT</text>
+          <text x="902" y="233" class="node-title">Answer</text>
+          <text x="902" y="249" class="node-sub">LLM 生成 / 抽取式</text>
+          <text x="902" y="263" class="node-code">citations · confidence</text>
+
+          <!-- Edges -->
+          <path d="M124 232 L174 232" class="edge strong" marker-end="url(#arr)"></path>
+          <text x="137" y="222" class="edge-label green">必需</text>
+
+          <path d="M124 216 C150 216 150 111 174 111" class="edge" marker-end="url(#arr)"></path>
+          <text x="130" y="154" class="edge-label">可选</text>
+
+          <path d="M124 248 C150 248 150 361 174 361" class="edge" marker-end="url(#arr)"></path>
+          <text x="130" y="330" class="edge-label">可选</text>
+
+          <path d="M334 232 L404 232" class="edge" marker-end="url(#arr)"></path>
+          <text x="349" y="222" class="edge-label">rank</text>
+
+          <path d="M334 111 C370 111 370 232 404 232" class="edge" marker-end="url(#arr)"></path>
+          <text x="344" y="118" class="edge-label">rank</text>
+
+          <path d="M334 361 C370 361 370 232 404 232" class="edge" marker-end="url(#arr)"></path>
+          <text x="344" y="354" class="edge-label">rank</text>
+
+          <path d="M564 232 L634 232" class="edge" marker-end="url(#arr)"></path>
+          <text x="552" y="222" class="edge-label">可选 · 已配置</text>
+
+          <path d="M814 232 L882 232" class="edge strong" marker-end="url(#arrG)"></path>
+          <text x="820" y="222" class="edge-label green">重排 / 直接</text>
+
+          <!-- Bottom rails -->
+          <line x1="0" y1="440" x2="1088" y2="440" class="rail"></line>
+          <text x="0" y="457" class="rail-label">ACL 预过滤在每个通道的 SQL 内完成；融合 / 重排后 L4 can_read 复核，丢弃项写 acl_second_check_dropped。</text>
+          <text x="0" y="472" class="rail-label">degraded[]：通道未启用、模型失败、超时、无向量候选、judge 分数非法，都显式上报；hybrid 未配置 judge 除外。</text>
+        </svg>
+      </div>
+      <p class="flow-caption"><b>当前接线：</b>hybrid 在 RRF 后、ACL 复核前，若 <code>retrieval.judge_after_hybrid=true</code>（默认）且 <code>models.judge</code> 已配置，调用 judge 重排 Top 30；未配置 judge 则跳过且不写 <code>degraded</code>。<code>bm25_judge</code> 仍在 BM25 后调用 judge。图中 RRF → Judge 是实线可选边；judge 失败才写 <code>decision_unavailable</code> <sup>†5</sup>。</p>
+
+      <div class="auto-grid">
+        <div class="auto-cell">
+          <div class="k">auto · PostgreSQL</div>
+          <p>直接解析为 <code>hybrid</code>，无论 embedding / extractor 是否配置。缺通道按能力裁剪并写 <code>degraded[]</code>：缺 embedding → <code>dense_not_enabled</code>；缺 extractor → <code>event_not_enabled</code>。</p>
+        </div>
+        <div class="auto-cell">
+          <div class="k">auto · SQLite + embedding</div>
+          <p>先探测 <code>has_embeddings</code> 是否有可见向量：有 → <code>hybrid</code>；无 → <code>index_missing</code>；探测失败 → <code>embedding_unavailable</code>。两种情况都继续检查 extractor / events；配置了 provider 不等于已经有向量。</p>
+        </div>
+        <div class="auto-cell">
+          <div class="k">auto · SQLite 兜底</div>
+          <p>无可见向量（或未配 embedding）时继续看 extractor / events：有 events → <code>hybrid</code>（event-only；dense 按原因报 <code>index_missing</code> / <code>dense_not_enabled</code>）；否则 → <code>bm25</code>。event 查询失败也回 <code>bm25</code>。</p>
+        </div>
+        <div class="auto-cell">
+          <div class="k">显式 hybrid / event</div>
+          <p><code>hybrid</code> 缺通道时裁剪并写 degraded；judge 仅在 <code>judge_after_hybrid=true</code> 且 <code>models.judge</code> 已配置时调用，无 judge 不写 degraded。显式 <code>event</code> 失败回 BM25。</p>
+        </div>
+      </div>
+
+      <div class="formula">
+        <div class="formula-main">
+          score(d) = Σ<sub>c</sub> w<sub>c</sub> / (60 + rank<sub>c</sub>(d))
+          <span class="small">c ∈ {bm25, dense, event}；同一 chunk 在多个通道出现则累加；只使用名次，不使用原始分数。</span>
+        </div>
+        <div class="formula-side">
+          <p><b>k 固定 60。</b><code>rrf_bm25_weight</code>、<code>rrf_dense_weight</code>、<code>rrf_event_weight</code> 默认都是 1.0；0 合法，但通道仍会执行，只是不贡献分数。</p>
+          <p>权重不是概率，也不做归一化；它只改变某一路名次的相对贡献。融合后按分数降序、同分按 <code>chunk_id</code> 排序。</p>
+        </div>
+      </div>
+
+      <pre class="calc" aria-label="RRF 算例"><span class="dim"># 单通道 rank 1</span>
+BM25  #1                   1.0 / 61            = 0.01639
+Dense #1                   1.2 / 61            = 0.01967   <span class="hi">← 权重让 dense 头名更高</span>
+Event #1                   0.8 / 61            = 0.01311
+
+<span class="dim"># 两个通道都出现的文档，累加后通常赢过单通道</span>
+BM25  #2 + Dense #2        1.0/62 + 1.2/62     = 0.03548   <span class="hi">← consensus</span>
+BM25  #1 + Event #1        1.0/61 + 0.8/61     = 0.02951</pre>
+
+      <div class="subhead">
+        <h3>通道、必需性与降级</h3>
+        <p>这张表是 <code>degraded[]</code> 的速查；不是第二张链路图。</p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <caption class="sr-only">检索通道、必需性与降级代码</caption>
+          <thead>
+            <tr><th scope="col">阶段</th><th scope="col">必需性</th><th scope="col">参与模式</th><th scope="col">缺失 / 失败</th><th scope="col">回退</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="key">BM25 keyword</td>
+              <td><span class="tag ok">必需</span></td>
+              <td><code>bm25</code>、<code>bm25_judge</code>、<code>hybrid</code>、<code>event</code> 回退</td>
+              <td><code>keyword_unavailable</code>、<code>keyword_exact_fallback</code></td>
+              <td>FTS 不可用时返回空并标注；不伪造命中。</td>
+            </tr>
+            <tr>
+              <td class="key">Dense</td>
+              <td><span class="tag">可选</span></td>
+              <td>仅 <code>hybrid</code></td>
+              <td><code>dense_not_enabled</code>（未配置）、<code>embedding_unavailable</code>（调用失败）、<code>index_missing</code>（无向量候选）</td>
+              <td>裁剪该通道；其他通道继续。</td>
+            </tr>
+            <tr>
+              <td class="key">Event-entity</td>
+              <td><span class="tag">可选</span></td>
+              <td><code>hybrid</code>、<code>event</code></td>
+              <td><code>event_not_enabled</code>、<code>event_extraction_unavailable</code>、<code>event_channel_timeout</code>、<code>event_no_seed</code></td>
+              <td>裁剪该通道；<code>event</code> 模式回 BM25。</td>
+            </tr>
+            <tr>
+              <td class="key">RRF</td>
+              <td><span class="tag ok">hybrid 必需</span></td>
+              <td><code>hybrid</code></td>
+              <td>无配置项；k=60 常量。单通道也可融合。</td>
+              <td>空 rankings 返回空；不做原始分数比较。</td>
+            </tr>
+            <tr>
+              <td class="key">Judge</td>
+              <td><span class="tag">可选</span></td>
+              <td><code>bm25_judge</code>；<code>hybrid</code>（<code>judge_after_hybrid=true</code> 且 judge 已配置）</td>
+              <td>配置后失败：<code>decision_unavailable</code>；hybrid 未配置不报；bm25_judge 未配置报 <code>decision_unavailable</code></td>
+              <td>保留原顺序；Top 30 以外不动，候选集不变。</td>
+            </tr>
+            <tr>
+              <td class="key">Answer / LLM</td>
+              <td><span class="tag">可选</span></td>
+              <td>所有模式</td>
+              <td><code>llm_unavailable</code>、<code>citation_alignment_failed</code>、<code>stream_fallback</code></td>
+              <td>抽取式答案 + citations；空证据返回 <code>no_citations</code>。</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="footnote"><sup>†5</sup> <code>should_judge_hybrid = judge_after_hybrid &amp;&amp; providers.judge.is_some()</code>：只配 <code>judge_alias</code>、没有 <code>models.judge</code> provider 不会触发 hybrid judge。未配置时静默跳过；配置后失败才写 <code>decision_unavailable</code>。<code>auto</code> 判断的是 <code>has_embeddings</code> 可见向量，不是 provider 是否配置。</p>
+    </div>
+  </section>
+
+  <section class="section" id="zero-model">
+    <div class="wrap">
+      <div class="sec-head">
+        <div class="sec-num">04 / ZERO MODEL</div>
+        <div>
+          <h2 class="sec-title">零模型也能用<span class="en">the default is a baseline, not a failure mode</span></h2>
+          <p class="sec-lede">四类模型槽位的默认值都是 <code>provider = "none"</code>。没有向量模型、没有 judge、没有 LLM，<code>lkb</code> 仍然能导入、检索、给出带引用的抽取式答案。先把基线跑通，再按瓶颈加模型。</p>
+        </div>
+      </div>
+
+      <div class="zero-panel">
+        <div class="zero-k">ZERO-MODEL BASELINE</div>
+        <h3>BM25 → 抽取式答案 → 引用</h3>
+        <p>默认路径不依赖任何外部 API，可离线启动。抽取式答案直接选句并附 <code>citations</code>；LLM 不可用只会让 <code>mode</code> 保持 <code>extractive</code>，不会让检索失败。把零模型当成“降级模式”会误判产品基线。</p>
+      </div>
+
+      <div class="model-grid">
+        <div class="model">
+          <div class="idx">01 / EMBEDDING</div>
+          <h3>向量模型</h3>
+          <div class="en">dense recall</div>
+          <dl>
+            <dt>解决什么</dt>
+            <dd>同义改写、跨语言、自然语言问句与原文措辞不一致时的语义召回；补 BM25 漏掉的候选。</dd>
+            <dt>何时值得加</dt>
+            <dd>评测显示 BM25 的漏召回主要来自词汇不匹配；语料以自然语言为主，或需要跨语言检索。solo 配好本地 embedding 且有可见向量后，<code>auto</code> 会自动切 <code>hybrid</code>。</dd>
+            <dt>成本 / 延迟</dt>
+            <dd>每次查询一次嵌入；索引期为每个 chunk 存向量。solo 的 3 万切片 float32 约 120 MB；目标查询嵌入 ≤ 300 ms。</dd>
+            <dt>不加会怎样</dt>
+            <dd>dense 通道写 <code>dense_not_enabled</code>；BM25 与抽取式答案继续工作。</dd>
+          </dl>
+        </div>
+        <div class="model">
+          <div class="idx">02 / JUDGE</div>
+          <h3>判别模型</h3>
+          <div class="en">decision rerank</div>
+          <dl>
+            <dt>解决什么</dt>
+            <dd>“已经召回，但没排上去”。对 Top 30 候选做证据判断与打分，只改顺序，不找回漏掉的文档。</dd>
+            <dt>何时值得加</dt>
+            <dd>召回集足够、排序是瓶颈；基准显示 RRF 之后 nDCG 仍有明显空间。<code>hybrid</code> 默认在 judge 已配置时后置重排，不必切到 <code>bm25_judge</code>。</dd>
+            <dt>成本 / 延迟</dt>
+            <dd>每查询一次模型调用；公开口径 70–500 ms，按部署与网络实测。无需 GPU，但需要可用的 judge 模型。</dd>
+            <dt>不加会怎样</dt>
+            <dd><code>hybrid</code> 未配置 judge 会静默跳过，不写 degraded；<code>bm25_judge</code> 未配置才写 <code>decision_unavailable</code>；配置后失败保持原顺序。</dd>
+          </dl>
+        </div>
+        <div class="model">
+          <div class="idx">03 / LLM</div>
+          <h3>生成模型</h3>
+          <div class="en">answer synthesis</div>
+          <dl>
+            <dt>解决什么</dt>
+            <dd>多文档归纳、自然语言解释、改写与摘要；不负责召回，也不能替代检索。</dd>
+            <dt>何时值得加</dt>
+            <dd>用户需要摘要 / 解释而不是原文片段；能接受 token 成本、配额与首 token 延迟。</dd>
+            <dt>成本 / 延迟</dt>
+            <dd>输入 + 输出 token；team 目标首 token ≤ 1.5 s。失败时回抽取式，不阻塞回答。</dd>
+            <dt>不加会怎样</dt>
+            <dd>默认抽取式 + 模板；引用仍然完整。<code>llm_unavailable</code> 只在调用失败时出现。</dd>
+          </dl>
+        </div>
+      </div>
+
+      <div class="extractor-note">
+        <b>第四个槽位 <code>models.extractor</code> 不是查询时模型。</b> 它在摄入期抽取事件 / 实体，决定 <code>event</code> 通道有没有候选；加它要重索引。没有抽取器时，显式请求 event 会写 <code>event_not_enabled</code>；不请求就不参与。
+      </div>
+
+      <div class="path-row" aria-label="推荐升级路径">
+        <span class="step on">solo 零模型</span>
+        <span class="arr">→</span>
+        <span class="step">solo + 本地 embedding（auto 自动 hybrid）</span>
+        <span class="arr">→</span>
+        <span class="step">team / enterprise + judge / LLM</span>
+      </div>
+      <p class="path-cost">成本 / 延迟顺序：BM25 &lt; embedding &lt; judge &lt; LLM；extractor 是索引期一次性成本 + 重索引。每次只加一个变量，先复测基线。</p>
+    </div>
+  </section>
+
+  <section class="section" id="admin">
+    <div class="wrap">
+      <div class="sec-head">
+        <div class="sec-num">05 / ADMIN</div>
+        <div>
+          <h2 class="sec-title">后台设计方向<span class="en">name the style, then change the information architecture</span></h2>
+          <p class="sec-lede">结论先说：现在的问题不是配色，是信息架构。现有 token、表格、空态 / 骨架 / 确认流程都可以保留；需要把“设置表单”改成“资源控制台”。</p>
+        </div>
+      </div>
+
+      <div class="verdict">
+        <div class="k">STYLE VERDICT</div>
+        <p><b>Cloud Control Plane</b> · 云控制台风格</p>
+        <p class="zh">企业基础设施控制台，不是 SaaS 营销后台。以资源为中心，服务导航为骨架，表格 + 详情抽屉为主操作面，IAM 策略矩阵表达权限。</p>
+      </div>
+
+      <div class="note">
+        <b>参考的是交互模型，不是视觉复制：</b>AWS Console 的服务导航与资源列表、Google Cloud 的 IAM 策略、Azure Portal 的 blade / drawer、Cloudflare 的高密度列表与 scope、Vercel 的克制深色界面。目标读者是管理员和平台工程师，不是营销访客。
+      </div>
+
+      <div class="subhead">
+        <h3>为什么现在不像云控制台</h3>
+        <p>基于 <code>web/src/pages/admin/AdminPage.tsx</code>、<code>features/admin/GroupsPanel.tsx</code>、<code>RolesPanel.tsx</code> 的现状。</p>
+      </div>
+      <div class="table-wrap">
+        <table class="compare">
+          <caption class="sr-only">管理后台现状与目标</caption>
+          <thead>
+            <tr><th scope="col">现状</th><th scope="col">结果</th><th scope="col">目标</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>max-w-[900px]</code> 单列 + 11 个平级 tab</td>
+              <td>没有服务层级，所有管理项同一权重；页面像“设置页”，不像控制面。</td>
+              <td>56 px 全局顶栏 + 240 px 分组服务导航 + 面包屑 + 内容区。</td>
+            </tr>
+            <tr>
+              <td>建组表单是列表底部的 Card；编辑在表格行内展开</td>
+              <td>主操作面是表单，资源列表退化为附属；新增/编辑打断扫描。</td>
+              <td>工具栏（搜索 / 过滤 / 列 / 刷新）+ 行选择 + 右侧详情抽屉。</td>
+            </tr>
+            <tr>
+              <td><code>GroupMembersCard</code> 在表格下方展开</td>
+              <td>选组后上下文丢失，页面长度跳变；成员与策略不在同一视野。</td>
+              <td>行点击打开抽屉（Overview / Members / Policies / Audit），列表保持原位。</td>
+            </tr>
+            <tr>
+              <td><code>RolesPanel</code> 是只读的两列表</td>
+              <td>权限不可比较、不可解释；看不出 scope 与继承。</td>
+              <td>IAM 矩阵：能力 × 角色，带 scope、direct / inherited、effective preview。</td>
+            </tr>
+            <tr>
+              <td>Card 堆叠；10.5–11.5 px 的 badge 与辅助字过多</td>
+              <td>层级弱、扫描成本高；重要状态与装饰性标签混在一起。</td>
+              <td>页面标题 / 分区 / 表格三级；主体 13 px、表格 12 px、标签 10 px；绿色只给 active / primary / success。</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="subhead">
+        <h3>设计原则</h3>
+        <p>按控制台的信息层级排列，不是按组件库排列。</p>
+      </div>
+      <div class="principles">
+        <div class="principle">
+          <div class="n">01</div>
+          <div><h3>全局顶栏 + 左侧服务导航</h3><p>顶栏放组织 / 租户切换、环境、全局搜索、帮助、账号；左栏按 Identity / Content / Platform / Governance 分组。不要把 11 个 tab 平铺成唯一导航。</p></div>
+        </div>
+        <div class="principle">
+          <div class="n">02</div>
+          <div><h3>面包屑 → 页面头 → 工具栏 → 表格</h3><p>页面头包含资源名、类型、数量、创建时间与主操作；工具栏放搜索、过滤 chip、列选择、刷新。主操作只有一个，且用绿色。</p></div>
+        </div>
+        <div class="principle">
+          <div class="n">03</div>
+          <div><h3>资源表格是主操作面</h3><p>36 px 行高、sticky header、行 hover、可选中、分页、空态与骨架。表格不是 Card 的附属内容；它承担扫描、比较、批量操作。</p></div>
+        </div>
+        <div class="principle">
+          <div class="n">04</div>
+          <div><h3>右侧详情抽屉</h3><p>480 px 抽屉，URL 可寻址，Esc 关闭；内部再分 Overview / Members / Policies / Audit。选资源不跳页，列表上下文不丢失。</p></div>
+        </div>
+        <div class="principle">
+          <div class="n">05</div>
+          <div><h3>IAM 权限矩阵</h3><p>能力行 × 角色列；scope 选择器；直接授予与继承分开显示；保存前展示 effective diff。权限组页面必须能回答“谁能做什么、在哪、从哪继承”。</p></div>
+        </div>
+        <div class="principle">
+          <div class="n">06</div>
+          <div><h3>状态与危险操作</h3><p>骨架、空态带下一步、错误可重试、degraded 可折叠；危险操作二次确认，要求输入资源名并展示影响范围（成员数、策略数、是否最后一个 Owner）。</p></div>
+        </div>
+        <div class="principle">
+          <div class="n">07</div>
+          <div><h3>用现有 token，不发明第二套皮肤</h3><p>直接使用 <code>--color-canvas/surface/panel/raise/line/fg/fg-2/fg-3/accent</code>；8–10 px 圆角、1 px 边框、150 ms 过渡；阴影只给抽屉，不给每张 Card。</p></div>
+        </div>
+        <div class="principle">
+          <div class="n">08</div>
+          <div><h3>先做对，再做“云”</h3><p>不要用假指标、英雄卡片或装饰性拓扑图撑场面。控制台的专业感来自一致的信息架构、可解释的权限与可靠的状态反馈。</p></div>
+        </div>
+      </div>
+
+      <div class="tokens" aria-label="现有设计 token">
+        <div class="token"><div class="swatch" style="background:#0d0d0f"></div><span class="name">--color-canvas</span><span class="hex">#0d0d0f</span></div>
+        <div class="token"><div class="swatch" style="background:#131316"></div><span class="name">--color-surface</span><span class="hex">#131316</span></div>
+        <div class="token"><div class="swatch" style="background:#101012"></div><span class="name">--color-panel</span><span class="hex">#101012</span></div>
+        <div class="token"><div class="swatch" style="background:#1a1a1e"></div><span class="name">--color-raise</span><span class="hex">#1a1a1e</span></div>
+        <div class="token"><div class="swatch" style="background:#26262b"></div><span class="name">--color-line</span><span class="hex">#26262b</span></div>
+        <div class="token"><div class="swatch" style="background:#35353b"></div><span class="name">--color-line-strong</span><span class="hex">#35353b</span></div>
+        <div class="token"><div class="swatch" style="background:#f4f4f5"></div><span class="name">--color-fg</span><span class="hex">#f4f4f5</span></div>
+        <div class="token"><div class="swatch" style="background:#a1a1aa"></div><span class="name">--color-fg-2</span><span class="hex">#a1a1aa</span></div>
+        <div class="token"><div class="swatch" style="background:#8a8a93"></div><span class="name">--color-fg-3</span><span class="hex">#8a8a93</span></div>
+        <div class="token"><div class="swatch" style="background:#32d74b"></div><span class="name">--color-accent</span><span class="hex">#32d74b</span></div>
+      </div>
+
+      <div class="no-list"><b>不要做：</b>大圆角营销卡片、渐变背景、插画式空态、把所有操作塞进 modal、用 tab 代替信息架构、为了“云感”加假图表或假指标。控制台的专业感来自层级、密度、可解释的权限和可靠的状态，不来自装饰。</div>
+    </div>
+  </section>
+
+  <section class="section" id="mockup">
+    <div class="wrap">
+      <div class="sec-head">
+        <div class="sec-num">06 / MOCKUP</div>
+        <div>
+          <h2 class="sec-title">权限组页面高保真示意<span class="en">identity / groups / engineering-platform</span></h2>
+          <p class="sec-lede">纯静态 HTML/CSS，用现有 token 画，不接真实 API。它展示目标信息架构：左侧 IAM 导航、组列表、成员表、右侧策略抽屉。数据和角色仅用于示意。</p>
+        </div>
+      </div>
+
+      <div class="mockup-frame" role="img" aria-label="权限组页面静态示意：左侧 IAM 导航、组列表、成员表与右侧策略矩阵抽屉">
+        <div class="mk-chrome">
+          <div class="mk-dots"><i></i><i></i><i></i></div>
+          <div class="mk-url">lkb.local/admin/groups/engineering-platform</div>
+          <span class="mk-static">STATIC · 示意数据</span>
+        </div>
+        <div class="mk-app">
+          <div class="mk-topbar">
+            <div class="mk-brand"><span class="dot"></span>Linxira <span class="sub">Knowledge Base</span></div>
+            <div class="mk-org">Acme Corp <span class="muted">/</span> Production <span class="mk-env">prod</span> <svg class="ic" width="10" height="10" aria-hidden="true"><use href="#i-chev"></use></svg></div>
+            <div class="mk-search"><svg width="10" height="10" aria-hidden="true"><use href="#i-search"></use></svg>Search resources, docs, people…<span class="kbd">⌘K</span></div>
+            <div class="mk-top-actions">
+              <svg width="13" height="13" aria-hidden="true"><use href="#i-bell"></use></svg>
+              <svg width="13" height="13" aria-hidden="true"><use href="#i-help"></use></svg>
+              <div class="mk-avatar">AL</div>
+            </div>
+          </div>
+          <div class="mk-body">
+            <aside class="mk-nav" aria-label="服务导航">
+              <div class="mk-nav-group">OVERVIEW</div>
+              <div class="mk-nav-item"><svg class="ic" aria-hidden="true"><use href="#i-grid"></use></svg>Overview</div>
+              <div class="mk-nav-group">IDENTITY</div>
+              <div class="mk-nav-item"><svg class="ic" aria-hidden="true"><use href="#i-users"></use></svg>Users<span class="count">1,248</span></div>
+              <div class="mk-nav-item active"><svg class="ic" aria-hidden="true"><use href="#i-groups"></use></svg>Groups<span class="count">18</span></div>
+              <div class="mk-nav-item"><svg class="ic" aria-hidden="true"><use href="#i-shield"></use></svg>Roles</div>
+              <div class="mk-nav-item"><svg class="ic" aria-hidden="true"><use href="#i-lock"></use></svg>SSO</div>
+              <div class="mk-nav-group">CONTENT</div>
+              <div class="mk-nav-item"><svg class="ic" aria-hidden="true"><use href="#i-layers"></use></svg>Spaces<span class="count">42</span></div>
+              <div class="mk-nav-item"><svg class="ic" aria-hidden="true"><use href="#i-plug"></use></svg>Connectors</div>
+              <div class="mk-nav-item"><svg class="ic" aria-hidden="true"><use href="#i-cpu"></use></svg>Models</div>
+              <div class="mk-nav-group">PLATFORM</div>
+              <div class="mk-nav-item"><svg class="ic" aria-hidden="true"><use href="#i-chart"></use></svg>Usage</div>
+              <div class="mk-nav-item"><svg class="ic" aria-hidden="true"><use href="#i-gauge"></use></svg>Quotas</div>
+              <div class="mk-nav-item"><svg class="ic" aria-hidden="true"><use href="#i-card"></use></svg>Billing</div>
+              <div class="mk-nav-group">GOVERNANCE</div>
+              <div class="mk-nav-item"><svg class="ic" aria-hidden="true"><use href="#i-audit"></use></svg>Audit log</div>
+            </aside>
+
+            <div class="mk-main">
+              <div class="mk-content">
+                <div class="mk-crumb">Identity <span class="sep">/</span> Groups <span class="sep">/</span> engineering-platform</div>
+                <div class="mk-pagehead">
+                  <div>
+                    <div class="mk-title">engineering-platform <span class="mk-badge">GROUP</span></div>
+                    <div class="mk-meta">24 members · tenant acme · created 2026-08-14 · group_admin 2 · last reviewed 2026-10-02</div>
+                  </div>
+                  <div class="mk-head-actions">
+                    <span class="mk-btn">Edit</span>
+                    <span class="mk-btn primary"><svg width="9" height="9" aria-hidden="true"><use href="#i-plus"></use></svg>Add member</span>
+                  </div>
+                </div>
+                <div class="mk-tabs">
+                  <div class="mk-tab active">Members <span class="n">24</span></div>
+                  <div class="mk-tab">Roles &amp; policies</div>
+                  <div class="mk-tab">Audit</div>
+                  <div class="mk-tab">Settings</div>
+                </div>
+
+                <div class="mk-grid">
+                  <aside class="mk-panel mk-groups">
+                    <div class="mk-panel-head">Groups <span class="minor">18</span></div>
+                    <div class="mk-searchline"><div class="mk-input"><svg width="9" height="9" aria-hidden="true"><use href="#i-search"></use></svg>Filter groups</div></div>
+                    <div class="mk-group active"><span class="gdot"></span><span class="gname">engineering-platform</span><span class="gcount">24</span></div>
+                    <div class="mk-group"><span class="gdot"></span><span class="gname">data-ops</span><span class="gcount">18</span></div>
+                    <div class="mk-group"><span class="gdot"></span><span class="gname">security-review</span><span class="gcount">9</span></div>
+                    <div class="mk-group"><span class="gdot"></span><span class="gname">contractors</span><span class="gcount">6</span></div>
+                    <div class="mk-group"><span class="gdot"></span><span class="gname">all-hands</span><span class="gcount">120</span><span class="glock">system</span></div>
+                    <div class="mk-group"><span class="gdot"></span><span class="gname">design-system</span><span class="gcount">14</span></div>
+                  </aside>
+
+                  <section class="mk-panel" aria-label="成员列表">
+                    <div class="mk-toolbar">
+                      <div class="mk-input"><svg width="9" height="9" aria-hidden="true"><use href="#i-search"></use></svg>Filter members</div>
+                      <span class="mk-chip"><svg width="8" height="8" aria-hidden="true"><use href="#i-filter"></use></svg> Role: All</span>
+                      <span class="mk-chip"><svg width="8" height="8" aria-hidden="true"><use href="#i-columns"></use></svg> Columns</span>
+                    </div>
+                    <div class="mk-table-wrap">
+                      <table class="mk-table">
+                        <colgroup>
+                          <col style="width:4%">
+                          <col style="width:30%">
+                          <col style="width:10%">
+                          <col style="width:14%">
+                          <col style="width:20%">
+                          <col class="mk-optional" style="width:8%">
+                          <col class="mk-optional" style="width:14%">
+                        </colgroup>
+                        <thead>
+                          <tr>
+                            <th></th>
+                            <th>Member</th>
+                            <th>Type</th>
+                            <th>Role</th>
+                            <th>Scope</th>
+                            <th class="mk-optional">MFA</th>
+                            <th class="mk-optional">Last active</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            <td><span class="mk-dash">□</span></td>
+                            <td><div class="mk-member"><span class="mk-av owner">PR</span><span><span class="nm">Priya Raman</span><br><span class="em">priya@acme.dev</span></span></div></td>
+                            <td>Human</td>
+                            <td><span class="mk-role owner">Owner <span class="chev">⌄</span></span></td>
+                            <td>Tenant</td>
+                            <td class="mk-optional"><span class="mk-check">✓</span></td>
+                            <td class="mk-optional">2m ago</td>
+                          </tr>
+                          <tr>
+                            <td><span class="mk-dash">□</span></td>
+                            <td><div class="mk-member"><span class="mk-av">DK</span><span><span class="nm">Daniel Kim</span><br><span class="em">daniel@acme.dev</span></span></div></td>
+                            <td>Human</td>
+                            <td><span class="mk-role">Admin <span class="chev">⌄</span></span></td>
+                            <td>Engineering</td>
+                            <td class="mk-optional"><span class="mk-check">✓</span></td>
+                            <td class="mk-optional">1h ago</td>
+                          </tr>
+                          <tr>
+                            <td><span class="mk-dash">□</span></td>
+                            <td><div class="mk-member"><span class="mk-av">MC</span><span><span class="nm">Mira Chen</span><br><span class="em">mira@acme.dev</span></span></div></td>
+                            <td>Human</td>
+                            <td><span class="mk-role">Editor <span class="chev">⌄</span></span></td>
+                            <td>Engineering / Docs</td>
+                            <td class="mk-optional"><span class="mk-check">✓</span></td>
+                            <td class="mk-optional">3h ago</td>
+                          </tr>
+                          <tr>
+                            <td><span class="mk-dash">□</span></td>
+                            <td><div class="mk-member"><span class="mk-av">S</span><span><span class="nm">svc-indexer</span><br><span class="em">service account</span></span></div></td>
+                            <td>Service</td>
+                            <td><span class="mk-role">Editor <span class="chev">⌄</span></span></td>
+                            <td>All spaces</td>
+                            <td class="mk-optional"><span class="mk-dash">—</span></td>
+                            <td class="mk-optional">12m ago</td>
+                          </tr>
+                          <tr>
+                            <td><span class="mk-dash">□</span></td>
+                            <td><div class="mk-member"><span class="mk-av">TS</span><span><span class="nm">Tomás Silva</span><br><span class="em">tomas@acme.dev</span></span></div></td>
+                            <td>Human</td>
+                            <td><span class="mk-role">Viewer <span class="chev">⌄</span></span></td>
+                            <td>Engineering</td>
+                            <td class="mk-optional"><span class="mk-dash">—</span></td>
+                            <td class="mk-optional">Yesterday</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                    <div class="mk-foot"><span>Showing 5 of 24</span><span class="mk-page"><span>‹</span><span class="on">1</span><span>2</span><span>3</span><span>…</span><span>›</span></span><span>20 / page</span></div>
+                  </section>
+
+                  <aside class="mk-panel mk-policy" aria-label="策略矩阵抽屉">
+                    <div class="mk-panel-head">Policy matrix <span class="x">×</span></div>
+                    <div class="mk-scope">Scope <span class="val">Engineering <span style="color:var(--fg-3)">⌄</span></span></div>
+                    <div class="mk-inherit">
+                      <div class="mk-chips"><span class="mk-chip2 on">tenant Owner</span><span class="mk-chip2 on">group Admin</span><span class="mk-chip2">space role</span></div>
+                      Explicit member role wins; group role takes max; the last Owner cannot be removed.
+                    </div>
+                    <table class="mk-matrix">
+                      <thead>
+                        <tr><th class="cap">Capability</th><th>O</th><th>A</th><th>E</th><th>V</th></tr>
+                      </thead>
+                      <tbody>
+                        <tr><td class="cap">Space settings</td><td class="yes">●</td><td class="yes">●</td><td class="no">○</td><td class="no">○</td></tr>
+                        <tr><td class="cap">Read documents</td><td class="yes">●</td><td class="yes">●</td><td class="yes">●</td><td class="yes">●</td></tr>
+                        <tr><td class="cap">Write documents</td><td class="yes">●</td><td class="yes">●</td><td class="yes">●</td><td class="no">○</td></tr>
+                        <tr><td class="cap">Manage members</td><td class="yes">●</td><td class="yes">●</td><td class="no">○</td><td class="no">○</td></tr>
+                        <tr><td class="cap">Manage policies</td><td class="yes">●</td><td class="yes">●</td><td class="no">○</td><td class="no">○</td></tr>
+                        <tr><td class="cap">View audit</td><td class="yes">●</td><td class="yes">●</td><td class="no">○</td><td class="no">○</td></tr>
+                        <tr><td class="cap">Delete group</td><td class="yes">●</td><td class="no">○</td><td class="no">○</td><td class="no">○</td></tr>
+                      </tbody>
+                    </table>
+                    <div class="mk-audit"><svg class="ic" aria-hidden="true"><use href="#i-shield"></use></svg><span>Policy changes are audited with actor, before/after and request_id. Team retention 90d; enterprise WORM target 1–3y.</span></div>
+                    <div class="mk-danger"><svg class="ic" aria-hidden="true"><use href="#i-x"></use></svg>Delete group · type name to confirm</div>
+                  </aside>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <p class="mock-caption"><b>读法：</b>左侧是 IAM 服务导航；中间是组列表 + 成员资源表；右侧是策略抽屉。矩阵列 <b>O / A / E / V</b> 对应 Owner / Admin / Editor / Viewer。<b>†6</b> 这是目标词汇，不是当前后端角色：租户角色是 <code>owner/admin/user</code>，空间角色是 <code>space_owner/space_admin/editor/viewer</code>，组角色只有 <code>group_admin/group_member</code>。统一角色词汇是发布前待确认项。</p>
+      <p class="mock-caption"><b>交互说明：</b>行点击打开右侧抽屉，列表不跳页；scope 改变时矩阵与继承链同步更新；保存前显示 effective diff；最后 Owner 的删除按钮禁用。真实实现应复用现有 <code>--color-*</code> token 与表格 / 空态 / 确认组件。</p>
+    </div>
+  </section>
+</main>
+
+<footer class="footer">
+  <div class="wrap footer-grid">
+    <div>
+      <div class="brand"><span class="dot"></span>Linxira Knowledge Base</div>
+      <p>发布前说明 · 静态单文件 · 无外部请求 · 可直接用浏览器打开或打印为 PDF。</p>
+    </div>
+    <div>
+      <div class="k">FILE</div>
+      <div class="v">document/pre-release-overview.html</div>
+      <div class="k" style="margin-top:10px">VERSION</div>
+      <div class="v">0.2.z · main 0.2.2 · latest v0.2.1</div>
+    </div>
+    <div>
+      <div class="k">LICENSE</div>
+      <p>自 v0.2.2 起：core 为 AGPL-3.0；其余为 MIT 或 Apache-2.0。v0.2.1 及更早：MIT。以仓库 <a href="../LICENSE">LICENSE</a> / NOTICE 与发布资产为准。</p>
+    </div>
+  </div>
+  <div class="wrap footer-note">本页不是发布承诺。† 标记的规范 / 实现差异、以及“仅 flag / 规划”条目，需产品确认后再对外表述。</div>
+</footer>
+
+</body>
+</html>
