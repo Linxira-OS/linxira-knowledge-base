@@ -22,7 +22,7 @@ use argon2::password_hash::{PasswordHash, PasswordVerifier};
 use argon2::Argon2;
 use axum::body::{Body, Bytes};
 use axum::extract::{ConnectInfo, Form, Path as AxumPath, Query, Request, State};
-use axum::http::{header, HeaderMap, HeaderValue, StatusCode};
+use axum::http::{header, HeaderMap, HeaderValue, Method, StatusCode};
 use axum::middleware::{self, Next};
 use axum::response::{Html, IntoResponse, Redirect, Response};
 use axum::routing::{get, post};
@@ -32,8 +32,10 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::net::SocketAddr;
+use std::path::{Path as FsPath, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
+use tokio::io::AsyncReadExt;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 
@@ -60,8 +62,8 @@ impl AppState {
 }
 
 pub fn router(state: AppState) -> Router {
-    Router::new()
-        .route("/", get(root))
+    let static_root = resolve_static_root(&state.config);
+    let mut router = Router::new()
         .route("/health", get(health))
         .route("/openapi.json", get(openapi_json))
         .route("/login", get(login_form).post(login_submit))
@@ -253,7 +255,22 @@ pub fn router(state: AppState) -> Router {
         .route(
             "/api/v1/admin/quota-overrides",
             post(create_quota_override_v1),
-        )
+        );
+
+    // With a web directory configured, "/" is the SPA entry point and every
+    // route the API does not claim falls through to static files; without one
+    // the built-in HTML index keeps working.
+    if let Some(dir) = static_root {
+        let dir = Arc::new(dir);
+        router = router.fallback(move |request: Request| {
+            let dir = dir.clone();
+            async move { serve_static(&dir, request).await }
+        });
+    } else {
+        router = router.route("/", get(root));
+    }
+
+    router
         .layer(middleware::from_fn_with_state(
             state.clone(),
             request_logging,
@@ -316,6 +333,246 @@ impl LoginLimiter {
         guard.remove(key);
     }
 }
+/// Canonical web root for `server.web_dir` / `LKB_WEB_DIR`, if it is usable.
+/// A missing directory only disables static hosting (the API still starts), so
+/// a stale path cannot take the whole server down.
+fn resolve_static_root(config: &Config) -> Option<PathBuf> {
+    let dir = config.server.web_dir.as_deref()?;
+    match std::fs::canonicalize(dir) {
+        Ok(root) if root.is_dir() => Some(root),
+        Ok(root) => {
+            tracing::warn!(
+                path = %root.display(),
+                "server.web_dir is not a directory; static hosting disabled"
+            );
+            None
+        }
+        Err(err) => {
+            tracing::warn!(
+                path = %dir.display(),
+                error = %err,
+                "server.web_dir cannot be read; static hosting disabled"
+            );
+            None
+        }
+    }
+}
+
+/// Fallback handler: anything the router did not claim is served from the web
+/// directory. Files are served as-is (content-hashed `assets/` get long cache
+/// headers, `index.html` is always revalidated), extension-less paths fall
+/// back to `index.html` so client-side history routing works, and a missing
+/// asset stays a 404 instead of silently turning into HTML.
+async fn serve_static(root: &FsPath, request: Request) -> Response {
+    let head_only = request.method() == Method::HEAD;
+    let response = match *request.method() {
+        Method::GET | Method::HEAD => static_response(root, request).await,
+        _ => {
+            let mut response = AppError::new(
+                StatusCode::METHOD_NOT_ALLOWED,
+                "method_not_allowed",
+                "static files are served with GET and HEAD",
+            )
+            .into_response();
+            response
+                .headers_mut()
+                .insert(header::ALLOW, HeaderValue::from_static("GET, HEAD"));
+            response
+        }
+    };
+    if !head_only {
+        return response;
+    }
+    // `Router::fallback` routes are called for HEAD as-is, so trim the body
+    // here and keep the headers (including Content-Length where known).
+    let (parts, _) = response.into_parts();
+    Response::from_parts(parts, Body::empty())
+}
+
+async fn static_response(root: &FsPath, request: Request) -> Response {
+    let raw_path = request.uri().path();
+    if is_api_path(raw_path) {
+        // A missing API route must never be answered with the SPA shell.
+        return AppError::not_found("api route not found").into_response();
+    }
+    let Some(relative) = safe_relative_path(raw_path) else {
+        return AppError::not_found("file not found").into_response();
+    };
+    if relative.as_os_str().is_empty() {
+        return index_response(root).await;
+    }
+    match resolve_static_file(root, &relative).await {
+        Some(file) => file_response(&file, &relative).await,
+        None if relative.extension().is_none() => index_response(root).await,
+        None => AppError::not_found("file not found").into_response(),
+    }
+}
+
+fn is_api_path(path: &str) -> bool {
+    path == "/api" || path.starts_with("/api/")
+}
+
+async fn index_response(root: &FsPath) -> Response {
+    let index = FsPath::new("index.html");
+    match resolve_static_file(root, index).await {
+        Some(file) => file_response(&file, index).await,
+        None => AppError::not_found("index.html is missing from the web directory").into_response(),
+    }
+}
+
+/// Canonicalize `root/relative` and keep it only when it stays inside `root`,
+/// so traversal attempts and symlinks pointing outside the web directory are
+/// rejected even if a segment check misses them.
+async fn resolve_static_file(root: &FsPath, relative: &FsPath) -> Option<PathBuf> {
+    let canonical = tokio::fs::canonicalize(root.join(relative)).await.ok()?;
+    if !canonical.starts_with(root) {
+        return None;
+    }
+    let metadata = tokio::fs::metadata(&canonical).await.ok()?;
+    if !metadata.is_file() {
+        return None;
+    }
+    Some(canonical)
+}
+
+async fn file_response(path: &FsPath, relative: &FsPath) -> Response {
+    let metadata = match tokio::fs::metadata(path).await {
+        Ok(metadata) if metadata.is_file() => metadata,
+        _ => return AppError::not_found("file not found").into_response(),
+    };
+    let file = match tokio::fs::File::open(path).await {
+        Ok(file) => file,
+        Err(_) => return AppError::not_found("file not found").into_response(),
+    };
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, content_type(relative))
+        .header(header::CONTENT_LENGTH, metadata.len().to_string())
+        .header(header::CACHE_CONTROL, cache_control(relative))
+        .header(
+            header::X_CONTENT_TYPE_OPTIONS,
+            HeaderValue::from_static("nosniff"),
+        )
+        .body(file_body(file))
+        .expect("static file response")
+}
+
+/// Stream the file instead of buffering it, so large assets stay off the heap.
+fn file_body(file: tokio::fs::File) -> Body {
+    let stream = futures_util::stream::try_unfold(file, |mut file| async move {
+        let mut chunk = vec![0u8; 64 * 1024];
+        let read = file.read(&mut chunk).await?;
+        if read == 0 {
+            return Ok::<_, std::io::Error>(None);
+        }
+        chunk.truncate(read);
+        Ok(Some((Bytes::from(chunk), file)))
+    });
+    Body::from_stream(stream)
+}
+
+/// Decode a request path into a relative path, rejecting anything that could
+/// escape the web directory (`..`, backslashes, drive letters, NUL) or hide a
+/// traversal behind percent encoding.
+fn safe_relative_path(raw: &str) -> Option<PathBuf> {
+    let decoded = percent_decode(raw)?;
+    if decoded.contains('\0') {
+        return None;
+    }
+    let mut relative = PathBuf::new();
+    for segment in decoded.split('/') {
+        if segment.is_empty() || segment == "." {
+            continue;
+        }
+        if segment == ".." {
+            return None;
+        }
+        if segment.contains('\\') || segment.contains(':') {
+            return None;
+        }
+        if cfg!(windows) && (segment.ends_with(' ') || segment.ends_with('.')) {
+            // Win32 strips trailing dots and spaces, which would alias other paths.
+            return None;
+        }
+        relative.push(segment);
+    }
+    Some(relative)
+}
+
+/// Decode `%XX` escapes; returns `None` for invalid UTF-8. `+` stays literal
+/// (that is query-string syntax, not path syntax).
+fn percent_decode(value: &str) -> Option<String> {
+    let bytes = value.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] == b'%' && index + 3 <= bytes.len() {
+            let high = (bytes[index + 1] as char).to_digit(16);
+            let low = (bytes[index + 2] as char).to_digit(16);
+            if let (Some(high), Some(low)) = (high, low) {
+                out.push((high * 16 + low) as u8);
+                index += 3;
+                continue;
+            }
+        }
+        out.push(bytes[index]);
+        index += 1;
+    }
+    String::from_utf8(out).ok()
+}
+
+/// Content types for the files a web dist actually ships; anything else stays
+/// `application/octet-stream` rather than guessing.
+fn content_type(path: &FsPath) -> &'static str {
+    const TYPES: &[(&str, &str)] = &[
+        ("html", "text/html; charset=utf-8"),
+        ("htm", "text/html; charset=utf-8"),
+        ("js", "text/javascript; charset=utf-8"),
+        ("mjs", "text/javascript; charset=utf-8"),
+        ("css", "text/css; charset=utf-8"),
+        ("json", "application/json; charset=utf-8"),
+        ("map", "application/json; charset=utf-8"),
+        ("svg", "image/svg+xml"),
+        ("png", "image/png"),
+        ("jpg", "image/jpeg"),
+        ("jpeg", "image/jpeg"),
+        ("gif", "image/gif"),
+        ("webp", "image/webp"),
+        ("avif", "image/avif"),
+        ("ico", "image/x-icon"),
+        ("woff", "font/woff"),
+        ("woff2", "font/woff2"),
+        ("ttf", "font/ttf"),
+        ("otf", "font/otf"),
+        ("wasm", "application/wasm"),
+        ("txt", "text/plain; charset=utf-8"),
+        ("xml", "application/xml; charset=utf-8"),
+        ("webmanifest", "application/manifest+json"),
+        ("pdf", "application/pdf"),
+        ("mp4", "video/mp4"),
+        ("webm", "video/webm"),
+        ("mp3", "audio/mpeg"),
+    ];
+    let extension = path.extension().and_then(|ext| ext.to_str()).unwrap_or("");
+    for (candidate, mime) in TYPES {
+        if extension.eq_ignore_ascii_case(candidate) {
+            return mime;
+        }
+    }
+    "application/octet-stream"
+}
+
+fn cache_control(relative: &FsPath) -> &'static str {
+    // Vite emits content-hashed bundles under `assets/`; those names can never
+    // change meaning, everything else (`index.html` included) revalidates.
+    match relative.components().next() {
+        Some(std::path::Component::Normal(first)) if first.eq_ignore_ascii_case("assets") => {
+            "public, max-age=31536000, immutable"
+        }
+        _ => "no-cache",
+    }
+}
+
 
 fn cookie_map(headers: &HeaderMap) -> HashMap<String, String> {
     let mut cookies = HashMap::new();
@@ -7706,3 +7963,175 @@ mod tests {
         assert_eq!(stored, sha256_hex_str(raw));
     }
 }
+
+    use crate::config::Backend;
+    use crate::governance::{SOLO_SPACE, SOLO_TENANT};
+    use axum::body::to_bytes;
+    use tower::ServiceExt;
+
+    fn write_web_file(root: &std::path::Path, relative: &str, contents: &str) {
+        let path = root.join(relative);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, contents).unwrap();
+    }
+
+    async fn static_app(web_root: &std::path::Path) -> (Router, tempfile::TempDir) {
+        let db = tempfile::tempdir().unwrap();
+        let mut config = Config::default();
+        config.storage.backend = Backend::Sqlite;
+        config.storage.sqlite_path = db.path().join("lkb.sqlite");
+        config.storage.tenant_id = SOLO_TENANT.to_string();
+        config.storage.default_space = SOLO_SPACE.to_string();
+        config.server.web_dir = Some(web_root.to_path_buf());
+        let store = crate::store::open(&config).await.unwrap();
+        crate::store::bootstrap_space(&store, &config)
+            .await
+            .unwrap();
+        let state = AppState::new(
+            store,
+            Arc::new(config),
+            Arc::new(crate::providers::ProviderSet::with_none()),
+        );
+        (router(state), db)
+    }
+
+    async fn static_get(app: &Router, uri: &str) -> Response {
+        app.clone()
+            .oneshot(Request::builder().uri(uri).body(Body::empty()).unwrap())
+            .await
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn static_files_serve_index_assets_and_head() {
+        let web = tempfile::tempdir().unwrap();
+        let index_html = "<!doctype html><div id=\"root\">spa</div>";
+        write_web_file(web.path(), "index.html", index_html);
+        write_web_file(web.path(), "assets/app-abc123.js", "console.log('app')");
+        let (app, _db) = static_app(web.path()).await;
+
+        let index = static_get(&app, "/").await;
+        assert_eq!(index.status(), StatusCode::OK);
+        assert_eq!(
+            index.headers()[header::CONTENT_TYPE].to_str().unwrap(),
+            "text/html; charset=utf-8"
+        );
+        assert_eq!(
+            index.headers()[header::CACHE_CONTROL].to_str().unwrap(),
+            "no-cache"
+        );
+        let body = to_bytes(index.into_body(), usize::MAX).await.unwrap();
+        assert!(String::from_utf8_lossy(&body).contains("spa"));
+
+        let asset = static_get(&app, "/assets/app-abc123.js").await;
+        assert_eq!(asset.status(), StatusCode::OK);
+        assert_eq!(
+            asset.headers()[header::CONTENT_TYPE].to_str().unwrap(),
+            "text/javascript; charset=utf-8"
+        );
+        assert_eq!(
+            asset.headers()[header::CACHE_CONTROL].to_str().unwrap(),
+            "public, max-age=31536000, immutable"
+        );
+
+        let head = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method(Method::HEAD)
+                    .uri("/index.html")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(head.status(), StatusCode::OK);
+        assert_eq!(
+            head.headers()[header::CONTENT_LENGTH].to_str().unwrap(),
+            index_html.len().to_string()
+        );
+        let head_body = to_bytes(head.into_body(), usize::MAX).await.unwrap();
+        assert!(head_body.is_empty());
+    }
+
+    #[tokio::test]
+    async fn spa_fallback_only_for_extensionless_paths() {
+        let web = tempfile::tempdir().unwrap();
+        write_web_file(web.path(), "index.html", "<div id=\"root\">spa</div>");
+        let (app, _db) = static_app(web.path()).await;
+
+        let deep = static_get(&app, "/wiki/some/deep/link").await;
+        assert_eq!(deep.status(), StatusCode::OK);
+        let body = to_bytes(deep.into_body(), usize::MAX).await.unwrap();
+        assert!(String::from_utf8_lossy(&body).contains("spa"));
+
+        // A missing asset with an extension stays a 404; it must not silently
+        // turn into the HTML shell.
+        let missing = static_get(&app, "/assets/missing-xyz.js").await;
+        assert_eq!(missing.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn spa_fallback_without_index_is_a_plain_404() {
+        let web = tempfile::tempdir().unwrap();
+        write_web_file(web.path(), "assets/app.js", "console.log('app')");
+        let (app, _db) = static_app(web.path()).await;
+
+        let deep = static_get(&app, "/wiki/some/page").await;
+        assert_eq!(deep.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn api_routes_and_health_are_not_swallowed_by_static_hosting() {
+        let web = tempfile::tempdir().unwrap();
+        write_web_file(web.path(), "index.html", "<div id=\"root\">spa</div>");
+        let (app, _db) = static_app(web.path()).await;
+
+        let health = static_get(&app, "/health").await;
+        assert_eq!(health.status(), StatusCode::OK);
+        assert_eq!(
+            health.headers()[header::CONTENT_TYPE].to_str().unwrap(),
+            "application/json"
+        );
+
+        let openapi = static_get(&app, "/openapi.json").await;
+        assert_eq!(openapi.status(), StatusCode::OK);
+        let body = to_bytes(openapi.into_body(), usize::MAX).await.unwrap();
+        let text = String::from_utf8_lossy(&body);
+        assert!(text.contains("\"openapi\""), "unexpected body: {text}");
+        assert!(!text.contains("<div id=\"root\">"), "served the SPA shell");
+
+        let unknown_api = static_get(&app, "/api/v1/not-a-route").await;
+        assert_eq!(unknown_api.status(), StatusCode::NOT_FOUND);
+        let body = to_bytes(unknown_api.into_body(), usize::MAX).await.unwrap();
+        let text = String::from_utf8_lossy(&body);
+        assert!(text.contains("not_found"), "unexpected body: {text}");
+    }
+
+    #[tokio::test]
+    async fn traversal_outside_the_web_dir_is_rejected() {
+        let parent = tempfile::tempdir().unwrap();
+        let web = parent.path().join("web");
+        std::fs::create_dir_all(&web).unwrap();
+        write_web_file(&web, "index.html", "<div>spa</div>");
+        std::fs::write(parent.path().join("secret.txt"), "top secret").unwrap();
+        let (app, _db) = static_app(&web).await;
+
+        for uri in [
+            "/../secret.txt",
+            "/%2e%2e/secret.txt",
+            "/%2E%2E/secret.txt",
+            "/..%2fsecret.txt",
+            "/%2e%2e%2fsecret.txt",
+            "/assets/%2e%2e/%2e%2e/secret.txt",
+            "/..\\secret.txt",
+        ] {
+            let response = static_get(&app, uri).await;
+            assert_eq!(response.status(), StatusCode::NOT_FOUND, "uri {uri}");
+            let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+            assert!(
+                !String::from_utf8_lossy(&body).contains("top secret"),
+                "uri {uri} leaked the file"
+            );
+        }
+    }

@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Linxira 桌面设置</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Linxira 知识库</h1>
+        <p class="muted">
+          首次启动：选择本地存储（SQLite，零配置）或连接 PostgreSQL（团队 / 多用户模式）。
+          保存后本机将启动 <code>lkb serve</code> 并打开主界面。
+        </p>
+      </header>
+
+      <form id="setup-form">
+        <fieldset>
+          <legend>存储</legend>
+          <label class="choice">
+            <input type="radio" name="mode" value="sqlite" checked />
+            <span><strong>SQLite</strong>（默认）：单机、单用户、零配置</span>
+          </label>
+          <label class="choice">
+            <input type="radio" name="mode" value="postgres" />
+            <span><strong>PostgreSQL</strong>：团队 / 多用户模式（profile=team + 会话登录）</span>
+          </label>
+        </fieldset>
+
+        <fieldset id="pg-fields" hidden>
+          <legend>PostgreSQL 连接</legend>
+          <div class="grid">
+            <label>主机 <input id="pg-host" value="127.0.0.1" spellcheck="false" /></label>
+            <label>端口 <input id="pg-port" type="number" value="5432" min="1" max="65535" /></label>
+            <label>数据库 <input id="pg-database" placeholder="lkb" spellcheck="false" /></label>
+            <label>用户 <input id="pg-user" placeholder="postgres" spellcheck="false" /></label>
+            <label>密码 <input id="pg-password" type="password" autocomplete="off" /></label>
+            <label
+              >SSL 模式
+              <select id="pg-sslmode">
+                <option value="prefer">prefer（默认）</option>
+                <option value="require">require</option>
+                <option value="disable">disable</option>
+                <option value="verify-ca">verify-ca</option>
+                <option value="verify-full">verify-full</option>
+              </select>
+            </label>
+          </div>
+          <p class="muted">
+            密码优先保存到系统凭据库（Windows 凭据管理器 / Linux Secret Service）；
+            不可用时写入配置目录的 <code>pg.env</code>（Unix 0600）并在保存后提示。
+            个人单机建议使用 SQLite。
+          </p>
+        </fieldset>
+
+        <div class="actions">
+          <button id="submit" type="submit">保存并启动</button>
+        </div>
+      </form>
+
+      <section id="status" hidden></section>
+      <section id="log" hidden>
+        <h2>日志</h2>
+        <pre id="log-text"></pre>
+      </section>
+
+      <footer>
+        <span>配置：<code id="config-path"></code></span>
+        <span>数据：<code id="data-path"></code></span>
+        <span>SQLite：<code id="sqlite-path"></code></span>
+      </footer>
+    </main>
+    <script src="setup.js"></script>
+  </body>
+</html>

@@ -20,7 +20,7 @@
 | --- | --- |
 | 首选 | Tauri 2（Windows 优先；WebView2；安装包小；Rust 后端与现有内核同栈） |
 | 兜底 | Electron 仅在 Tauri 无法满足 Windows 兼容/签名/自动更新时评估，不作为默认 |
-| 平台 | Windows 10/11 x64 首发；Linux 个人版 tar.gz；macOS dmg/tar.gz 可选后续 |
+| 平台 | Windows 10/11 x64 首发；Linux 个人版 tar.gz；macOS 暂不打包 |
 | 启动 | 双击 exe → Tauri 启动 sidecar `lkb serve` → 打开窗口加载本地 URL |
 | 端口 | 默认 loopback 随机端口；可配置固定端口；端口冲突时回退随机并记录 |
 | 单实例 | 第二次启动只激活已有窗口，不启动第二个 sidecar |
@@ -34,7 +34,7 @@
 
 1. 选择存储：SQLite（默认，零配置）或 PostgreSQL（host/port/db/user/password/SSL）。
 2. PostgreSQL 填连接信息 → “测试连接”（超时/SSL/TLS 错误可读）。
-3. 写配置：`%APPDATA%\Linxira\lkb.toml`；portable 模式写 portable 同目录 `lkb.toml`。
+3. 写配置：`%APPDATA%\lkb\lkb.toml`；portable 模式写 portable 同目录 `lkb.toml`。
 4. 密码：Windows Credential Manager / DPAPI；配置文件只存引用/键名，不落明文。
 5. 首次启动跑迁移；失败展示可操作的诊断（权限/端口/DB/SSL）。
 6. 切换数据库：明确“迁移到新库”或“新建空库”；迁移需备份/导出；不静默覆盖。
@@ -78,7 +78,7 @@
 
 | 对象 | 存储 | 说明 |
 | --- | --- | --- |
-| 笔记 | Markdown 文件 vault | 事实源；默认 `%USERPROFILE%\\Documents\\Linxira Notes` 或配置路径 |
+| 笔记 | Markdown 文件 vault | 事实源；默认 `%USERPROFILE%\\Documents\\lkb-notes` 或配置路径 |
 | Wiki 页面 | DB Page/Revision | 现有内置 Wiki；保留 revision/乐观锁 |
 | 索引 | Document/Chunk/FTS | 笔记编译为文件型 Document；复用 doc_id、chunk、FTS |
 | UI | 统一“页面” | 笔记与 Wiki 在同一侧栏/搜索中展示，但不强行合并存储 |
@@ -106,7 +106,7 @@
 | Windows installer | Tauri NSIS/MSI + sidecar + web dist | 默认个人版；未签名 SmartScreen 提示 |
 | Windows portable zip | exe + sidecar + web dist + 配置模板 | 解压即用；数据/配置同目录 |
 | Linux 个人版 | tar.gz（Tauri/二进制 + web dist） | 可选后续 |
-| macOS | dmg/tar.gz | 可选后续；签名/公证 |
+| macOS | 不发布 | 暂不打包；仅保留开发路径 |
 | `lkb-web` dist | 静态 web 资源 | 浏览器/外部 nginx 使用 |
 | 企业 Docker + compose | API/worker + PG + 对象存储 | 不含桌面壳 |
 | 不发 | debug 包、DB 专用包、node_modules、target/、测试数据 | 避免泄漏/膨胀 |

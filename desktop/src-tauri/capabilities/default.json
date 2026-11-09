@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "setup",
+  "description": "首启设置窗口：只使用应用内命令与核心 API。主窗口加载的是本地 Web UI，不授予任何 Tauri 权限。",
+  "windows": ["setup"],
+  "permissions": ["core:default"]
+}

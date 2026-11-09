@@ -12,12 +12,12 @@
 **个人版 = Tauri 2 桌面壳 + sidecar `lkb serve` + 内置 Web dist；笔记 = Markdown vault 作为事实源，编译为文件型 Document/Chunk；Wiki 仍用 DB Page/Revision；UI 统一为“页面”，存储不强行合并。**
 
 - 桌面壳首选 Tauri 2（Windows WebView2，NSIS/MSI + portable zip）；Electron 仅兜底。单实例、托盘、关闭行为、崩溃重启、日志/诊断、签名更新。
-- 首启向导选择 SQLite（默认）或 PostgreSQL；测试连接；配置写 `%APPDATA%\Linxira\lkb.toml` 或 portable 同目录；密码存 Credential Manager/DPAPI，不落明文；切换 DB 需迁移/新库。
+- 首启向导选择 SQLite（默认）或 PostgreSQL；测试连接；配置写 `%APPDATA%\lkb\lkb.toml` 或 portable 同目录；密码存 Credential Manager/DPAPI，不落明文；切换 DB 需迁移/新库。
 - `solo` 允许 SQLite 或 PostgreSQL（仍单用户、loopback、allow-all）；team/enterprise 仍 PG；不改变企业语义。
 - Rust 二进制托管 `web/dist`（`LKB_WEB_DIR`，SPA fallback，API 同源）；Tauri/浏览器/portable 都只启动一个 sidecar。
-- 笔记：`personal` 空间每用户私有；vault 默认 `%USERPROFILE%\Documents\Linxira Notes`；文件树/frontmatter/`[[wikilink]]`；文件监听增量索引；原子写/冲突检测/回收站或本地快照；Obsidian 风格 UI；不做插件市场。
+- 笔记：`personal` 空间每用户私有；vault 默认 `%USERPROFILE%\Documents\lkb-notes`；文件树/frontmatter/`[[wikilink]]`；文件监听增量索引；原子写/冲突检测/回收站或本地快照；Obsidian 风格 UI；不做插件市场。
 - 团队内每人有 personal 空间；笔记可发布/共享到团队空间（复制为 Wiki 页面，保留来源）；权限按空间角色。
-- 发布：Windows installer + portable、Linux tar.gz、macOS 可选、`lkb-web` dist、企业 Docker；不发 debug/DB 专用/node_modules/target。
+- 发布：Windows installer + portable、Linux tar.gz、macOS 暂不发布、`lkb-web` dist、企业 Docker；不发 debug/DB 专用/node_modules/target。
 
 ## 备选方案与为何不选
 

@@ -541,12 +541,17 @@ impl Default for GroupsConfig {
 #[serde(default)]
 pub struct ServerConfig {
     pub bind: String,
+    /// Static web directory (the SPA `web/dist`). When set and readable,
+    /// `lkb serve` answers unmatched GET/HEAD requests from it, with
+    /// `index.html` as the SPA fallback for extension-less paths.
+    pub web_dir: Option<PathBuf>,
 }
 
 impl Default for ServerConfig {
     fn default() -> Self {
         Self {
             bind: "127.0.0.1:7331".to_string(),
+            web_dir: None,
         }
     }
 }
@@ -772,6 +777,11 @@ impl Config {
         }
         if let Ok(value) = env::var("LKB_BIND") {
             self.server.bind = value;
+        }
+        if let Ok(value) = env::var("LKB_WEB_DIR") {
+            if !value.trim().is_empty() {
+                self.server.web_dir = Some(PathBuf::from(value));
+            }
         }
         if let Ok(value) = env::var("LKB_AUTH_MODE") {
             self.auth.mode = AuthMode::parse(&value).map_err(anyhow::Error::msg)?;
@@ -1134,6 +1144,14 @@ impl Config {
         let mut out = String::new();
         out.push_str(&format!("profile = {}\n", self.profile_name().as_str()));
         out.push_str(&format!("server.bind = {}\n", self.server.bind));
+        out.push_str(&format!(
+            "server.web_dir = {}\n",
+            self.server
+                .web_dir
+                .as_deref()
+                .map(|path| path.display().to_string())
+                .unwrap_or_else(|| "<not set>".to_string())
+        ));
         out.push_str(&format!("auth.mode = {}\n", self.auth.mode.as_str()));
         out.push_str(&format!("auth.cookie_name = {}\n", self.auth.cookie_name));
         out.push_str(&format!(

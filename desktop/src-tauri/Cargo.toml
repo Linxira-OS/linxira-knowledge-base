@@ -1,0 +1,35 @@
+[package]
+name = "lkb-desktop"
+version = "0.2.1"
+description = "Linxira Knowledge Base desktop shell (Windows/Linux)"
+edition = "2021"
+rust-version = "1.82"
+license = "MIT"
+publish = false
+
+# Standalone crate: it must never join the repository root package build.
+[workspace]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+tauri-plugin-shell = "2"
+tauri-plugin-single-instance = "2"
+dirs = "7"
+serde = { version = "1", features = ["derive"] }
+toml = "1"
+
+# The PostgreSQL password lives in the OS credential store when one is
+# available; pg.env is only the documented fallback (see desktop/README.md).
+[target.'cfg(target_os = "windows")'.dependencies]
+keyring = { version = "3", features = ["windows-native"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+keyring = { version = "3", features = ["sync-secret-service", "crypto-rust"] }
+
+[profile.release]
+strip = true
+lto = "thin"
