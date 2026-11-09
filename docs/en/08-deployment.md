@@ -142,7 +142,7 @@ Production deployments should know:
 
 ## 10. Resources and Scale
 
-Design targets (not measured): solo ≤ 2,000 documents / 30,000 chunks; team ≤ 100,000 / 2,000,000; enterprise ≤ 10,000,000 / 200,000,000. The validated workload is the repository corpus plus 24 seed documents, with 106 tests on SQLite. Above roughly 50,000 solo chunks or sustained latency growth, evaluate moving to team rather than adding more index to solo.
+Design targets (not measured): solo ≤ 2,000 documents / 30,000 chunks; team ≤ 100,000 / 2,000,000; enterprise ≤ 10,000,000 / 200,000,000. The validated workload is the repository corpus plus 24 seed documents, with 113 tests on SQLite. Above roughly 50,000 solo chunks or sustained latency growth, evaluate moving to team rather than adding more index to solo.
 
 ## 11. Upgrades and Rollback
 

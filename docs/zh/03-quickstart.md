@@ -18,7 +18,7 @@ summary: 从构建 lkb 到导入示例、检索、回答、评测与启动本地
 - 运行前端需要 Node.js 与 npm（`web/` 使用 npm 与 Vite）。
 - 首次构建需要联网拉取 crates；运行默认路径不联网。
 
-本仓库验证过的组合是 `stable-x86_64-pc-windows-gnu` + MSYS2 gcc：`cargo check --all-targets`、`cargo build --release` 与 `cargo test` 全部通过（106 tests passed；PostgreSQL 集成测试因未设置 `LKB_TEST_PG_URL` 打印 SKIP）。默认 `stable-x86_64-pc-windows-msvc` 在验证机器上因 `link.exe` 解析到 Git 自带 coreutils 的 `link` 而失败；装好 MSVC 链接器后可直接用默认 toolchain。
+本仓库验证过的组合是 `stable-x86_64-pc-windows-gnu` + MSYS2 gcc：`cargo check --all-targets`、`cargo build --release` 与 `cargo test` 全部通过（113 tests passed；PostgreSQL 集成测试因未设置 `LKB_TEST_PG_URL` 打印 SKIP）。默认 `stable-x86_64-pc-windows-msvc` 在验证机器上因 `link.exe` 解析到 Git 自带 coreutils 的 `link` 而失败；装好 MSVC 链接器后可直接用默认 toolchain。
 
 ## 2. 构建
 
