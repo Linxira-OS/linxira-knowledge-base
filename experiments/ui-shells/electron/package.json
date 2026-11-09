@@ -1,0 +1,48 @@
+{
+  "name": "lkb-shell-electron",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Electron shell prototype for the Layered KB UI",
+  "author": "LKB prototype",
+  "main": "main.js",
+  "scripts": {
+    "sync:dist": "node scripts/sync-dist.mjs",
+    "start": "node scripts/sync-dist.mjs && electron .",
+    "pack:nsis": "node scripts/sync-dist.mjs && electron-builder --win nsis",
+    "pack:nsis:offline": "node scripts/sync-dist.mjs && electron-builder --win nsis --config.electronDist=node_modules/electron/dist"
+  },
+  "devDependencies": {
+    "electron": "^45.2.3",
+    "electron-builder": "^26.18.0"
+  },
+  "build": {
+    "appId": "dev.lkb.shell.electron-prototype",
+    "productName": "Layered KB",
+    "asar": true,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer/**/*",
+      "package.json"
+    ],
+    "win": {
+      "signAndEditExecutable": false,
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": false,
+      "allowToChangeInstallationDirectory": true,
+      "deleteAppDataOnUninstall": false
+    }
+  }
+}

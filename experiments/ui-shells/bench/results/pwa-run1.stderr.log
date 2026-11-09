@@ -1,0 +1,2 @@
+[16036:9208:1108/163835.288:ERROR:content\browser\network_service_instance_impl.cc:652] Network service crashed or was terminated, restarting service.
+[16036:9208:1108/163835.290:ERROR:content\browser\gpu\gpu_process_host.cc:1044] GPU process exited unexpectedly: exit_code=-1

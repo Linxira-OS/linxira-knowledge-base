@@ -289,20 +289,16 @@ impl PostgresStore {
     }
 }
 
-fn statement_has_sql(statement: &str) -> bool {
-    statement.lines().any(|line| {
-        let line = line.trim();
-        !line.is_empty() && !line.starts_with("--")
-    })
-}
-
 async fn execute_script(connection: &mut PgConnection, sql: &str) -> Result<(), sqlx::Error> {
-    for statement in sql.split(';') {
-        if !statement_has_sql(statement) {
-            continue;
-        }
-        sqlx::query(statement).execute(&mut *connection).await?;
-    }
+    // The whole script goes to the server in one simple-query round trip so
+    // PostgreSQL's own parser handles comments, string literals and dollar
+    // quoting. Splitting on `;` client-side mis-cuts semicolons that appear
+    // inside comments or literals (migrations/postgres/0002_search.sql has one
+    // in a comment).
+    //
+    // `RawSql::execute` trips higher-ranked lifetime inference in async
+    // contexts (sqlx#3581), so invoke `Executor::execute` on the connection.
+    sqlx::Executor::execute(connection, sqlx::raw_sql(sql)).await?;
     Ok(())
 }
 

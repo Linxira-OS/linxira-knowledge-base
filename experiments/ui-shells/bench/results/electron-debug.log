@@ -1,0 +1,56 @@
+npm notice run lkb-shell-electron@0.1.0 npx
+npm notice run electron-builder --win nsis
+  • electron-builder  version=26.18.0 os=10.0.26300
+  • Implicit publishing triggered by CI detection. This behavior will be disabled in electron-builder v27. Please use --publish explicitly.
+  • loaded configuration  file=package.json ("build" field)
+  • effective config  config=directories:
+  output: release
+  buildResources: build
+appId: dev.lkb.shell.electron-prototype
+productName: Layered KB
+asar: true
+files:
+  - filter:
+      - main.js
+      - preload.js
+      - renderer/**/*
+      - package.json
+win:
+  signAndEditExecutable: false
+  target:
+    - target: nsis
+      arch:
+        - x64
+nsis:
+  oneClick: false
+  perMachine: false
+  allowElevation: false
+  allowToChangeInstallationDirectory: true
+  deleteAppDataOnUninstall: false
+
+  • spawning        command=npm prefix -w cwd=F:\CODE\RAG\experiments\ui-shells\electron
+  • exited          command=npm code=1 pid=7660
+  • workspace root command failed, falling back to package.json walk  command=npm prefix -w error=npm process failed ERR_ELECTRON_BUILDER_CANNOT_EXECUTE
+Exit code:
+1
+  • no event listeners found  event=beforePack
+  • executing @electron/rebuild  electronVersion=45.2.3 arch=x64 buildFromSource=false workspaceRoot=F:\CODE\RAG\experiments\ui-shells\electron projectDir=./ appDir=./
+  • installing native dependencies  arch=x64
+  • completed installing native dependencies
+  • packaging       platform=win32 arch=x64 electron=45.2.3 appOutDir=release\win-unpacked
+  • no custom electronDist provided, unpacking default Electron distribution
+  • downloaded      label=electron progress=100%
+  ⨯ Timeout awaiting 'request' for 600000ms  failedTask=build stackTrace=RequestError: Timeout awaiting 'request' for 600000ms
+    at ClientRequest.<anonymous> (F:\CODE\RAG\experiments\ui-shells\electron\node_modules\got\dist\source\core\index.js:970:65)
+    at Object.onceWrapper (node:events:631:26)
+    at ClientRequest.emit (node:events:521:24)
+    at ClientRequest.origin.emit (F:\CODE\RAG\experiments\ui-shells\electron\node_modules\@szmarczak\http-timer\dist\source\index.js:43:20)
+    at emitErrorEvent (node:_http_client:109:11)
+    at TLSSocket.socketErrorListener (node:_http_client:593:5)
+    at TLSSocket.emit (node:events:509:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3)
+    at processTicksAndRejections (node:internal/process/task_queues:90:21)
+    at Timeout.timeoutHandler [as _onTimeout] (F:\CODE\RAG\experiments\ui-shells\electron\node_modules\got\dist\source\core\utils\timed-out.js:36:25)
+    at listOnTimeout (node:internal/timers:607:11)
+    at processTimers (node:internal/timers:541:7)

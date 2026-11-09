@@ -1,0 +1,156 @@
+﻿{
+    "summary":  {
+                    "shell":  "electron",
+                    "exe":  "F:\\CODE\\RAG\\experiments\\ui-shells\\electron\\release\\win-unpacked\\Layered KB.exe",
+                    "headless":  true,
+                    "args":  [
+                                 "@(--headless)"
+                             ],
+                    "runs":  3,
+                    "paintMsMedian":  522.4,
+                    "paintMsAll":  [
+                                       614.5,
+                                       522.4,
+                                       478.5
+                                   ],
+                    "windowMsMedian":  null,
+                    "windowMsAll":  [
+
+                                    ],
+                    "totalWorkingSetMBMedian":  433,
+                    "totalWorkingSetMBAll":  [
+                                                 433,
+                                                 471,
+                                                 420
+                                             ],
+                    "totalPrivateMBMedian":  241.9,
+                    "totalPrivateMBAll":  [
+                                              241.9,
+                                              279.3,
+                                              223.3
+                                          ],
+                    "capturedAt":  "2026-11-08T16:35:25.8689916+08:00"
+                },
+    "records":  [
+                    {
+                        "shell":  "electron",
+                        "headless":  true,
+                        "run":  1,
+                        "startEpochMs":  1794126890412,
+                        "windowMs":  null,
+                        "paintMs":  614.5,
+                        "inPageFcpMs":  250.5,
+                        "processCount":  4,
+                        "mainWorkingSetMB":  94.8,
+                        "totalWorkingSetMB":  433,
+                        "totalPrivateMB":  241.9,
+                        "relaunched":  false,
+                        "processes":  [
+                                          {
+                                              "Name":  "Layered KB",
+                                              "Id":  6568,
+                                              "WorkingSetMB":  94.8,
+                                              "PrivateMB":  31.8
+                                          },
+                                          {
+                                              "Name":  "Layered KB",
+                                              "Id":  41116,
+                                              "WorkingSetMB":  191.9,
+                                              "PrivateMB":  153
+                                          },
+                                          {
+                                              "Name":  "Layered KB",
+                                              "Id":  5868,
+                                              "WorkingSetMB":  46.7,
+                                              "PrivateMB":  11.8
+                                          },
+                                          {
+                                              "Name":  "Layered KB",
+                                              "Id":  41660,
+                                              "WorkingSetMB":  99.6,
+                                              "PrivateMB":  45.3
+                                          }
+                                      ]
+                    },
+                    {
+                        "shell":  "electron",
+                        "headless":  true,
+                        "run":  2,
+                        "startEpochMs":  1794126902637,
+                        "windowMs":  null,
+                        "paintMs":  522.4,
+                        "inPageFcpMs":  234.2,
+                        "processCount":  4,
+                        "mainWorkingSetMB":  96.6,
+                        "totalWorkingSetMB":  471,
+                        "totalPrivateMB":  279.3,
+                        "relaunched":  false,
+                        "processes":  [
+                                          {
+                                              "Name":  "Layered KB",
+                                              "Id":  4776,
+                                              "WorkingSetMB":  96.6,
+                                              "PrivateMB":  31.9
+                                          },
+                                          {
+                                              "Name":  "Layered KB",
+                                              "Id":  30220,
+                                              "WorkingSetMB":  233.7,
+                                              "PrivateMB":  195.3
+                                          },
+                                          {
+                                              "Name":  "Layered KB",
+                                              "Id":  32344,
+                                              "WorkingSetMB":  46.8,
+                                              "PrivateMB":  12
+                                          },
+                                          {
+                                              "Name":  "Layered KB",
+                                              "Id":  16900,
+                                              "WorkingSetMB":  93.9,
+                                              "PrivateMB":  40.1
+                                          }
+                                      ]
+                    },
+                    {
+                        "shell":  "electron",
+                        "headless":  true,
+                        "run":  3,
+                        "startEpochMs":  1794126914336,
+                        "windowMs":  null,
+                        "paintMs":  478.5,
+                        "inPageFcpMs":  250.9,
+                        "processCount":  4,
+                        "mainWorkingSetMB":  96.4,
+                        "totalWorkingSetMB":  420,
+                        "totalPrivateMB":  223.3,
+                        "relaunched":  false,
+                        "processes":  [
+                                          {
+                                              "Name":  "Layered KB",
+                                              "Id":  11708,
+                                              "WorkingSetMB":  96.4,
+                                              "PrivateMB":  32
+                                          },
+                                          {
+                                              "Name":  "Layered KB",
+                                              "Id":  24960,
+                                              "WorkingSetMB":  179,
+                                              "PrivateMB":  140.2
+                                          },
+                                          {
+                                              "Name":  "Layered KB",
+                                              "Id":  12184,
+                                              "WorkingSetMB":  51.7,
+                                              "PrivateMB":  12.2
+                                          },
+                                          {
+                                              "Name":  "Layered KB",
+                                              "Id":  28740,
+                                              "WorkingSetMB":  92.9,
+                                              "PrivateMB":  38.9
+                                          }
+                                      ]
+                    }
+                ]
+}

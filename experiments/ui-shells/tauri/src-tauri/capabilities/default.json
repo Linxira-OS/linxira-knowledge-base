@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Default capability for the prototype window. No plugin permissions are needed: the frontend is fully static.",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

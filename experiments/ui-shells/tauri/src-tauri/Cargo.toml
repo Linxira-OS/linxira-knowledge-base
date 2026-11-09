@@ -1,0 +1,21 @@
+[package]
+name = "lkb-shell-tauri"
+version = "0.1.0"
+description = "Tauri 2 shell prototype for the Layered KB UI"
+edition = "2021"
+rust-version = "1.77"
+
+# Detach from any parent workspace so this prototype never participates in the
+# repository's own Cargo build.
+[workspace]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[profile.release]
+strip = true

@@ -1,0 +1,1 @@
+{"default":{"identifier":"default","description":"Default capability for the prototype window. No plugin permissions are needed: the frontend is fully static.","local":true,"windows":["main"],"permissions":["core:default"]}}

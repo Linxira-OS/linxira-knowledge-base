@@ -1,0 +1,330 @@
+﻿{
+    "summary":  {
+                    "shell":  "tauri",
+                    "exe":  "F:\\CODE\\RAG\\experiments\\ui-shells\\tauri\\src-tauri\\target\\release\\lkb-shell-tauri.exe",
+                    "args":  [
+
+                             ],
+                    "runs":  5,
+                    "paintMsMedian":  705.5,
+                    "paintMsAll":  [
+                                       737.7,
+                                       655.4,
+                                       652.7,
+                                       829,
+                                       705.5
+                                   ],
+                    "windowMsMedian":  115,
+                    "windowMsAll":  [
+                                        151,
+                                        102,
+                                        100,
+                                        198,
+                                        115
+                                    ],
+                    "totalWorkingSetMBMedian":  492.5,
+                    "totalWorkingSetMBAll":  [
+                                                 491.5,
+                                                 492.5,
+                                                 492.5,
+                                                 497.6,
+                                                 490.8
+                                             ],
+                    "totalPrivateMBMedian":  255.1,
+                    "totalPrivateMBAll":  [
+                                              255.1,
+                                              251.7,
+                                              253.7,
+                                              264.2,
+                                              258
+                                          ],
+                    "capturedAt":  "2026-11-08T16:31:49.3835271+08:00"
+                },
+    "records":  [
+                    {
+                        "shell":  "tauri",
+                        "run":  1,
+                        "startEpochMs":  1794126650957,
+                        "windowMs":  151,
+                        "paintMs":  737.7,
+                        "inPageFcpMs":  168.6,
+                        "processCount":  7,
+                        "mainWorkingSetMB":  28.1,
+                        "totalWorkingSetMB":  491.5,
+                        "totalPrivateMB":  255.1,
+                        "relaunched":  false,
+                        "processes":  [
+                                          {
+                                              "Name":  "lkb-shell-tauri",
+                                              "Id":  11532,
+                                              "WorkingSetMB":  28.1,
+                                              "PrivateMB":  4.2
+                                          },
+                                          {
+                                              "Name":  "msedgewebview2",
+                                              "Id":  10292,
+                                              "WorkingSetMB":  138.7,
+                                              "PrivateMB":  43.3
+                                          },
+                                          {
+                                              "Name":  "msedgewebview2",
+                                              "Id":  20932,
+                                              "WorkingSetMB":  10.9,
+                                              "PrivateMB":  2.5
+                                          },
+                                          {
+                                              "Name":  "msedgewebview2",
+                                              "Id":  7104,
+                                              "WorkingSetMB":  163.4,
+                                              "PrivateMB":  140
+                                          },
+                                          {
+                                              "Name":  "msedgewebview2",
+                                              "Id":  41384,
+                                              "WorkingSetMB":  42,
+                                              "PrivateMB":  12.5
+                                          },
+                                          {
+                                              "Name":  "msedgewebview2",
+                                              "Id":  43472,
+                                              "WorkingSetMB":  21.5,
+                                              "PrivateMB":  7.8
+                                          },
+                                          {
+                                              "Name":  "msedgewebview2",
+                                              "Id":  25308,
+                                              "WorkingSetMB":  87,
+                                              "PrivateMB":  44.7
+                                          }
+                                      ]
+                    },
+                    {
+                        "shell":  "tauri",
+                        "run":  2,
+                        "startEpochMs":  1794126663116,
+                        "windowMs":  102,
+                        "paintMs":  655.4,
+                        "inPageFcpMs":  145.5,
+                        "processCount":  7,
+                        "mainWorkingSetMB":  28.1,
+                        "totalWorkingSetMB":  492.5,
+                        "totalPrivateMB":  251.7,
+                        "relaunched":  false,
+                        "processes":  [
+                                          {
+                                              "Name":  "lkb-shell-tauri",
+                                              "Id":  29264,
+                                              "WorkingSetMB":  28.1,
+                                              "PrivateMB":  4.3
+                                          },
+                                          {
+                                              "Name":  "msedgewebview2",
+                                              "Id":  44544,
+                                              "WorkingSetMB":  140.1,
+                                              "PrivateMB":  43.8
+                                          },
+                                          {
+                                              "Name":  "msedgewebview2",
+                                              "Id":  28912,
+                                              "WorkingSetMB":  10.9,
+                                              "PrivateMB":  2.5
+                                          },
+                                          {
+                                              "Name":  "msedgewebview2",
+                                              "Id":  16320,
+                                              "WorkingSetMB":  162.3,
+                                              "PrivateMB":  135.8
+                                          },
+                                          {
+                                              "Name":  "msedgewebview2",
+                                              "Id":  9000,
+                                              "WorkingSetMB":  42,
+                                              "PrivateMB":  12.6
+                                          },
+                                          {
+                                              "Name":  "msedgewebview2",
+                                              "Id":  13232,
+                                              "WorkingSetMB":  21.5,
+                                              "PrivateMB":  7.8
+                                          },
+                                          {
+                                              "Name":  "msedgewebview2",
+                                              "Id":  17016,
+                                              "WorkingSetMB":  87.6,
+                                              "PrivateMB":  44.9
+                                          }
+                                      ]
+                    },
+                    {
+                        "shell":  "tauri",
+                        "run":  3,
+                        "startEpochMs":  1794126674741,
+                        "windowMs":  100,
+                        "paintMs":  652.7,
+                        "inPageFcpMs":  142.5,
+                        "processCount":  7,
+                        "mainWorkingSetMB":  28.2,
+                        "totalWorkingSetMB":  492.5,
+                        "totalPrivateMB":  253.7,
+                        "relaunched":  false,
+                        "processes":  [
+                                          {
+                                              "Name":  "lkb-shell-tauri",
+                                              "Id":  36768,
+                                              "WorkingSetMB":  28.2,
+                                              "PrivateMB":  4.3
+                                          },
+                                          {
+                                              "Name":  "msedgewebview2",
+                                              "Id":  42468,
+                                              "WorkingSetMB":  138.7,
+                                              "PrivateMB":  43.8
+                                          },
+                                          {
+                                              "Name":  "msedgewebview2",
+                                              "Id":  33252,
+                                              "WorkingSetMB":  10.9,
+                                              "PrivateMB":  2.5
+                                          },
+                                          {
+                                              "Name":  "msedgewebview2",
+                                              "Id":  15096,
+                                              "WorkingSetMB":  164.3,
+                                              "PrivateMB":  137.9
+                                          },
+                                          {
+                                              "Name":  "msedgewebview2",
+                                              "Id":  30752,
+                                              "WorkingSetMB":  42.4,
+                                              "PrivateMB":  13
+                                          },
+                                          {
+                                              "Name":  "msedgewebview2",
+                                              "Id":  17784,
+                                              "WorkingSetMB":  21.5,
+                                              "PrivateMB":  7.8
+                                          },
+                                          {
+                                              "Name":  "msedgewebview2",
+                                              "Id":  37612,
+                                              "WorkingSetMB":  86.6,
+                                              "PrivateMB":  44.4
+                                          }
+                                      ]
+                    },
+                    {
+                        "shell":  "tauri",
+                        "run":  4,
+                        "startEpochMs":  1794126686279,
+                        "windowMs":  198,
+                        "paintMs":  829,
+                        "inPageFcpMs":  163.2,
+                        "processCount":  7,
+                        "mainWorkingSetMB":  28,
+                        "totalWorkingSetMB":  497.6,
+                        "totalPrivateMB":  264.2,
+                        "relaunched":  false,
+                        "processes":  [
+                                          {
+                                              "Name":  "lkb-shell-tauri",
+                                              "Id":  34152,
+                                              "WorkingSetMB":  28,
+                                              "PrivateMB":  4.2
+                                          },
+                                          {
+                                              "Name":  "msedgewebview2",
+                                              "Id":  7456,
+                                              "WorkingSetMB":  138.1,
+                                              "PrivateMB":  43.4
+                                          },
+                                          {
+                                              "Name":  "msedgewebview2",
+                                              "Id":  6684,
+                                              "WorkingSetMB":  10.9,
+                                              "PrivateMB":  2.5
+                                          },
+                                          {
+                                              "Name":  "msedgewebview2",
+                                              "Id":  29112,
+                                              "WorkingSetMB":  167.9,
+                                              "PrivateMB":  144.5
+                                          },
+                                          {
+                                              "Name":  "msedgewebview2",
+                                              "Id":  11356,
+                                              "WorkingSetMB":  42.1,
+                                              "PrivateMB":  12.6
+                                          },
+                                          {
+                                              "Name":  "msedgewebview2",
+                                              "Id":  27744,
+                                              "WorkingSetMB":  21.5,
+                                              "PrivateMB":  8.8
+                                          },
+                                          {
+                                              "Name":  "msedgewebview2",
+                                              "Id":  2748,
+                                              "WorkingSetMB":  89.1,
+                                              "PrivateMB":  48.2
+                                          }
+                                      ]
+                    },
+                    {
+                        "shell":  "tauri",
+                        "run":  5,
+                        "startEpochMs":  1794126698255,
+                        "windowMs":  115,
+                        "paintMs":  705.5,
+                        "inPageFcpMs":  117.2,
+                        "processCount":  7,
+                        "mainWorkingSetMB":  25.8,
+                        "totalWorkingSetMB":  490.8,
+                        "totalPrivateMB":  258,
+                        "relaunched":  false,
+                        "processes":  [
+                                          {
+                                              "Name":  "lkb-shell-tauri",
+                                              "Id":  16960,
+                                              "WorkingSetMB":  25.8,
+                                              "PrivateMB":  4.1
+                                          },
+                                          {
+                                              "Name":  "msedgewebview2",
+                                              "Id":  33804,
+                                              "WorkingSetMB":  137.9,
+                                              "PrivateMB":  43.6
+                                          },
+                                          {
+                                              "Name":  "msedgewebview2",
+                                              "Id":  37224,
+                                              "WorkingSetMB":  10.9,
+                                              "PrivateMB":  2.5
+                                          },
+                                          {
+                                              "Name":  "msedgewebview2",
+                                              "Id":  31528,
+                                              "WorkingSetMB":  164.7,
+                                              "PrivateMB":  141.2
+                                          },
+                                          {
+                                              "Name":  "msedgewebview2",
+                                              "Id":  44424,
+                                              "WorkingSetMB":  42,
+                                              "PrivateMB":  12.5
+                                          },
+                                          {
+                                              "Name":  "msedgewebview2",
+                                              "Id":  20904,
+                                              "WorkingSetMB":  21.4,
+                                              "PrivateMB":  7.8
+                                          },
+                                          {
+                                              "Name":  "msedgewebview2",
+                                              "Id":  21152,
+                                              "WorkingSetMB":  88.1,
+                                              "PrivateMB":  46.4
+                                          }
+                                      ]
+                    }
+                ]
+}

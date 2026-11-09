@@ -1,0 +1,5 @@
+node_modules/
+dist/
+renderer/
+release/
+src-tauri/gen/

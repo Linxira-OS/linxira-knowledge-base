@@ -1,0 +1,141 @@
+@import 'tailwindcss';
+
+/* ---------------------------------------------------------------------------
+   Design tokens. Neutral scale + one restrained accent (iOS-style green).
+   Dark is the primary surface; light is a first-class peer.
+   Every component reads these through Tailwind utilities (bg-surface, text-fg…).
+   --------------------------------------------------------------------------- */
+@theme inline {
+  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI Variable Text', 'Segoe UI',
+    system-ui, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'Cascadia Code', 'Segoe UI Mono', Menlo, Consolas, monospace;
+
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-panel: var(--panel);
+  --color-raise: var(--raise);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-fg: var(--fg);
+  --color-fg-2: var(--fg-2);
+  --color-fg-3: var(--fg-3);
+  --color-accent: var(--accent);
+  --color-accent-weak: var(--accent-weak);
+  --color-accent-line: var(--accent-line);
+  --color-on-accent: var(--on-accent);
+  --color-warn: var(--warn);
+  --color-warn-weak: var(--warn-weak);
+  --color-code-bg: var(--code-bg);
+  --color-code-fg: var(--code-fg);
+}
+
+:root {
+  color-scheme: light;
+  --canvas: #f5f5f7;
+  --surface: #ffffff;
+  --panel: #fbfbfc;
+  --raise: #ffffff;
+  --line: #e6e6e9;
+  --line-strong: #d8d8dd;
+  --fg: #15151a;
+  --fg-2: #52525b;
+  --fg-3: #6f6f76;
+  --accent: #1a7f37;
+  --accent-weak: #edf6f0;
+  --accent-line: #cfe6d6;
+  --on-accent: #ffffff;
+  --warn: #9a5b00;
+  --warn-weak: #fdf6e7;
+  --code-bg: #f7f7f9;
+  --code-fg: #27272a;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --canvas: #0d0d0f;
+  --surface: #131316;
+  --panel: #101012;
+  --raise: #1a1a1e;
+  --line: #26262b;
+  --line-strong: #35353b;
+  --fg: #f4f4f5;
+  --fg-2: #a1a1aa;
+  --fg-3: #8a8a93;
+  --accent: #32d74b;
+  --accent-weak: #16281b;
+  --accent-line: #24432c;
+  --on-accent: #08130a;
+  --warn: #ffb340;
+  --warn-weak: #2a2114;
+  --code-bg: #0b0b0d;
+  --code-fg: #e4e4e7;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    font-family: var(--font-sans);
+    background: var(--canvas);
+    color: var(--fg);
+    font-size: 14px;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background: var(--accent-weak);
+    color: var(--fg);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+
+  a {
+    text-decoration: none;
+  }
+}
+
+.thin-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+.thin-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.thin-scroll::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border-radius: 999px;
+}
+
+.thin-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@keyframes lkb-caret {
+  0%,
+  45% {
+    opacity: 1;
+  }
+  55%,
+  100% {
+    opacity: 0;
+  }
+}
+
+.streaming-caret::after {
+  content: '▌';
+  margin-left: 1px;
+  color: var(--accent);
+  animation: lkb-caret 1s steps(1) infinite;
+}

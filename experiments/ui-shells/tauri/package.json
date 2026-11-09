@@ -1,0 +1,13 @@
+{
+  "name": "lkb-shell-tauri",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "tauri": "tauri",
+    "icon": "tauri icon ../web/public/icon.svg",
+    "build:gnu": "tauri build"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.12.4"
+  }
+}

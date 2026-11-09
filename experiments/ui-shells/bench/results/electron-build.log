@@ -1,0 +1,25 @@
+npm notice run lkb-shell-electron@0.1.0 pack:nsis:offline
+npm notice run node scripts/sync-dist.mjs && electron-builder --win nsis --config.electronDist=node_modules/electron/dist
+copied F:\CODE\RAG\experiments\ui-shells\web\dist -> F:\CODE\RAG\experiments\ui-shells\electron\renderer
+  • electron-builder  version=26.18.0 os=10.0.26300
+  • Implicit publishing triggered by CI detection. This behavior will be disabled in electron-builder v27. Please use --publish explicitly.
+  • loaded configuration  file=package.json ("build" field)
+  • executing @electron/rebuild  electronVersion=45.2.3 arch=x64 buildFromSource=false workspaceRoot=F:\CODE\RAG\experiments\ui-shells\electron projectDir=./ appDir=./
+  • installing native dependencies  arch=x64
+  • completed installing native dependencies
+  • packaging       platform=win32 arch=x64 electron=45.2.3 appOutDir=release\win-unpacked
+  • using custom unpacked Electron distribution  electronDist=node_modules\electron\dist
+  • copying unpacked Electron  source=F:\CODE\RAG\experiments\ui-shells\electron\node_modules\electron\dist destination=F:\CODE\RAG\experiments\ui-shells\electron\release\win-unpacked
+  • searching for node modules  pm=npm searchDir=F:\CODE\RAG\experiments\ui-shells\electron
+  • no node modules found in collection, trying next search directory  pm=npm searchDir=F:\CODE\RAG\experiments\ui-shells\electron
+  • searching for node modules  pm=traversal searchDir=F:\CODE\RAG\experiments\ui-shells\electron
+  • using manual traversal of node_modules to build dependency tree
+  • no node modules found in collection, trying next search directory  pm=traversal searchDir=F:\CODE\RAG\experiments\ui-shells\electron
+  • no node modules returned while searching directories  searchDirectories=[""]
+  • updating asar integrity executable resource  executablePath=release\win-unpacked\Layered KB.exe
+  • executable resource editing and code signing skipped — signAndEditExecutable is false. To skip only code signing while keeping icon and metadata applied, use signExecutable: false instead.  exe=release\win-unpacked\Layered KB.exe
+  • building        target=nsis file=release\Layered KB Setup 0.1.0.exe archs=x64 oneClick=false perMachine=false
+  • default Electron icon is used  reason=application icon is not set
+  • no code signing certificate configured, signing is skipped  path=release\Layered KB Setup 0.1.0.__uninstaller.exe
+  • no code signing certificate configured, signing is skipped  path=release\Layered KB Setup 0.1.0.exe
+  • building block map  blockMapFile=release\Layered KB Setup 0.1.0.exe.blockmap

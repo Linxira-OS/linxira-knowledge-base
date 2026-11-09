@@ -1,6 +1,6 @@
 # Repository Guidelines
 
-面向在本仓库工作的 AI 编码助手。仓库当前状态：P0 文档已定稿，P1（Rust 实现）已落地，并通过 `stable-x86_64-pc-windows-gnu` 的 `cargo check --all-targets` / `cargo build --release` / `cargo test`（113 tests passed；PostgreSQL 集成测试未设置 `LKB_TEST_PG_URL` 时打印 SKIP）。默认 MSVC 工具链仍缺可用链接器。本文只给工作所需的指针，不重复 `document/architecture.md` 的论述。
+面向在本仓库工作的 AI 编码助手。仓库当前状态：P0 文档已定稿，P1（Rust 实现）已落地，并通过 `stable-x86_64-pc-windows-gnu` 的 `cargo check --all-targets` / `cargo build --release` / `cargo test`（113 tests passed；PostgreSQL 集成已通过 WSL PostgreSQL 18.6 实测、不再 SKIP，详见 `document/wsl-postgres.md`；未设置 `LKB_TEST_PG_URL` 时仍打印 SKIP）。默认 MSVC 工具链仍缺可用链接器。本文只给工作所需的指针，不重复 `document/architecture.md` 的论述。
 
 ## 1. Project Overview
 
@@ -10,7 +10,7 @@
   - `solo`：SQLite 单文件，单进程，默认 `auth.mode = none` 且只绑 loopback，零外部服务依赖。
   - `team`：PostgreSQL 后端，会话/Bearer 认证，共享空间。
   - `enterprise`：PostgreSQL 多租户；当前代码行为与 `team` 相同，仅名称与配置不同（多租户靠独立配置/数据库或外部路由，HTTP 层不解析租户）。
-- **当前阶段**：P1 solo 闭环（导入 → 检索 → 带引用回答 → CLI/本地 Web + 最小 Wiki + 认证 + 导入导出 + 内置种子知识库）已实现并通过 GNU 工具链验证；PostgreSQL 后端同时提供，但本机未设置测试库。所有“能构建/能通过”的结论仍以实际命令输出为准。
+- **当前阶段**：P1 solo 闭环（导入 → 检索 → 带引用回答 → CLI/本地 Web + 最小 Wiki + 认证 + 导入导出 + 内置种子知识库）已实现并通过 GNU 工具链验证；PostgreSQL 后端同时提供，并已通过 WSL PostgreSQL 18.6 实测（113 tests，PG 集成不再 SKIP；本机凭据在 `.lkb/pg.env`，已 gitignore；无 PG 环境时仍 SKIP）。所有“能构建/能通过”的结论仍以实际命令输出为准。
 - **素材现状**：`examples/docs/` 有 20 篇 Markdown，`examples/questions.jsonl` 有 20 条问题（满足 roadmap 的 P1 评测素材数量要求）。
 
 ## 2. Architecture & Data Flow
@@ -87,7 +87,7 @@ docs/                        产品使用文档（zh/en 各 12 篇）；编译�
 
 ## 4. Development Commands
 
-> **构建门禁仍然有效**：执行任何 `cargo`/`rustup`/清理命令前先获得用户明确确认。当前已实际执行 `cargo +stable-x86_64-pc-windows-gnu check --all-targets`、`build --release` 与 `test`（59 passed；PG SKIP）；下列命令中未实际执行的项目仍不得当作已通过。
+> **构建门禁仍然有效**：执行任何 `cargo`/`rustup`/清理命令前先获得用户明确确认。当前已实际执行 `cargo +stable-x86_64-pc-windows-gnu check --all-targets`、`build --release` 与 `test`（113 passed；PG 集成已实测、不再 SKIP）；下列命令中未实际执行的项目仍不得当作已通过。
 
 **构建门禁（强制）**
 
@@ -120,7 +120,7 @@ cargo build --release
 
 # 测试（未验证；需用户确认）
 cargo test
-LKB_TEST_PG_URL=postgres://user:pass@localhost/lkb_test cargo test --test postgres_integration
+set -a; source .lkb/pg.env; set +a; cargo test --test postgres_integration   # 本机 WSL PG 18.6 凭据（gitignored；无文件时 PG 测试 SKIP）
 
 # lint / 格式（未验证；需用户确认；仓库无 clippy.toml / rustfmt 配置）
 cargo clippy --all-targets
@@ -199,7 +199,7 @@ cargo test --test axum_oneshot               # 已执行
 cargo test --test cli                        # 已执行
 cargo test --test seed_lang                  # 已执行
 cargo test --test event_entity               # 已执行
-cargo test --test postgres_integration       # 已执行，SKIP（未设置 LKB_TEST_PG_URL）
+cargo test --test postgres_integration       # 已执行（WSL PG 18.6 实测通过；无 LKB_TEST_PG_URL 时 SKIP）
 ```
 
 **测试布局**（16 个集成测试文件，113 个测试函数；另有各模块 `#[cfg(test)]` 单测）：
@@ -209,7 +209,7 @@ cargo test --test postgres_integration       # 已执行，SKIP（未设置 LKB_
 | `tests/integration_sqlite.rs` | 导入→搜索→回答→导出→重导入往返；内容变化产生新 doc_id 且旧记录 `superseded_by` 前向链接 |
 | `tests/axum_oneshot.rs` | `/health`、`/`、Wiki 保存与读取、`/api/search`、`/api/ask`、Origin 不匹配 403 |
 | `tests/cli.rs` | `config check` 脱敏输出；`user add` / `import` / `search` / `export` / token 创建与 Bearer 搜索 |
-| `tests/postgres_integration.rs` | PG 导入 + 关键词搜索；未设置 `LKB_TEST_PG_URL` 时打印 SKIP |
+| `tests/postgres_integration.rs` | PG 导入 + 关键词搜索；已通过 WSL PostgreSQL 18.6 实测（见 `document/wsl-postgres.md`）；未设置 `LKB_TEST_PG_URL` 时打印 SKIP |
 | `tests/seed_lang.rs` | 24 篇双语种子、幂等、用户修改保护、语言过滤、自动 seed 条件、seed 失败不阻塞、seed 入队摘要作业 |
 | `tests/rbac_spaces.rs` | 组/显式角色优先级、组展开 members、成员隔离、last_space_owner、scope 401/403+audit、空间 CRUD、quota 413、session CSRF |
 | `tests/limits_observability.rs` | 100 并发请求、token QPS 429+Retry-After、吊销 401、超长 query/top_k 400、配额并发不 oversell、JSON 日志字段/脱敏 |
@@ -224,12 +224,12 @@ cargo test --test postgres_integration       # 已执行，SKIP（未设置 LKB_
 | `tests/event_entity.rs` | event-entity 通道、ACL/租户/有效期过滤、抽取失败降级、hybrid RRF |
 
 - 测试数据来自仓库 `examples/`（通过 `env!("CARGO_MANIFEST_DIR")` 定位）；临时库放在 `tempfile::tempdir()`。
-- **PG SKIP 语义**：`LKB_TEST_PG_URL` 未设置或为空白时，测试打印 `SKIP postgres integration test: ... refusing to pretend it passed` 后直接 `return`；Cargo 仍记为 passed。报告时必须写“未验证/SKIP”，不得写成“PostgreSQL 测试通过”。设置 URL 时也只覆盖导入+搜索，并非与 SQLite 同一组用例。
+- **PG SKIP 语义**：`LKB_TEST_PG_URL` 未设置或为空白时，测试打印 `SKIP postgres integration test: ... refusing to pretend it passed` 后直接 `return`；Cargo 仍记为 passed。无 PG 环境时报告必须写“未验证/SKIP”，不得写成“PostgreSQL 测试通过”；本机已通过 WSL PostgreSQL 18.6 实测（113 tests，PG 集成不再 SKIP，见 `document/wsl-postgres.md`）。设置 URL 时也只覆盖导入+搜索，并非与 SQLite 同一组用例。
 - 测试默认不触网；但代码中没有“无出站请求”的断言。
 
 **P1 出口标准（`document/roadmap.md`，验收以此为准）**：Recall@5 ≥ 0.8（20 条问题）；20/20 引用可回跳到源文件行号且文本包含答案；断网可完成全流程；删索引重建后 doc_id 集合一致且 Recall 下降 ≤ 0.05；能力未启用/不可用必须在 `degraded[]` 声明；重复导入幂等；未认证 401、缺 CSRF 403、loopback 启动保护；模型 stub/timeout/retry 生效；Wiki revision +1 且旧版可读、新版可检索；导入导出计数 20/0/0；干净目录单二进制启动；设置 `LKB_TEST_PG_URL` 时与 SQLite 跑同一组用例。
 
-**当前测试边界**：PG 集成仅覆盖导入 + 关键词搜索（未设置 `LKB_TEST_PG_URL` 时 SKIP）；PDF 摄入未测；`lkb eval` 的 CLI 报告仅通过手工冒烟（Recall@5=1.0、MRR=0.925 on examples）；登录限流/CSRF/Origin 有单测与 axum 用例，但没有覆盖全部认证分支。
+**当前测试边界**：PG 集成仅覆盖导入 + 关键词搜索（已通过 WSL PostgreSQL 18.6 实测；未设置 `LKB_TEST_PG_URL` 时仍 SKIP）；PDF 摄入未测；`lkb eval` 的 CLI 报告仅通过手工冒烟（Recall@5=1.0、MRR=0.925 on examples）；登录限流/CSRF/Origin 有单测与 axum 用例，但没有覆盖全部认证分支。
 
 ## 9. Documentation Rules
 

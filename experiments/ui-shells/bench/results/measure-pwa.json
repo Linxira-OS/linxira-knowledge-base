@@ -1,0 +1,396 @@
+﻿{
+    "summary":  {
+                    "shell":  "pwa",
+                    "exe":  "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+                    "headless":  true,
+                    "args":  [
+                                 "--headless=new",
+                                 "--disable-gpu",
+                                 "--no-first-run",
+                                 "--no-default-browser-check",
+                                 "--app=http://127.0.0.1:4173/"
+                             ],
+                    "runs":  5,
+                    "paintMsMedian":  754.5,
+                    "paintMsAll":  [
+                                       872.6,
+                                       700.9,
+                                       710.5,
+                                       754.5,
+                                       771.4
+                                   ],
+                    "windowMsMedian":  null,
+                    "windowMsAll":  [
+
+                                    ],
+                    "totalWorkingSetMBMedian":  466.5,
+                    "totalWorkingSetMBAll":  [
+                                                 466.6,
+                                                 465.8,
+                                                 466.5,
+                                                 464,
+                                                 467.9
+                                             ],
+                    "totalPrivateMBMedian":  184.4,
+                    "totalPrivateMBAll":  [
+                                              183.6,
+                                              184.5,
+                                              184.4,
+                                              181.9,
+                                              185.9
+                                          ],
+                    "capturedAt":  "2026-11-08T16:39:24.3975319+08:00"
+                },
+    "records":  [
+                    {
+                        "shell":  "pwa",
+                        "headless":  true,
+                        "run":  1,
+                        "startEpochMs":  1794127104102,
+                        "windowMs":  null,
+                        "paintMs":  872.6,
+                        "inPageFcpMs":  398.5,
+                        "processCount":  9,
+                        "mainWorkingSetMB":  148.2,
+                        "totalWorkingSetMB":  466.6,
+                        "totalPrivateMB":  183.6,
+                        "relaunched":  false,
+                        "processes":  [
+                                          {
+                                              "Name":  "chrome",
+                                              "Id":  16036,
+                                              "WorkingSetMB":  148.2,
+                                              "PrivateMB":  49
+                                          },
+                                          {
+                                              "Name":  "chrome",
+                                              "Id":  36060,
+                                              "WorkingSetMB":  10.6,
+                                              "PrivateMB":  2.5
+                                          },
+                                          {
+                                              "Name":  "chrome",
+                                              "Id":  18648,
+                                              "WorkingSetMB":  38,
+                                              "PrivateMB":  14.6
+                                          },
+                                          {
+                                              "Name":  "chrome",
+                                              "Id":  19976,
+                                              "WorkingSetMB":  39.2,
+                                              "PrivateMB":  13.2
+                                          },
+                                          {
+                                              "Name":  "chrome",
+                                              "Id":  6512,
+                                              "WorkingSetMB":  18,
+                                              "PrivateMB":  7.7
+                                          },
+                                          {
+                                              "Name":  "chrome",
+                                              "Id":  23212,
+                                              "WorkingSetMB":  90.2,
+                                              "PrivateMB":  39.5
+                                          },
+                                          {
+                                              "Name":  "chrome",
+                                              "Id":  28624,
+                                              "WorkingSetMB":  48.1,
+                                              "PrivateMB":  21.1
+                                          },
+                                          {
+                                              "Name":  "chrome",
+                                              "Id":  34672,
+                                              "WorkingSetMB":  42.7,
+                                              "PrivateMB":  20.8
+                                          },
+                                          {
+                                              "Name":  "chrome",
+                                              "Id":  22576,
+                                              "WorkingSetMB":  31.6,
+                                              "PrivateMB":  15.2
+                                          }
+                                      ]
+                    },
+                    {
+                        "shell":  "pwa",
+                        "headless":  true,
+                        "run":  2,
+                        "startEpochMs":  1794127116826,
+                        "windowMs":  null,
+                        "paintMs":  700.9,
+                        "inPageFcpMs":  383.7,
+                        "processCount":  9,
+                        "mainWorkingSetMB":  147.4,
+                        "totalWorkingSetMB":  465.8,
+                        "totalPrivateMB":  184.5,
+                        "relaunched":  false,
+                        "processes":  [
+                                          {
+                                              "Name":  "chrome",
+                                              "Id":  37028,
+                                              "WorkingSetMB":  147.4,
+                                              "PrivateMB":  48.7
+                                          },
+                                          {
+                                              "Name":  "chrome",
+                                              "Id":  36416,
+                                              "WorkingSetMB":  10.6,
+                                              "PrivateMB":  2.5
+                                          },
+                                          {
+                                              "Name":  "chrome",
+                                              "Id":  29952,
+                                              "WorkingSetMB":  38,
+                                              "PrivateMB":  14.7
+                                          },
+                                          {
+                                              "Name":  "chrome",
+                                              "Id":  12164,
+                                              "WorkingSetMB":  39.1,
+                                              "PrivateMB":  13.2
+                                          },
+                                          {
+                                              "Name":  "chrome",
+                                              "Id":  6684,
+                                              "WorkingSetMB":  18,
+                                              "PrivateMB":  7.7
+                                          },
+                                          {
+                                              "Name":  "chrome",
+                                              "Id":  5404,
+                                              "WorkingSetMB":  93.1,
+                                              "PrivateMB":  42.5
+                                          },
+                                          {
+                                              "Name":  "chrome",
+                                              "Id":  37592,
+                                              "WorkingSetMB":  45.4,
+                                              "PrivateMB":  19.3
+                                          },
+                                          {
+                                              "Name":  "chrome",
+                                              "Id":  14720,
+                                              "WorkingSetMB":  42.6,
+                                              "PrivateMB":  20.8
+                                          },
+                                          {
+                                              "Name":  "chrome",
+                                              "Id":  45020,
+                                              "WorkingSetMB":  31.5,
+                                              "PrivateMB":  15.2
+                                          }
+                                      ]
+                    },
+                    {
+                        "shell":  "pwa",
+                        "headless":  true,
+                        "run":  3,
+                        "startEpochMs":  1794127128655,
+                        "windowMs":  null,
+                        "paintMs":  710.5,
+                        "inPageFcpMs":  380.1,
+                        "processCount":  9,
+                        "mainWorkingSetMB":  147.9,
+                        "totalWorkingSetMB":  466.5,
+                        "totalPrivateMB":  184.4,
+                        "relaunched":  false,
+                        "processes":  [
+                                          {
+                                              "Name":  "chrome",
+                                              "Id":  42688,
+                                              "WorkingSetMB":  147.9,
+                                              "PrivateMB":  48.4
+                                          },
+                                          {
+                                              "Name":  "chrome",
+                                              "Id":  21276,
+                                              "WorkingSetMB":  10.6,
+                                              "PrivateMB":  2.5
+                                          },
+                                          {
+                                              "Name":  "chrome",
+                                              "Id":  20348,
+                                              "WorkingSetMB":  38,
+                                              "PrivateMB":  14.7
+                                          },
+                                          {
+                                              "Name":  "chrome",
+                                              "Id":  38428,
+                                              "WorkingSetMB":  39.2,
+                                              "PrivateMB":  13.3
+                                          },
+                                          {
+                                              "Name":  "chrome",
+                                              "Id":  2176,
+                                              "WorkingSetMB":  18.1,
+                                              "PrivateMB":  7.8
+                                          },
+                                          {
+                                              "Name":  "chrome",
+                                              "Id":  34320,
+                                              "WorkingSetMB":  93,
+                                              "PrivateMB":  42.3
+                                          },
+                                          {
+                                              "Name":  "chrome",
+                                              "Id":  32180,
+                                              "WorkingSetMB":  45.5,
+                                              "PrivateMB":  18.3
+                                          },
+                                          {
+                                              "Name":  "chrome",
+                                              "Id":  21500,
+                                              "WorkingSetMB":  42.7,
+                                              "PrivateMB":  20.9
+                                          },
+                                          {
+                                              "Name":  "chrome",
+                                              "Id":  41196,
+                                              "WorkingSetMB":  31.5,
+                                              "PrivateMB":  16.2
+                                          }
+                                      ]
+                    },
+                    {
+                        "shell":  "pwa",
+                        "headless":  true,
+                        "run":  4,
+                        "startEpochMs":  1794127140612,
+                        "windowMs":  null,
+                        "paintMs":  754.5,
+                        "inPageFcpMs":  401.8,
+                        "processCount":  9,
+                        "mainWorkingSetMB":  148.3,
+                        "totalWorkingSetMB":  464,
+                        "totalPrivateMB":  181.9,
+                        "relaunched":  false,
+                        "processes":  [
+                                          {
+                                              "Name":  "chrome",
+                                              "Id":  41076,
+                                              "WorkingSetMB":  148.3,
+                                              "PrivateMB":  49.2
+                                          },
+                                          {
+                                              "Name":  "chrome",
+                                              "Id":  10820,
+                                              "WorkingSetMB":  10.6,
+                                              "PrivateMB":  2.5
+                                          },
+                                          {
+                                              "Name":  "chrome",
+                                              "Id":  14328,
+                                              "WorkingSetMB":  38.1,
+                                              "PrivateMB":  15.7
+                                          },
+                                          {
+                                              "Name":  "chrome",
+                                              "Id":  24120,
+                                              "WorkingSetMB":  39.2,
+                                              "PrivateMB":  13.2
+                                          },
+                                          {
+                                              "Name":  "chrome",
+                                              "Id":  16224,
+                                              "WorkingSetMB":  18,
+                                              "PrivateMB":  7.7
+                                          },
+                                          {
+                                              "Name":  "chrome",
+                                              "Id":  32160,
+                                              "WorkingSetMB":  90.2,
+                                              "PrivateMB":  39.3
+                                          },
+                                          {
+                                              "Name":  "chrome",
+                                              "Id":  14372,
+                                              "WorkingSetMB":  45.5,
+                                              "PrivateMB":  18.4
+                                          },
+                                          {
+                                              "Name":  "chrome",
+                                              "Id":  29756,
+                                              "WorkingSetMB":  42.6,
+                                              "PrivateMB":  20.8
+                                          },
+                                          {
+                                              "Name":  "chrome",
+                                              "Id":  16020,
+                                              "WorkingSetMB":  31.5,
+                                              "PrivateMB":  15.2
+                                          }
+                                      ]
+                    },
+                    {
+                        "shell":  "pwa",
+                        "headless":  true,
+                        "run":  5,
+                        "startEpochMs":  1794127152512,
+                        "windowMs":  null,
+                        "paintMs":  771.4,
+                        "inPageFcpMs":  389.8,
+                        "processCount":  9,
+                        "mainWorkingSetMB":  148.7,
+                        "totalWorkingSetMB":  467.9,
+                        "totalPrivateMB":  185.9,
+                        "relaunched":  false,
+                        "processes":  [
+                                          {
+                                              "Name":  "chrome",
+                                              "Id":  32736,
+                                              "WorkingSetMB":  148.7,
+                                              "PrivateMB":  49.9
+                                          },
+                                          {
+                                              "Name":  "chrome",
+                                              "Id":  30596,
+                                              "WorkingSetMB":  10.6,
+                                              "PrivateMB":  2.5
+                                          },
+                                          {
+                                              "Name":  "chrome",
+                                              "Id":  6684,
+                                              "WorkingSetMB":  38.1,
+                                              "PrivateMB":  14.7
+                                          },
+                                          {
+                                              "Name":  "chrome",
+                                              "Id":  27412,
+                                              "WorkingSetMB":  39.3,
+                                              "PrivateMB":  13.4
+                                          },
+                                          {
+                                              "Name":  "chrome",
+                                              "Id":  13796,
+                                              "WorkingSetMB":  18,
+                                              "PrivateMB":  7.7
+                                          },
+                                          {
+                                              "Name":  "chrome",
+                                              "Id":  24372,
+                                              "WorkingSetMB":  90.9,
+                                              "PrivateMB":  39.6
+                                          },
+                                          {
+                                              "Name":  "chrome",
+                                              "Id":  46784,
+                                              "WorkingSetMB":  45.4,
+                                              "PrivateMB":  19.3
+                                          },
+                                          {
+                                              "Name":  "chrome",
+                                              "Id":  20296,
+                                              "WorkingSetMB":  42.6,
+                                              "PrivateMB":  20.8
+                                          },
+                                          {
+                                              "Name":  "chrome",
+                                              "Id":  42228,
+                                              "WorkingSetMB":  34.2,
+                                              "PrivateMB":  17.9
+                                          }
+                                      ]
+                    }
+                ]
+}

@@ -1,0 +1,12 @@
+npm notice run lkb-shell-tauri@0.1.0 npx
+npm notice run tauri build
+        Info Looking up installed tauri packages to check mismatched versions...
+   Compiling lkb-shell-tauri v0.1.0 (F:\CODE\RAG\experiments\ui-shells\tauri\src-tauri)
+    Finished `release` profile [optimized] target(s) in 32.58s
+       Built application at: F:\CODE\RAG\experiments\ui-shells\tauri\src-tauri\target\release\lkb-shell-tauri.exe
+        Info Patching F:\CODE\RAG\experiments\ui-shells\tauri\src-tauri\target\release\lkb-shell-tauri.exe with bundle type information: nsis
+        Info Target: x64
+     Running makensis to produce F:\CODE\RAG\experiments\ui-shells\tauri\src-tauri\target\release\bundle\nsis\Layered KB_0.1.0_x64-setup.exe
+    Finished 1 bundle at:
+        F:\CODE\RAG\experiments\ui-shells\tauri\src-tauri\target\release\bundle\nsis\Layered KB_0.1.0_x64-setup.exe (3.28 MiB)
+
