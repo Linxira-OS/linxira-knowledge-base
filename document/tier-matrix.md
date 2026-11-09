@@ -163,6 +163,16 @@
 
 启动校验：enterprise_external 必须 billing+multi_tenant+public_api；solo 不得开 billing；审计关闭仅显式风险接受。
 
+### 2.11 桌面 APP、solo+PG 与笔记
+
+| 能力 | solo | team | enterprise | 说明 |
+| --- | --- | --- | --- | --- |
+| 交付形态 | Tauri APP（installer/portable）、CLI、浏览器 | 服务 + Web/CLI | 服务/容器 + Web/CLI | 桌面壳只属个人版；企业不装壳 |
+| 存储后端 | SQLite 默认；可选 PostgreSQL | PostgreSQL | PostgreSQL | solo+PG 仍单用户/loopback/allow-all；team/ent 禁止 SQLite |
+| Web 托管 | Rust 二进制托管 web/dist，同源 | 同左或外部 nginx | 外部 nginx/网关 | Tauri/浏览器/portable 单 sidecar |
+| 笔记 | personal vault（Markdown 文件，事实源） | 每人 personal；可发布到团队空间 | 同左；按空间角色 | 笔记=Document，Wiki=Page/Revision；UI 统一 |
+| 首启/更新 | 向导 SQLite/PG、凭据管理、签名更新 | 配置/迁移 | 配置/迁移/HA | 便携模式密钥保护 |
+
 ## 3. 基础设施替换表
 
 | 组件 | solo | team | enterprise | 端口契约 | 不可替换的语义 |

@@ -16,7 +16,7 @@ use crate::store::{
 };
 use crate::util::{
     constant_time_eq, html_escape, now_rfc3339, random_hex, sha256_hex, sha256_hex_str,
-    truncate_chars, url_encode_path_segment,
+    truncate_chars, url_encode_path_segment, ISSUES_URL, REPOSITORY_URL, SECURITY_URL,
 };
 use argon2::password_hash::{PasswordHash, PasswordVerifier};
 use argon2::Argon2;
@@ -742,10 +742,19 @@ fn html_page(title: &str, body: &str, principal: Option<&Principal>, csrf: Optio
         ),
         _ => String::new(),
     };
+    // Static canonical links only: nothing user-supplied is interpolated, and
+    // the opened pages get no window handle back (`rel="noopener"`).
+    let footer = format!(
+        "<footer class=\"repo-links\">\
+         <a href=\"{REPOSITORY_URL}\" target=\"_blank\" rel=\"noopener\">GitHub</a> · \
+         <a href=\"{ISSUES_URL}\" target=\"_blank\" rel=\"noopener\">Issues</a> · \
+         <a href=\"{SECURITY_URL}\" target=\"_blank\" rel=\"noopener\">Security</a>\
+         </footer>"
+    );
     format!(
         "<!doctype html><html lang=\"zh\"><head><meta charset=\"utf-8\">\
          <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\
-         <title>{}</title></head><body>{nav}<main>{body}</main></body></html>",
+         <title>{}</title></head><body>{nav}<main>{body}</main>{footer}</body></html>",
         html_escape(title)
     )
 }

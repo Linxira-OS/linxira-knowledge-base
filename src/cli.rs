@@ -9,7 +9,9 @@ use crate::store::{
     self, GroupMemberRecord, GroupRecord, QuotaScope, SpaceMemberRecord, SpaceRecord, Store,
     TokenRecord, UserRecord,
 };
-use crate::util::{now_rfc3339, random_hex, sha256_hex_str};
+use crate::util::{
+    now_rfc3339, random_hex, sha256_hex_str, ISSUES_URL, REPOSITORY_URL, SECURITY_URL,
+};
 use anyhow::{bail, Context};
 use argon2::password_hash::{rand_core::OsRng, PasswordHasher, SaltString};
 use argon2::Argon2;
@@ -19,8 +21,29 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+/// Long form of `lkb --version`: the bare `lkb -V` stays terse. clap takes a
+/// `&'static str` here, so the URL is concatenated at compile time; the util
+/// test pins `CARGO_PKG_REPOSITORY` to `REPOSITORY_URL`.
+const LONG_VERSION: &str = concat!(
+    env!("CARGO_PKG_VERSION"),
+    " (",
+    env!("CARGO_PKG_REPOSITORY"),
+    ")"
+);
+
+/// `lkb --help` footer: where the project lives and where to file issues.
+fn after_help() -> String {
+    format!("Repository:  {REPOSITORY_URL}\nReport bugs: {ISSUES_URL}\nSecurity:    {SECURITY_URL}")
+}
+
 #[derive(Debug, Parser)]
-#[command(name = "lkb", version, about = "Layered knowledge base")]
+#[command(
+    name = "lkb",
+    version,
+    long_version = LONG_VERSION,
+    about = "Layered knowledge base",
+    after_help = after_help()
+)]
 struct Cli {
     #[arg(long, global = true, default_value = "lkb.toml")]
     config: PathBuf,
@@ -341,12 +364,60 @@ enum PageCommand {
     },
 }
 
+/// Marker for problems in configuration the user supplies. `Display`, `Debug`
+/// and the source chain pass straight through, so CLI output is unchanged.
+struct UserInput(anyhow::Error);
+
+impl std::fmt::Display for UserInput {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(&self.0, f)
+    }
+}
+
+impl std::fmt::Debug for UserInput {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Debug::fmt(&self.0, f)
+    }
+}
+
+impl std::error::Error for UserInput {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        // Skip the wrapped top message, which `Display` already shows.
+        self.0.chain().nth(1)
+    }
+}
+
+/// Errors the operator can fix (flags, environment, config files) never get
+/// the bug-report tail; anything else may deserve a GitHub issue.
+fn is_user_input_error(err: &anyhow::Error) -> bool {
+    if err.downcast_ref::<UserInput>().is_some() {
+        return true;
+    }
+    // `bail!`/`anyhow!` build a message-only error with no typed cause: that
+    // is CLI guidance ("username must be ..."), not a crash report.
+    err.chain().count() == 1
+        && (err.downcast_ref::<&str>().is_some() || err.downcast_ref::<String>().is_some())
+}
+
 pub fn run_blocking() -> anyhow::Result<()> {
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
         .context("cannot create tokio runtime")?;
-    runtime.block_on(run())
+    let result = runtime.block_on(run());
+    // Drop the runtime before the exit path below so pools and blocking
+    // threads still shut down exactly as they do on the success path.
+    drop(runtime);
+    match result {
+        Ok(()) => Ok(()),
+        Err(err) => {
+            eprintln!("Error: {err:?}");
+            if !is_user_input_error(&err) {
+                eprintln!("If this is a bug, report: {ISSUES_URL}");
+            }
+            std::process::exit(1);
+        }
+    }
 }
 
 pub async fn run() -> anyhow::Result<()> {
@@ -359,7 +430,9 @@ pub async fn run() -> anyhow::Result<()> {
     };
     crate::logging::init(service);
 
-    let config = Config::load(&cli.config)?;
+    // Configuration problems are the operator's to fix, not bugs; mark them
+    // so the top-level exit skips the bug-report tail.
+    let config = Config::load(&cli.config).map_err(UserInput)?;
     crate::i18n::set_cli_locale(&config.i18n.default_locale);
     crate::logging::cli_event(command_name, 0, None, &[]);
     match cli.command {
@@ -1690,5 +1763,27 @@ mod tests {
     fn token_scope_round_trips() {
         assert_eq!(TokenScope::parse("admin").unwrap().as_str(), "admin");
         assert!(TokenScope::parse("root").is_err());
+    }
+
+    #[test]
+    fn bug_report_tail_is_reserved_for_suspected_bugs() {
+        // CLI guidance and config problems: no GitHub pointer.
+        assert!(is_user_input_error(&anyhow::anyhow!(
+            "username must be a non-empty single token"
+        )));
+        assert!(is_user_input_error(&anyhow::anyhow!(
+            "not found: {}",
+            "alice"
+        )));
+        assert!(is_user_input_error(&anyhow::Error::new(UserInput(
+            anyhow::anyhow!("profile solo requires storage.backend = \"sqlite\"")
+        ))));
+        // Typed runtime failures: pointer shown.
+        assert!(!is_user_input_error(&anyhow::Error::new(
+            std::io::Error::other("connection refused")
+        )));
+        assert!(!is_user_input_error(
+            &anyhow::Error::new(std::io::Error::other("io")).context("cannot open store")
+        ));
     }
 }

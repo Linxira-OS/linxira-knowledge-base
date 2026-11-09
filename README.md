@@ -52,6 +52,7 @@
 - [document/spaces-and-permissions.md](document/spaces-and-permissions.md) — 空间自助、用户组、三层角色与存储配额
 - [document/agent-access-and-observability.md](document/agent-access-and-observability.md) — Agent 鉴权、结构化日志、并发限流与 CLI
 - [document/deployment-modes-i18n-payments.md](document/deployment-modes-i18n-payments.md) — 运营模式、功能门禁、限速、i18n 与支付边界
+- [document/desktop-app-and-notes.md](document/desktop-app-and-notes.md) — 桌面 APP、首启、solo+PG、Markdown 笔记与发布包
 - [document/roadmap.md](document/roadmap.md) — 阶段划分、出口标准与明确不做的事
 - [document/build-policy.md](document/build-policy.md) — 构建门禁与当前实现边界
 - 架构决策记录（ADR）：
@@ -67,12 +68,13 @@
   - [ADR 0010 空间自助、用户组与分层权限](document/adr/0010-self-service-spaces.md)
   - [ADR 0011 Agent 访问、结构化日志与并发背压](document/adr/0011-agent-access-and-observability.md)
   - [ADR 0012 部署/运营模式、限速、i18n 与支付边界](document/adr/0012-deployment-modes-i18n-payments.md)
+  - [ADR 0013 桌面 APP 与 Markdown 笔记模式](document/adr/0013-desktop-app-notes.md)
 
 其余已定取舍（solo 零外部依赖、doc_id 由内容指纹与逻辑路径派生并遵循 [ADR 0006](document/adr/0006-doc-id-identity.md)、保留 v1 的有效取舍如召回期 ACL 与多通道 RRF 融合）记录在架构正文与上述 ADR 中。
 
 ## 当前状态
 
-**源码、迁移与测试已落地，并完成 GNU 工具链验证。** 验证记录：默认 `stable-x86_64-pc-windows-msvc` 因 `link.exe` 解析到 Git 的 coreutils `link`（`cl.exe` 缺失）无法链接；改用已安装的 `stable-x86_64-pc-windows-gnu` + MSYS2 gcc 16.1.0 执行 `cargo check --all-targets`、`cargo build --release` 与 `cargo test`，全部通过（113 tests passed；PostgreSQL 集成已通过 WSL PostgreSQL 18.6 实测、不再 SKIP；无 PG 环境时仍 SKIP，详见 `document/wsl-postgres.md`）。发布二进制 `target/release/lkb.exe` 约 28 MB，`target/` 约 13 GB。MSVC 链接器/VS Build Tools 仍缺失，安装需单独确认。
+**源码、迁移与测试已落地，并完成 GNU 工具链验证。** 验证记录：默认 `stable-x86_64-pc-windows-msvc` 因 `link.exe` 解析到 Git 的 coreutils `link`（`cl.exe` 缺失）无法链接；改用已安装的 `stable-x86_64-pc-windows-gnu` + MSYS2 gcc 16.1.0 执行 `cargo check --all-targets`、`cargo build --release` 与 `cargo test`，全部通过（115 tests passed；PostgreSQL 集成已通过 WSL PostgreSQL 18.6 实测、不再 SKIP；无 PG 环境时仍 SKIP，详见 `document/wsl-postgres.md`）。发布二进制 `target/release/lkb.exe` 约 28 MB，`target/` 约 13 GB。MSVC 链接器/VS Build Tools 仍缺失，安装需单独确认。
 
 实现要点：
 
@@ -81,7 +83,7 @@
 - **治理字段 day-one**：`tenant_id` / `space_id` / `acl_json` / `valid_from` / `valid_to` / `version` / `superseded_by` 在所有文档与切片上写入；召回 SQL 统一经 `Policy::visibility(principal)` 生成过滤条件，solo 也走该路径。
 - **可信反代 Header SSO（P2）**：`[sso] mode=trusted_header` 时仅当 TCP peer IP 命中 `trusted_proxies`（IP/CIDR）才接受 `user_header`/`email_header`/`groups_header`；否则 401 并审计，客户端直传内部身份头一律剥离。可信请求按 email/external_id/username 绑定或自动创建 `source=sso` 用户（unique email / external_id，migration 0011），`group_role_map` 取最高角色、否则 provision 用 `default_role`；disabled 用户拒绝，`allowed_email_domains` 不匹配 403；成功后签发与普通登录相同的 HttpOnly 会话 cookie（轮换、CSRF 仍适用），审计 `sso.login`/`sso.provision`/`sso.denied`；`GET /api/v1/auth/sso/status` 只返回 enabled/mode。启动校验覆盖 mode/header/trusted_proxies CIDR/default_role/group_role_map/allowed_email_domains/session_ttl_hours；trusted_proxies 为空合法但启动打印 `SSO will deny all peers` 警告。OIDC/SAML/SCIM 未实现。
 - **外部连接器（P2 收尾）**：migration 0010 新增 `connectors`/`external_refs`/`connector_jobs`；Connector trait（test/list_items/fetch_item/deep_link/acl_snapshot）提供 `filesystem_export`（manifest.json）、`jsonl`、`http_json`（真实 HTTP + Bearer api_key_env）；`feishu/sharepoint/onedrive/confluence/mediawiki` 仅做配置结构与 `connector_not_configured` 占位。Sync 幂等 upsert 引用；manifest 带 content 时按导入管线生成 Document/Chunk/FTS（source_uri=外部 URL、source_role=external、ACL 以源为准，读不到 ACL 按拒绝），不保存原件/二进制。Admin API `GET/POST /api/v1/connectors`、PATCH/DELETE `/{id}`、`POST /{id}/test`、`POST /{id}/sync`（后台 job）、`GET /{id}/jobs`、`GET /api/v1/external-refs`；feature gate connectors + admin scope + 审计；secret_env 只回显名称与是否配置。
-- **PostgreSQL 静态 SQL 守卫**：修复 `usage_events` 插入 22 占位符/21 绑定缺陷（补 `rewritten_query`）；`tests/pg_sql_guard.rs` 静态扫描 `src/store/postgres.rs` 的 140 条字面量 SQL 与 `.bind()` 链，要求 `$1..$n` 与绑定数/顺序一致，并有自检用例防止守卫空转。PG 运行时已通过 WSL PostgreSQL 18.6 实测（113 tests 全绿，PG 集成不再 SKIP；本机凭据在 `.lkb/pg.env`，已 gitignore；详见 `document/wsl-postgres.md`）。
+- **PostgreSQL 静态 SQL 守卫**：修复 `usage_events` 插入 22 占位符/21 绑定缺陷（补 `rewritten_query`）；`tests/pg_sql_guard.rs` 静态扫描 `src/store/postgres.rs` 的 140 条字面量 SQL 与 `.bind()` 链，要求 `$1..$n` 与绑定数/顺序一致，并有自检用例防止守卫空转。PG 运行时已通过 WSL PostgreSQL 18.6 实测（115 tests 全绿，PG 集成不再 SKIP；本机凭据在 `.lkb/pg.env`，已 gitignore；详见 `document/wsl-postgres.md`）。
 - **钱包/账本/套餐/支付（P2a）**：migration 0009 新增 plans/subscriptions/wallets/ledger_entries（双分录、idempotency_key 唯一、只追加）/topups/invoices/payment_events（provider_event_id 幂等）/entitlements；本地钱包支持手工/模拟充值、usage 扣费、退款冲正、余额不足 402 `payment_required`、并发不超扣；套餐 trial→active→past_due→suspended→cancelled 状态机与 entitlement 快照（plan included tokens 优先于钱包）；`BillingEngine` 适配器默认 local，lago/openmeter/stripe_billing 只发事件/读快照不写财务表；PaymentProvider 新增 stripe（Checkout Session + HMAC-SHA256 webhook 验签、时间戳容差）与 manual/mock（微信/支付宝 not_configured）；API `GET/POST /api/v1/billing/{plans,wallet,ledger,invoices,topup,checkout,webhook/{provider},subscribe,subscription,entitlement}`（订阅 GET/PATCH 状态机、tenant admin/owner、审计）；charge.refunded 反向冲正 topup（钱包可转负）；网关在存在钱包/entitlement 的租户上先鉴权后扣费（402/429）；judge 搜索路径也按 billing.engine 设置 local_ledger，外部引擎不本地扣费。
 - **契约 REST + 真流式（P1a2）**：`GET /api/v1/search`、`POST /api/v1/answer`、`GET /api/v1/answer/stream`（真 SSE）、页面列表 `GET /api/v1/pages?space&lang&limit&cursor&q`（cursor 分页）、单 revision `GET /api/v1/pages/{space}/{slug}/revisions/{revision_id}`（history 支持 `include_markdown=true`）、JSON 认证 `GET /api/v1/auth/csrf` + `POST /api/v1/auth/login`（Origin+CSRF，HttpOnly 会话 cookie、返回 principal/features）+ `GET /api/v1/auth/me` + `POST /api/v1/auth/logout`、会话恢复 `POST /api/v1/conversations/{id}/restore`；页面 JSON `GET/PUT/POST/DELETE /api/v1/pages/{space}/{slug}`（`If-Match` 必需，冲突 409 `revision_conflict`）、`GET .../history`、`POST .../restore`（space owner）；保存会按 web 表单同一路径重建 Document/Chunk/FTS 索引并占配额（失败释放/500），删除归档同步隐藏索引、恢复重新可见；`/api/v1/query|answer/stream` 通过网关 `stream:true` 解析上游 SSE delta，axum `Body::from_stream` 逐 token 推送；客户端断开释放配额预留并写 `status=cancelled` usage；上游不支持流时回退非流式并写 `stream_fallback` degraded。管理写操作（users/groups/spaces/quotas/models providers/aliases/routes）写 `audit_events`，记录真实 target_id 且创建操作只有一条审计；MCP 另有子进程 stdio smoke，`kb_write_page` 取空间默认 ACL 而非硬编码 allow_all。
 - **OpenAPI/MCP/管理面（P1a）**：`GET /openapi.json` 无认证输出 OpenAPI 3.1（覆盖当前全部真实 public/admin 路由与 Answer/Citation/Degraded/Space/User/Quota/Usage/Conversation/Summary schemas；未实装的 search/answer 与页面 JSON CRUD 不写入，避免文档超出路由）；`lkb mcp serve` 提供 stdio JSON-RPC 2.0（initialize/tools/list/tools/call），tools 为 kb_search/kb_answer/kb_get_page/kb_get_page_summary/kb_get_page_history/kb_list_spaces/kb_write_page，复用 REST 同一内核与 token scope，不暴露 admin 工具；admin 补齐 `GET /api/v1/admin/users|roles|groups|spaces|usage/aggregate`（含 group_by=user|space|alias|period|source 与分页）及 users 角色/禁用写入；`/api/v1/query/stream` 逐段推送多个 `token` 事件（meta/results/token/citation/usage/degraded/done）。
@@ -300,7 +302,7 @@ target/release/lkb serve
 - solo 的 `auth.mode = "none"` 只允许回环地址；非 loopback + `none` 会在启动时被拒绝。
 - 密钥只从环境变量读取（`models.*.api_key_env` 指定变量名），不会写入配置或日志；`config check` 只显示变量是否已设置。
 - team / enterprise 的 CLI 查询需要 `--token` 或 `LKB_API_TOKEN`；token 只在创建时显示一次，数据库中只存 sha256。
-- PostgreSQL 集成测试读取 `LKB_TEST_PG_URL`（本机取值见 `.lkb/pg.env`，已 gitignore）；本机已通过 WSL PostgreSQL 18.6 实测（113 tests）；未设置时仍打印 SKIP 原因并跳过，不会伪装通过。
+- PostgreSQL 集成测试读取 `LKB_TEST_PG_URL`（本机取值见 `.lkb/pg.env`，已 gitignore）；本机已通过 WSL PostgreSQL 18.6 实测（115 tests）；未设置时仍打印 SKIP 原因并跳过，不会伪装通过。
 
 ## 发布
 

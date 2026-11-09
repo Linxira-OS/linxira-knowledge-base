@@ -147,7 +147,7 @@
 | 模型网关/计量/配额最小集（Rust 薄网关 + tokenizer + usage + hard quota + usage 页） | 6–10 |
 | groups/space_members/三层角色/基础 storage quota | 6–10 |
 | P0 安全回归与联调 | 1–2 |
-| **P0 合计** | **43–71** |
+| **P0 合计** | **49–81** |
 | Wiki 删除/恢复/If-Match/附件/页面树 | 3–5 |
 | 生产 UI（用户端 Wiki） | 3–5 |
 | 连接器（5 类，只做引用/深链） | 8–12 |
@@ -160,12 +160,12 @@
 | SSE + 多轮改写 + Zeta 历史映射 + 摘要管理页 | 3–6 |
 | 自助配额/用量页/共享/归档/转移所有权 | 6–10 |
 | P1 回归与打磨 | 1–2 |
-| **P1 合计** | **53–87** |
+| **P1 合计** | **59–97** |
 
 | 排法 | 总工期（P0） | 总工期（P0+P1） |
 | --- | --- | --- |
-| 串行（1 人） | 43–71 周 | 96–158 周 |
-| 并行（3–4 人做 P0；5–6 人做全量） | 约 11–14 周 | 约 14–18 周 |
+| 串行（1 人） | 49–81 周 | 108–178 周 |
+| 并行（3–4 人做 P0；5–6 人做全量） | 约 12–16 周 | 约 15–20 周 |
 
 并行估算假设接口先冻结、P0 各轨可独立联调、外部连接器凭据不阻塞开发；实际以排期为准。
 
@@ -208,9 +208,13 @@
 | 运营模式/功能门禁 | 0% | 无 deployment.mode/features |
 | 支付/计费 | 0% | 无 PaymentProvider/entitlement；默认外接 |
 | i18n | 10% | 文档双语；无消息目录/Intl/API 本地化 |
+| 桌面 APP | 0% | 无 Tauri 壳/首启/签名更新 |
+| solo+PostgreSQL | 0% | 当前 solo 仅 SQLite 校验；未验证 solo+PG |
+| 静态 Web 托管 | 20% | 有最小 HTML 页面；无 web/dist SPA fallback |
+| Markdown 笔记 | 0% | 无 vault/文件监听/反向链接/笔记入口 |
 | 企业能力（SSO/多租户/WORM） | 0% | 本期不做 |
 
-**综合粗估：约 13%**（简单平均，仅作导航；不按代码行数计算；此前未纳入模型网关/计量/计费/Agent 集成时约 23%）。P0 完成后预计约 50–60%，P1 完成后约 78%；剩余为企业能力与连接器深度。
+**综合粗估：约 12%**（简单平均，仅作导航；不按代码行数计算；此前未纳入模型网关/计量/计费/Agent 集成时约 23%）。P0 完成后预计约 50–60%，P1 完成后约 78%；剩余为企业能力与连接器深度。
 
 ## 7. 建议的下一冲刺（P0）
 
@@ -404,3 +408,8 @@ MCP 与 REST 共用同一内核与 Answer 契约，不另写检索逻辑。
 ## 15. 运营模式、限速、支付与 i18n
 
 设计见 [deployment-modes-i18n-payments.md](deployment-modes-i18n-payments.md)，决策见 [ADR 0012](adr/0012-deployment-modes-i18n-payments.md)。当前：无 deployment.mode/features；限流仅登录；无 PaymentProvider/entitlement；i18n 仅文档双语。P0 5–8 人周（模式/门禁/限速/i18n zh-en）；P1 8–12 人周（支付适配/套餐/entitlement/发票）；P2 6–10 人周（多语言/税务/RTL/dunning）。
+
+
+## 16. 桌面 APP 与笔记
+
+设计见 [desktop-app-and-notes.md](desktop-app-and-notes.md)，决策见 [ADR 0013](adr/0013-desktop-app-notes.md)。当前：无桌面壳/首启向导/静态 web dist/笔记 vault；solo 仅允许 SQLite。P0 6–10 人周（Tauri 壳/首启 SQLite-PG/凭据/静态托管）；P1 6–10 人周（笔记入口/vault/编辑器/反向链接/索引）；P2 4–8 人周（安装包/更新/签名/团队发布）。已并入上述 P0/P1/P2 总量。

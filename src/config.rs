@@ -1246,6 +1246,12 @@ impl Config {
                 model.timeout_ms, model.max_retries
             ));
         }
+        out.push_str(&format!(
+            "repository = {}\nissues = {}\nsecurity = {}\n",
+            crate::util::REPOSITORY_URL,
+            crate::util::ISSUES_URL,
+            crate::util::SECURITY_URL
+        ));
         out
     }
 }

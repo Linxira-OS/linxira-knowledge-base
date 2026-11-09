@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { ensureCsrfToken } from '../api/client'
 import { Banner, Button, Card, Field } from '../components/ui'
 import { useI18n } from '../lib/i18n'
+import { ISSUES_URL, REPOSITORY_URL, SECURITY_URL } from '../lib/repo'
 import { useLoginErrorMessage, useSession } from '../lib/session'
 
 const inputClass =
@@ -121,6 +122,35 @@ export function LoginPage() {
             {status === 'authenticated' && <p className="text-[11px] text-fg-3">{t('account.login.continue')}</p>}
           </form>
         </Card>
+
+        <p className="flex flex-wrap items-center justify-center gap-x-2 text-[11px] text-fg-3">
+          <a
+            className="text-fg-2 transition-colors hover:text-fg"
+            href={REPOSITORY_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            GitHub
+          </a>
+          <span aria-hidden="true">·</span>
+          <a
+            className="text-fg-2 transition-colors hover:text-fg"
+            href={ISSUES_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Issues
+          </a>
+          <span aria-hidden="true">·</span>
+          <a
+            className="text-fg-2 transition-colors hover:text-fg"
+            href={SECURITY_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Security
+          </a>
+        </p>
       </div>
     </div>
   )

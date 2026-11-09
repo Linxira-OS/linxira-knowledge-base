@@ -3,6 +3,14 @@ use rand::RngCore;
 use sha2::{Digest, Sha256};
 use std::net::IpAddr;
 
+/// Canonical project links. Single source of truth for the CLI `--version`/
+/// `--help`/error tails, `lkb config check` and the server-rendered pages.
+/// Keep in sync with the `repository` field in Cargo.toml (pinned by a test).
+pub const REPOSITORY_URL: &str = "https://github.com/Linxira-OS/linxira-knowledge-base";
+pub const ISSUES_URL: &str = "https://github.com/Linxira-OS/linxira-knowledge-base/issues";
+pub const SECURITY_URL: &str =
+    "https://github.com/Linxira-OS/linxira-knowledge-base/security/advisories/new";
+
 pub fn sha256_hex(bytes: &[u8]) -> String {
     let mut hasher = Sha256::new();
     hasher.update(bytes);
@@ -273,6 +281,16 @@ mod tests {
         assert!(is_loopback_host("localhost"));
         assert!(!is_loopback_host("0.0.0.0"));
         assert!(!is_loopback_host("192.168.1.10"));
+    }
+
+    #[test]
+    fn repository_links_pin_the_canonical_repository() {
+        assert_eq!(REPOSITORY_URL, env!("CARGO_PKG_REPOSITORY"));
+        assert_eq!(ISSUES_URL, format!("{REPOSITORY_URL}/issues"));
+        assert_eq!(
+            SECURITY_URL,
+            format!("{REPOSITORY_URL}/security/advisories/new")
+        );
     }
 
     #[test]

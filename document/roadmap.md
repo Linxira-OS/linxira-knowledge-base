@@ -235,3 +235,12 @@
 | P2 | 设备码登录、token 轮换、lkb mcp、慢查询/死锁重试、Redis/PG 多实例限流 | 吊销立即 401；单 token 超 QPS 429；SQLite/PG 并发无死锁 |
 | P3 | deployment.mode/features、启动校验、限速维度、i18n zh/en、错误 code | 非法模式拒绝启动；限流分维度生效；UI/API 无硬编码文案 |
 | P4 | PaymentProvider 适配、套餐/试用/降级、entitlement、webhook 幂等、发票/税务 | 沙箱支付闭环；欠费停服/降级可回滚；对账可追溯 |
+
+
+## 跨阶段补充：桌面 APP 与笔记
+
+| 阶段 | 交付 | 出口 |
+| --- | --- | --- |
+| P0 | Tauri 2 壳 + sidecar 启停/单实例/托盘；首启 SQLite/PG + 测试连接 + 凭据存储；静态 web dist 托管 | 双击 exe 可用；portable 可用；solo+PG 跑同一组用例；team+SQLite 被拒 |
+| P1 | 笔记入口/personal 空间/vault/文件树/编辑器/反向链接/索引 | 外部编辑可索引；原子写/冲突不丢；笔记与 Wiki 在 UI 统一 |
+| P2 | 安装包/portable/自动更新/签名/团队发布共享/诊断 | 签名更新可回滚；未签名提示；发布到团队空间权限正确 |
