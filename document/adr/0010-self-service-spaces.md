@@ -14,7 +14,7 @@
 - 租户角色：owner / admin / user / agent；组角色：group_admin / group_member；空间角色：space_owner / space_admin / editor / viewer（commenter 留 P1）。
 - 组可拥有空间（`owner_type=group`）；group_admin 默认映射 space_admin，group_member 默认 viewer，空间 settings 可改默认 editor。显式用户空间角色优先于组派生；无显式用户角色时多组取 max。
 - 新增 `groups` / `group_members` / `space_members`；`space_members` 唯一键 `(space_id, principal_type, principal_id)`。
-- `spaces` 增加 `owner_type`、`owner_id`、`status`、`settings`；`allow_user_creation` 控制自助；solo 默认关闭，team/enterprise 默认开启。
+- `spaces` 增加 `owner_type`、`owner_id`、`status`、`settings`；`allow_user_creation` 控制自助；solo 默认可创建自己的笔记空间/笔记本（组创建仍关闭），team/enterprise 默认开启空间与组。
 - 配额层级 tenant → group → space → user；维度 storage_bytes/documents/chunks/members/spaces；hard/soft、80/95% 告警、超限 413/429；写入前原子预留、失败回滚；管理员 override 带 actor/reason/expires_at。
 - 存储计量：source_bytes + index_bytes（chunks/events 文本）+ history_bytes；归档/软删除在物理清理前计入，清理后回收；与模型 token 配额完全分开。
 - 共享：默认 private；internal 仅可发现元数据，读正文仍需成员/显式共享；ACL 与空间成员取交集；链接分享/评论/审批 P2。

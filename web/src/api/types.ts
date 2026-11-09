@@ -130,6 +130,8 @@ export interface FeaturesResponse {
     audit: boolean
     rate_limit: boolean
     public_share: boolean
+    /** Space/token quota management is part of the subscription tier. */
+    quotas: boolean
   }
   i18n: { default_locale: string; supported_locales: string[] }
 }

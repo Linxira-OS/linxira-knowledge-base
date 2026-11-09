@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useQueryState } from '../features/query/QueryProvider'
+import { encodePathSegment } from '../api/client'
+import { ensureMyNotesSpace } from '../api/notes'
 import { hitReaderPath } from '../api/wiki'
 import { Badge, Button, cx } from './ui'
 import { BrandMark } from './BrandMark'
 import { useI18n } from '../lib/i18n'
 import { useSession } from '../lib/session'
 import { useTheme } from '../lib/theme'
+import { pushToast } from '../lib/toast'
 
 function Logo() {
   const { t } = useI18n()
@@ -265,6 +268,51 @@ function AccountMenu() {
   )
 }
 
+/**
+ * Creates a note in the signed-in user's private notes space. The space is
+ * ensured lazily (idempotent); if the endpoint is not deployed yet, fall back
+ * to the currently selected space and surface a banner/toast.
+ */
+function NewNoteButton() {
+  const { t } = useI18n()
+  const navigate = useNavigate()
+  const { currentSpace, readableSpaces } = useQueryState()
+  const [busy, setBusy] = useState(false)
+
+  const createNote = async () => {
+    setBusy(true)
+    try {
+      const { space } = await ensureMyNotesSpace()
+      navigate(`/create/${encodePathSegment(space.space_id)}`)
+    } catch {
+      const fallbackSpace = currentSpace ?? readableSpaces[0] ?? null
+      if (fallbackSpace) {
+        pushToast(t('notes.fallbackBanner'), 'warn')
+        navigate(`/create/${encodePathSegment(fallbackSpace.space_id)}`)
+      } else {
+        pushToast(t('notes.fallbackNoSpace'), 'danger')
+      }
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Button
+      size="sm"
+      variant="primary"
+      className="whitespace-nowrap"
+      disabled={busy}
+      onClick={() => void createNote()}
+    >
+      <svg viewBox="0 0 16 16" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
+        <path d="M8 3.5v9M3.5 8h9" strokeLinecap="round" />
+      </svg>
+      {t('topbar.newNote')}
+    </Button>
+  )
+}
+
 export function TopBar() {
   const { t } = useI18n()
   const { currentSpace } = useQueryState()
@@ -277,6 +325,7 @@ export function TopBar() {
           <span className="h-1.5 w-1.5 rounded-full bg-accent" />
           {currentSpace ? currentSpace.name : t('space.selectHint')}
         </span>
+        <NewNoteButton />
         <SpacePicker />
         <LocaleToggle />
         <ThemeToggle />

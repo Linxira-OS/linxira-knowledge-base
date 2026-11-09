@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark">
-<meta name="description" content="Linxira Knowledge Base 0.2.z 发布前说明：三档 profile、配置边界、检索加权链路、零模型基线、云控制台风格与权限组页面示意。">
+<meta name="description" content="Linxira Knowledge Base 0.2.z 发布前说明：三档 profile、配置边界、检索加权链路、零模型基线、我的笔记与配额分层、云控制台风格与权限组页面示意。">
 <title>Linxira Knowledge Base · 0.2.z 发布前说明</title>
 <style>
 /* ---------------------------------------------------------------------------
@@ -357,6 +357,68 @@ sup { font: 8px var(--font-mono); color: var(--fg-3); vertical-align: super; lin
 .path-row .arr { color: var(--fg-3); }
 .path-cost { margin-top: 9px; font-size: 10.5px; color: var(--fg-3); }
 
+/* Notes & quota -------------------------------------------------------------- */
+.notes-grid {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px; background: var(--line); border: 1px solid var(--line);
+  border-radius: 11px; overflow: hidden;
+}
+.notes-panel {
+  background: var(--surface); padding: 21px 22px 19px; min-width: 0;
+}
+.notes-panel.primary {
+  background: var(--accent-weak); box-shadow: inset 3px 0 0 var(--accent);
+}
+.notes-k {
+  font: 500 9px var(--font-mono); letter-spacing: .12em;
+  text-transform: uppercase; color: var(--accent);
+}
+.notes-panel h3 {
+  margin: 6px 0 5px; font-size: 17px; line-height: 1.25;
+  letter-spacing: -.018em; font-weight: 600;
+}
+.notes-panel > p { margin: 0; color: var(--fg-2); font-size: 11.5px; line-height: 1.68; }
+.notes-panel code { font-size: 9.5px; }
+.notes-list { list-style: none; margin: 13px 0 0; padding: 0; }
+.notes-list li {
+  position: relative; padding: 0 0 0 14px; margin: 0 0 8px;
+  color: var(--fg-2); font-size: 11px; line-height: 1.65;
+}
+.notes-list li:last-child { margin-bottom: 0; }
+.notes-list li::before {
+  content: ""; position: absolute; left: 0; top: .64em;
+  width: 4px; height: 4px; border-radius: 50%; background: var(--accent);
+}
+.notes-list b { color: var(--fg); font-weight: 600; }
+.notes-chain { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 14px; }
+.notes-chain span {
+  border: 1px solid var(--line-strong); border-radius: 999px;
+  padding: 2px 7px; color: var(--fg-3);
+  font: 9px var(--font-mono); white-space: nowrap;
+}
+.notes-boundary {
+  display: grid; grid-template-columns: 190px minmax(0, 1fr); gap: 18px;
+  align-items: start; margin-top: 14px; padding: 13px 15px;
+  border: 1px dashed var(--line-strong); border-radius: 9px;
+}
+.notes-boundary .k {
+  display: block; margin-bottom: 4px; color: var(--accent);
+  font: 500 8.5px var(--font-mono); letter-spacing: .1em;
+}
+.notes-boundary b { display: block; font-size: 12px; font-weight: 600; line-height: 1.45; }
+.notes-boundary p { margin: 0; color: var(--fg-2); font-size: 11px; line-height: 1.65; }
+.notes-boundary code { font-size: 9.5px; }
+.principle code, .notes-panel code, .notes-boundary code, .notes-quota-link code {
+  white-space: normal; overflow-wrap: anywhere;
+}
+.notes-quota-link { margin: 11px 0 0; font-size: 10.5px; line-height: 1.7; color: var(--fg-3); }
+.notes-quota-link a {
+  color: var(--fg-2); text-decoration: underline; text-underline-offset: 2px;
+  text-decoration-color: var(--line-strong);
+}
+.notes-quota-link a:hover { color: var(--accent); }
+.notes-boundary .notes-quota-link { margin: 6px 0 0; }
+
 /* Admin direction ------------------------------------------------------------
    The page should read as a console brief, not a stack of marketing cards. */
 .verdict {
@@ -664,6 +726,8 @@ sup { font: 8px var(--font-mono); color: var(--fg-3); vertical-align: super; lin
   .sec-num { padding-top: 0; }
   .sec-title .en { display: inline; margin-left: 8px; }
   .lock-grid, .auto-grid, .model-grid { grid-template-columns: 1fr; }
+  .notes-grid { grid-template-columns: 1fr; }
+  .notes-boundary { grid-template-columns: 1fr; gap: 7px; }
   .formula { grid-template-columns: 1fr; gap: 12px; }
   .principles { grid-template-columns: 1fr; }
   .tokens { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -683,6 +747,7 @@ sup { font: 8px var(--font-mono); color: var(--fg-3); vertical-align: super; lin
   .wrap { padding: 0 16px; }
   h1 { font-size: 38px; }
   .hero .lead { font-size: 15px; }
+  #notes-quota .sec-title .en { display: block; margin: 5px 0 0; font-size: .5em; }
   .tokens { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .mk-grid { grid-template-columns: 1fr; }
   .mk-groups { display: none; }
@@ -724,8 +789,9 @@ sup { font: 8px var(--font-mono); color: var(--fg-3); vertical-align: super; lin
   .fact-panel { padding-right: 8px; }
   .fact-row .v { font-size: 7.4pt; white-space: normal; }
   .section { padding: 20px 0; }
-  .sec-head { grid-template-columns: 100px 1fr; gap: 16px; margin-bottom: 12px; }
+  .sec-head { grid-template-columns: 140px 1fr; gap: 16px; margin-bottom: 12px; }
   .sec-num { font-size: 8pt; letter-spacing: .08em; white-space: nowrap; }
+  #notes-quota { break-before: page; }
   .sec-title { font-size: 18pt; }
   .sec-lede { font-size: 9pt; }
   .table-wrap { overflow: visible; border-radius: 0; }
@@ -735,6 +801,12 @@ sup { font: 8px var(--font-mono); color: var(--fg-3); vertical-align: super; lin
   .cell-note { font-size: 7pt; }
   .footnote { padding-right: 8px; }
   .lock-grid, .auto-grid, .model-grid { break-inside: avoid; }
+  .notes-grid, .notes-boundary { break-inside: avoid; }
+  .notes-panel { padding: 9px 10px; }
+  .notes-panel h3 { font-size: 13pt; }
+  .notes-panel > p, .notes-list li, .notes-boundary p { font-size: 7.5pt; }
+  .notes-list { margin-top: 7px; }
+  .notes-quota-link { break-before: avoid; }
   .model-grid { grid-template-columns: repeat(3, 1fr); }
   .model { padding: 8px 9px; }
   .model h3 { font-size: 13pt; }
@@ -823,6 +895,7 @@ sup { font: 8px var(--font-mono); color: var(--fg-3); vertical-align: super; lin
       <a href="#config">配置边界</a>
       <a href="#retrieval">检索链路</a>
       <a href="#zero-model">零模型</a>
+      <a href="#notes-quota">我的笔记 / 配额</a>
       <a href="#admin">后台方向</a>
       <a href="#mockup">权限组示意</a>
     </nav>
@@ -837,12 +910,13 @@ sup { font: 8px var(--font-mono); color: var(--fg-3); vertical-align: super; lin
         <div class="eyebrow">Pre-release brief · 0.2.z</div>
         <h1>Linxira<span class="line">Knowledge Base</span></h1>
         <p class="lead">一个内核，三档 profile。同一份 <code>lkb</code> 二进制，用配置与适配器装配成个人库、团队库或企业知识基础设施。</p>
-        <p class="sub">这页把设想的功能、可配置边界、检索加权逻辑放在一页里；后半部分给出管理后台的风格判断与权限组页面示意。技术读者优先，不写营销话术。</p>
+        <p class="sub">这页把设想的功能、可配置边界、检索加权逻辑、我的笔记与配额分层放在一页里；后半部分给出管理后台的风格判断与权限组页面示意。技术读者优先，不写营销话术。</p>
         <div class="hero-pills">
           <span class="pill green">lkb 0.2.z</span>
           <span class="pill">one kernel</span>
           <span class="pill">three profiles</span>
           <span class="pill">zero-model baseline</span>
+          <span class="pill">my notes · quota tiers</span>
           <span class="pill">SQLite / PostgreSQL</span>
         </div>
       </div>
@@ -905,6 +979,13 @@ sup { font: 8px var(--font-mono); color: var(--fg-3); vertical-align: super; lin
               <td><span class="tag ok">已实现</span></td>
             </tr>
             <tr>
+              <th scope="row">笔记本 / 我的笔记 <span class="en">notebooks / my notes</span></th>
+              <td><span class="sym y">●</span> <b>自己的笔记本 / 空间</b><span class="cell-note"><code>spaces.allow_user_creation=true</code>；组创建仍关闭</span></td>
+              <td><span class="sym y">●</span> <b>空间 + 组策略</b><span class="cell-note">策略允许；与现有实现一致</span></td>
+              <td><span class="sym y">●</span> <b>空间 + 组策略</b><span class="cell-note">按租户 / 组策略</span></td>
+              <td><span class="tag ok">已实现</span><span class="cell-note">所有层级私有笔记；页面 = 笔记 · 空间 = 笔记本；桌面 Markdown vault 未实现</span></td>
+            </tr>
+            <tr>
               <th scope="row">身份 <span class="en">identity</span></th>
               <td><span class="sym y">●</span> <b>none / session</b><span class="cell-note">默认 <code>none</code>；只允许 loopback</span></td>
               <td><span class="sym y">●</span> <b>session / SSO</b><span class="cell-note">默认 <code>none</code>；非 loopback 必须 session；SSO 走可信 Header</span></td>
@@ -941,10 +1022,10 @@ sup { font: 8px var(--font-mono); color: var(--fg-3); vertical-align: super; lin
             </tr>
             <tr>
               <th scope="row">配额 <span class="en">quotas</span></th>
-              <td><span class="sym y">●</span> 宽松默认<span class="cell-note">进程内限流；单机</span></td>
-              <td><span class="sym y">●</span> 默认收紧<span class="cell-note">仅覆盖仍为默认值的 <code>limits</code></span></td>
-              <td><span class="sym y">●</span> 按租户 / 空间<span class="cell-note">基础配额已实现；多实例需共享锁；合同 / 策略引擎规划</span></td>
-              <td><span class="tag ok">已实现</span><span class="cell-note">基础配额；进程内计数；策略引擎未实现</span></td>
+              <td><span class="sym y">●</span> 默认关闭硬配额<span class="cell-note"><code>features.quotas=false</code>；用量只读；配额写接口 403</span></td>
+              <td><span class="sym y">●</span> 默认开启<span class="cell-note">存储 + token / 请求 / 成本配额</span></td>
+              <td><span class="sym y">●</span> 按租户 / 空间 / 角色<span class="cell-note">tenant / role 级与合同额可叠加</span></td>
+              <td><span class="tag ok">已实现</span><span class="cell-note">基础配额；进程内计数；跨实例串行化规划</span></td>
             </tr>
             <tr>
               <th scope="row">公开分享 <span class="en">public share</span></th>
@@ -973,7 +1054,7 @@ sup { font: 8px var(--font-mono); color: var(--fg-3); vertical-align: super; lin
 
       <p class="footnote"><sup>†1</sup> 历史说明：0.2.1 及更早的 <code>validate()</code> 拒绝 <code>solo + postgres</code>；0.2.2 已允许 solo 使用 PostgreSQL（team / enterprise 仍强制 PG）。PG 需要 <code>storage.url_env</code> 指向的环境变量中有 URL；URL 不写入配置。</p>
       <p class="footnote"><sup>†2</sup> <code>features.connectors</code> 在 solo 默认 <code>false</code>，但校验没有禁止显式打开；这与“solo 关闭连接器”的规范表述不一致。若产品要求锁死，应在 <code>validate()</code> 加规则，而不是只靠默认值。</p>
-      <p class="footnote"><sup>†3</sup> 身份当前只有 <code>none</code> / <code>session</code> / <code>trusted_header</code>。OIDC、SAML、SCIM、工作负载身份是规范目标，不在 0.2.z 实现内；不要把 <code>features.sso</code> 当成 SSO 已完整实现的证据。enterprise 当前与 team 共享实现；真正的多租户路由、配额策略引擎与 WORM 审计仍未实现。</p>
+      <p class="footnote"><sup>†3</sup> 身份当前只有 <code>none</code> / <code>session</code> / <code>trusted_header</code>。OIDC、SAML、SCIM、工作负载身份是规范目标，不在 0.2.z 实现内；不要把 <code>features.sso</code> 当成 SSO 已完整实现的证据。enterprise 当前与 team 共享实现；真正的多租户路由、跨实例配额串行化与 WORM 审计仍未实现。</p>
       <p class="footnote"><sup>†4</sup> <code>features.audit=false</code> 只让 <code>/admin/audit</code> 路由返回未启用；<code>audit::record</code> 仍会写核心审计事件。如果产品语义是“关闭审计”，当前实现不一致，需要改代码或改表述。</p>
     </div>
   </section>
@@ -991,7 +1072,7 @@ sup { font: 8px var(--font-mono); color: var(--fg-3); vertical-align: super; lin
       <div class="lock-grid">
         <div class="lock-cell">
           <div class="k">Normalize</div>
-          <p>solo 强制 <code>tenant_id=t_local</code>、<code>default_space=s_default</code>，并关闭自助建空间 / 建组。team / enterprise 只在值仍等于默认值时收紧 <code>limits</code>，不覆盖显式配置。</p>
+          <p>solo 强制 <code>tenant_id=t_local</code>、<code>default_space=s_default</code>，关闭组创建，但保留自助笔记本（space，受 <code>spaces.max_per_user</code> 约束）。team / enterprise 只在值仍等于默认值时收紧 <code>limits</code>，不覆盖显式配置。</p>
         </div>
         <div class="lock-cell">
           <div class="k">Validate</div>
@@ -999,7 +1080,7 @@ sup { font: 8px var(--font-mono); color: var(--fg-3); vertical-align: super; lin
         </div>
         <div class="lock-cell">
           <div class="k">Runtime</div>
-          <p>模型 <code>provider=none</code> 不是配置错误：对应通道被裁剪，写入 <code>degraded[]</code>，其他通道继续。功能 flag 也不都等于实现；只有 billing / connectors / audit 有运行时门禁，且 audit 只门禁查询 API <sup>†4</sup>。</p>
+          <p>模型 <code>provider=none</code> 不是配置错误：对应通道被裁剪，写入 <code>degraded[]</code>，其他通道继续。功能 flag 也不都等于实现；只有 billing / connectors / audit / quotas 有运行时门禁；audit 只门禁查询 API，quotas 只门禁写接口 <sup>†4</sup>。</p>
         </div>
       </div>
 
@@ -1063,7 +1144,15 @@ sup { font: 8px var(--font-mono); color: var(--fg-3); vertical-align: super; lin
               <td><span class="pill2 lock">部分锁</span><span class="cell-note">billing 禁止</span></td>
               <td><span class="pill2 can">可改</span></td>
               <td><span class="pill2 lock">部分锁</span><span class="cell-note">audit 禁止关</span></td>
-              <td>10 个布尔覆盖。solo 禁止 billing；enterprise 强制 audit；enterprise_external 强制 signup + billing + multi_tenant + public_api。只有 billing / connectors / audit 有运行时门禁；audit 只门禁查询 API <sup>†4</sup>。</td>
+              <td>11 个布尔覆盖。solo 禁止 billing；enterprise 强制 audit；enterprise_external 强制 signup + billing + multi_tenant + public_api。只有 billing / connectors / audit / quotas 有运行时门禁；audit 只门禁查询 API，quotas 只门禁写接口 <sup>†4</sup>。</td>
+            </tr>
+            <tr>
+              <td class="key">features.quotas</td>
+              <td><code>solo false · team/ent true</code><span class="cell-note">第 11 个 flag</span></td>
+              <td><span class="pill2 can">可改</span><span class="cell-note">默认 false；可显式开</span></td>
+              <td><span class="pill2 can">可改</span><span class="cell-note">默认 true</span></td>
+              <td><span class="pill2 can">可改</span><span class="cell-note">默认 true</span></td>
+              <td>solo 默认关闭硬配额，<code>GET /spaces/{id}/usage</code> 与 <code>GET /admin/quotas</code> 仍可读；配额写接口返回 <code>403 feature_disabled</code>。team / enterprise 默认开启，可显式 override 两方向；关闭不删除已有配额记录。</td>
             </tr>
             <tr>
               <td class="key">retrieval.mode</td>
@@ -1201,6 +1290,7 @@ sup { font: 8px var(--font-mono); color: var(--fg-3); vertical-align: super; lin
             <tr><td>audit</td><td><code>true</code></td><td><code>true</code></td><td><code>true</code></td><td><code>true</code></td><td>门禁 audit 查询 API；enterprise 禁止关；核心写入仍执行 <sup>†4</sup>。</td></tr>
             <tr><td>rate_limit</td><td><code>true</code></td><td><code>true</code></td><td><code>true</code></td><td><code>true</code></td><td>始终按 <code>[limits]</code> 生效，不受 flag 关闭。</td></tr>
             <tr><td>public_share</td><td><code>false</code></td><td><code>false</code></td><td><code>false</code></td><td><code>true</code></td><td>仅展示；无分享路由，P2。</td></tr>
+            <tr><td>quotas</td><td><code>false</code></td><td><code>true</code></td><td><code>true</code></td><td><code>true</code></td><td>门禁空间配额（space quota）、admin token quota 与 quota overrides 写接口；关闭时返回 <code>403 feature_disabled</code>，用量读取仍可用；可显式覆盖。</td></tr>
           </tbody>
         </table>
       </div>
@@ -1239,7 +1329,8 @@ sup { font: 8px var(--font-mono); color: var(--fg-3); vertical-align: super; lin
             <tr><th scope="col">键</th><th scope="col">默认</th><th scope="col">solo</th><th scope="col">team / enterprise</th><th scope="col">说明</th></tr>
           </thead>
           <tbody>
-            <tr><td>spaces.* / groups.*</td><td><code>allow=true · max=10</code></td><td><span class="pill2 lock">锁定</span> 自助关闭</td><td><span class="pill2 can">可改</span></td><td>solo 归一化强制 <code>allow_user_creation=false</code>；团队可开。</td></tr>
+            <tr><td>spaces.*</td><td><code>allow=true · max=10</code></td><td><span class="pill2 can">可改</span> 自助开</td><td><span class="pill2 can">可改</span></td><td>solo 保留自助笔记本（space）；显式关闭仍生效；数量受 <code>max_per_user</code> 约束。</td></tr>
+            <tr><td>groups.*</td><td><code>allow=true</code></td><td><span class="pill2 lock">锁定</span> 关闭</td><td><span class="pill2 can">可改</span></td><td>solo 归一化强制 <code>allow_user_creation=false</code>；团队 / 企业按配置。</td></tr>
             <tr><td>server.bind</td><td><code>127.0.0.1:7331</code></td><td><span class="pill2 can">可改</span></td><td><span class="pill2 can">可改</span></td><td>必须是 <code>host:port</code>；非回环 + <code>auth.none</code> 拒绝启动。</td></tr>
             <tr><td>seed.* / summary.* / query.*</td><td><code>on · auto · product</code></td><td><span class="pill2 can">可改</span></td><td><span class="pill2 can">可改</span></td><td>种子导入、摘要（1200 字 / batch 8 / 3 次重试）、多轮改写（context 6）。</td></tr>
             <tr><td>payment.*</td><td><code>none · USD · test</code></td><td><span class="pill2 lock">不适用</span></td><td><span class="pill2 can">可改</span></td><td>只在 billing 开启时有意义；currency 必须是 3 位 ISO 4217。</td></tr>
@@ -1535,10 +1626,60 @@ BM25  #1 + Event #1        1.0/61 + 0.8/61     = 0.02951</pre>
     </div>
   </section>
 
+  <section class="section" id="notes-quota">
+    <div class="wrap">
+      <div class="sec-head">
+        <div class="sec-num">05 / NOTES &amp; QUOTA</div>
+        <div>
+          <h2 class="sec-title">我的笔记与配额分层<span class="en">My notes · quota layers</span></h2>
+          <p class="sec-lede">我的笔记不是 solo 专属：任何层级（solo / team / enterprise）的每个用户都有自己的私有笔记，仅本人可见。页面 = 笔记，空间 = 笔记本；笔记由系统私有空间承载，不占自助空间配额。配额只治理空间与模型用量。</p>
+        </div>
+      </div>
+
+      <div class="notes-grid">
+        <div class="notes-panel primary">
+          <div class="notes-k">ANY TIER · MY NOTES</div>
+          <h3>我的笔记 / My notes</h3>
+          <p>私有（仅本人可见）；solo / team / enterprise 都可用。当前入口是 Web Wiki，不是桌面本地 vault。</p>
+          <ul class="notes-list">
+            <li><b>页面 = 笔记，空间 = 笔记本</b>；正文以 <code>Page / Revision</code> 保存，保存生成新 revision。</li>
+            <li><b>检索</b>：保存后进入统一索引，可被搜索 / 问答；没有模型时走抽取式回退。</li>
+            <li><b>系统私有空间</b>：每用户一个 <code>notes_*</code> 空间；<code>POST/GET /api/v1/notes/space</code> 幂等确保，ACL 仅本人，管理员读内容 404；不占自助空间配额。<span class="tag ok">已实现</span></li>
+            <li><b>块编辑器</b>：Markdown / Blocks 切换、分块 / 拖拽 / 类型工具栏 / 实时预览；Markdown 是事实源，代码围栏 / 表格不拆。<span class="tag ok">已实现</span></li>
+            <li><b>插件接口 v0</b>：manifest / hooks / block renderer / command registry，编译内置；v0 骨架已实现。<span class="tag ok">v0 骨架</span><span class="cell-note">远程加载 / 沙箱 / 市场未实现。</span></li>
+            <li><b>入口</b>：顶部栏「新建笔记」/「笔记」；solo / team / enterprise 共用同一套 <code>Page / Revision</code> 与搜索。</li>
+          </ul>
+          <div class="notes-chain"><span>private</span><span>Page / Revision</span><span>Web / SQLite / PG</span></div>
+        </div>
+        <div class="notes-panel">
+          <div class="notes-k">QUOTA LAYERS · SOLO / TEAM / ENTERPRISE</div>
+          <h3>配额分层 / Quota layers</h3>
+          <p>我的笔记由系统私有空间承载，不占自助空间配额；配额只治理空间与模型用量。solo 默认只读，team / enterprise 才开放配额管理。</p>
+          <ul class="notes-list">
+            <li><b>solo</b>：<code>features.quotas=false</code>；仅用量可读，配额写接口返回 <code>403 feature_disabled</code>；可显式 opt-in。</li>
+            <li><b>team / enterprise</b>：<code>features.quotas=true</code>；scope chain <code>tenant → group / user → space</code>；token 配额另支持 tenant / space / user / role。</li>
+            <li><b>hard / soft</b>：hard 阻断（字节 413、计数 429），soft 不阻断；80% / 95% 告警仍是目标。override 带 reason 与 <code>expires_at</code>。</li>
+            <li><b>不是限速</b>：quota 管总量，rate limit 管每秒突发；<code>quota_exceeded</code> / <code>rate_limited</code> / <code>402 payment_required</code> 不混用。</li>
+            <li><b>写入口与审计</b>：空间配额、admin token 配额、override；关闭 flag 不删除已有记录，变更 / override 写审计。</li>
+          </ul>
+          <div class="notes-chain"><span>storage</span><span>token</span><span>request</span><span>cost</span></div>
+        </div>
+      </div>
+
+      <div class="notes-boundary">
+        <div><span class="k">CURRENT SHAPE</span><b>Web / SQLite / PG 的 Wiki 形态</b></div>
+        <div>
+          <p>笔记事实源是数据库中的 <code>Page / Revision</code>，不是磁盘上的 <code>.md</code> 文件。桌面本地 Markdown vault、文件监听、frontmatter、<code>[[wikilink]]</code>、反向链接与离线桌面壳都尚未实现；CLI 导入 / 导出也不是双向同步。</p>
+          <p class="notes-quota-link">细节与验收：<a href="../document/notes.md">notes.md</a> · <a href="../document/plugin-api.md">plugin-api.md</a> · <a href="../document/quotas.md">quotas.md</a>。配额数值是建议默认值，不是编译常量；跨实例预留仍靠进程内互斥，多实例需数据库锁。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <section class="section" id="admin">
     <div class="wrap">
       <div class="sec-head">
-        <div class="sec-num">05 / ADMIN</div>
+        <div class="sec-num">06 / ADMIN</div>
         <div>
           <h2 class="sec-title">后台设计方向<span class="en">name the style, then change the information architecture</span></h2>
           <p class="sec-lede">结论先说：现在的问题不是配色，是信息架构。现有 token、表格、空态 / 骨架 / 确认流程都可以保留；需要把“设置表单”改成“资源控制台”。</p>
@@ -1654,7 +1795,7 @@ BM25  #1 + Event #1        1.0/61 + 0.8/61     = 0.02951</pre>
   <section class="section" id="mockup">
     <div class="wrap">
       <div class="sec-head">
-        <div class="sec-num">06 / MOCKUP</div>
+        <div class="sec-num">07 / MOCKUP</div>
         <div>
           <h2 class="sec-title">权限组页面高保真示意<span class="en">identity / groups / engineering-platform</span></h2>
           <p class="sec-lede">纯静态 HTML/CSS，用现有 token 画，不接真实 API。它展示目标信息架构：左侧 IAM 导航、组列表、成员表、右侧策略抽屉。数据和角色仅用于示意。</p>

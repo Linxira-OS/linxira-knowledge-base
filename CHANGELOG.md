@@ -4,7 +4,15 @@
 
 ## [0.2.2] - 2026-11-09
 
-许可证/文档 + 检索与 solo 后端修正。
+许可证/文档 + 检索、私有笔记/块编辑器/插件 v0、配额分层与 solo 后端修正。
+
+### Added — 私有笔记、块编辑器、插件 v0 与配额分层
+
+- **私有笔记空间（所有层级）**：每个登录用户拥有一个 `notes_<principal>` 私有空间（`visibility=private`、owner-only ACL），管理员也不能通过普通页面接口读取他人笔记内容（后端返回 404）。该空间不占自助空间数量配额，页面写入仍计配额与审计。`/notes` 是「我的笔记」，空间即笔记本；笔记复用 Wiki `Page / Revision`，保留 revision 历史与乐观锁。
+- **块编辑器**：Markdown/Blocks 编辑，Markdown 为事实源；页面保存仍走 revision 与索引管线。
+- **插件 v0**：插件为编译内置模块，随 Web 包注册并隔离激活；远程下载、动态 import、`eval`/`new Function` 与远程 manifest 均未实现。
+- **配额分层**：新增第 11 个功能开关 `features.quotas`。solo 默认 `false`（仅展示用量，不启用硬配额）；team / enterprise 默认 `true`，支持 space 存储/文档/切片/成员配额与 token/请求/成本配额。门禁只在 API 层：关闭时配额写/管理端点返回 `403 feature_disabled`，用量与生效配额仍可读；显式 override 优先。
+- 新增 `document/notes.md` 与 `document/quotas.md`；`README.md` 中英双语补充私有笔记、块编辑器/插件 v0、配额分层说明及文档入口。
 
 ### Changed — 分层许可证
 

@@ -7,6 +7,7 @@ import { TopBar } from './TopBar'
 import { Banner, cx } from './ui'
 import { useI18n } from '../lib/i18n'
 import { useSession } from '../lib/session'
+import { ToastHost } from '../lib/toast'
 import { isEmbedMode } from '../lib/embed'
 import { useMediaQuery } from '../lib/hooks'
 import {
@@ -83,6 +84,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     return (
       <div className="flex h-full min-h-0 flex-col overflow-hidden bg-canvas text-fg">
         <EmbedHeader />
+        <ToastHost />
         <main className="thin-scroll min-w-0 flex-1 overflow-y-auto bg-surface">{children}</main>
       </div>
     )
@@ -93,6 +95,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="flex h-full flex-col overflow-hidden bg-canvas text-fg">
       <TopBar />
+      <ToastHost />
       <div ref={rowRef} className="flex min-h-0 flex-1">
         {leftVisible ? (
           <>

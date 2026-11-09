@@ -18,7 +18,7 @@ Commands are shown in GNU style (Linux, macOS, Git Bash) and Windows PowerShell;
 - Node.js and npm for the frontend (`web/` uses npm and Vite).
 - The first build needs network access for crates; the default runtime path does not.
 
-The verified combination in this repository is `stable-x86_64-pc-windows-gnu` with MSYS2 gcc: `cargo check --all-targets`, `cargo build --release`, and `cargo test` all pass (152 tests passed; the PostgreSQL integration test prints SKIP because `LKB_TEST_PG_URL` is unset). On the verification machine the default `stable-x86_64-pc-windows-msvc` failed because `link.exe` resolved to the coreutils `link` shipped with Git. With a real MSVC linker installed, the default toolchain works.
+The verified combination in this repository is `stable-x86_64-pc-windows-gnu` with MSYS2 gcc: `cargo check --all-targets`, `cargo build --release`, and `cargo test` all pass (162 tests passed; the PostgreSQL integration test prints SKIP because `LKB_TEST_PG_URL` is unset). On the verification machine the default `stable-x86_64-pc-windows-msvc` failed because `link.exe` resolved to the coreutils `link` shipped with Git. With a real MSVC linker installed, the default toolchain works.
 
 ## 2. Build
 

@@ -18,7 +18,7 @@ There is one configuration entry point: `lkb.toml`. If the file is absent, defau
 4. Normalize: infer `profile` from the backend, force solo governance IDs, tighten limits for non-solo, resolve `deployment.mode` and feature defaults.
 5. Validate; exit on failure.
 
-When `profile` is unset, SQLite infers `solo` and PostgreSQL infers `team`; run solo on PostgreSQL by setting `profile = "solo"` explicitly. solo normalization forces `tenant_id = t_local`, `default_space = s_default`, and disables self-service groups/spaces. When `deployment.mode` is unset: `solo → solo`, `team → team`, `enterprise → enterprise_internal`; `enterprise_external` only via explicit configuration.
+When `profile` is unset, SQLite infers `solo` and PostgreSQL infers `team`; run solo on PostgreSQL by setting `profile = "solo"` explicitly. solo normalization forces `tenant_id = t_local`, `default_space = s_default`, and disables self-service groups only; users may still create their own notes spaces within `spaces.max_per_user`. When `deployment.mode` is unset: `solo → solo`, `team → team`, `enterprise → enterprise_internal`; `enterprise_external` only via explicit configuration.
 
 ## 2. profile, server, auth
 
@@ -68,7 +68,7 @@ Validation and effective rules:
 
 | Field | Default | Notes |
 | --- | --- | --- |
-| `spaces.allow_user_creation` | `true` (solo forces `false`) | Self-service space creation |
+| `spaces.allow_user_creation` | `true` | Self-service notes spaces (solo may create its own; groups stay closed) |
 | `spaces.max_per_user` | `10` | Per-owner space count |
 | `spaces.default_storage_bytes` | none | Default per-space quota; `None` means unlimited |
 | `spaces.default_documents` | none | Default per-space document quota |
@@ -98,8 +98,9 @@ Feature defaults per mode:
 | `audit` | true | true | true | true |
 | `rate_limit` | true | true | true | true |
 | `public_share` | false | false | false | true |
+| `quotas` | false | true | true | true |
 
-**`billing`, `audit`, and `connectors` are enforced at runtime.** The remaining switches (`signup`, `sso`, `multi_tenant`, `public_api`, `mcp`, `public_share`) are surfaced by `GET /api/v1/features` but do not gate behavior; `rate_limit` always applies. Validation requires `deployment.mode` to match `profile`, forbids billing under solo, requires `signup + billing + multi_tenant + public_api` for `enterprise_external`, and forbids disabling audit on enterprise.
+**`billing`, `audit`, `connectors`, and `quotas` are enforced at runtime.** The remaining switches (`signup`, `sso`, `multi_tenant`, `public_api`, `mcp`, `public_share`) are surfaced by `GET /api/v1/features` but do not gate behavior; `rate_limit` always applies. `quotas` gates quota write/management endpoints only; usage reads stay available, and solo can explicitly opt in. Validation requires `deployment.mode` to match `profile`, forbids billing under solo, requires `signup + billing + multi_tenant + public_api` for `enterprise_external`, and forbids disabling audit on enterprise.
 
 ## 6. i18n
 

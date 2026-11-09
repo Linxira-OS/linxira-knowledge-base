@@ -54,6 +54,9 @@ async fn start_provider() -> String {
 fn test_config(path: &std::path::Path) -> Config {
     let mut config = Config::default();
     config.storage.sqlite_path = path.to_path_buf();
+    // Token quota management is a team+ capability; enable it explicitly so
+    // the admin quota API tests exercise the enabled path.
+    config.features.quotas = Some(true);
     config
 }
 

@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ApiError, encodePathSegment } from '../../api/client'
 import { getPage, isRevisionConflictError, savePage } from '../../api/wiki'
-import { Badge, Banner, Button, Card, EmptyState, ErrorState, Field, LoadingState, SectionTitle } from '../../components/ui'
+import { Badge, Banner, Button, EmptyState, ErrorState, Field, LoadingState, SectionTitle } from '../../components/ui'
+import { BlockEditor } from '../../features/editor/BlockEditor'
 import { useI18n } from '../../lib/i18n'
-import { renderMarkdown } from '../../lib/markdown'
 import { useUnsavedWarning } from '../../lib/hooks'
 
 const SLUG_PATTERN = /^[^/\\]{1,200}$/
@@ -92,8 +92,6 @@ function EditorForm({ space, slug, creating }: { space: string; slug: string; cr
       effectiveSlug !== slug ||
       original.baseRevisionId !== draft.baseRevisionId)
   useUnsavedWarning(dirty)
-
-  const previewHtml = useMemo(() => renderMarkdown(draft.markdown), [draft.markdown])
 
   const saveMutation = useMutation({
     mutationFn: (baseRevisionId: string | null) =>
@@ -245,23 +243,11 @@ function EditorForm({ space, slug, creating }: { space: string; slug: string; cr
           </Field>
         </div>
 
-        <div className="grid gap-3 lg:grid-cols-2">
-          <Card title={t('wiki.editor.markdown')} bodyClassName="p-2">
-            <textarea
-              value={draft.markdown}
-              onChange={(event) => setDraft({ ...draft, markdown: event.target.value })}
-              className="thin-scroll min-h-[380px] w-full resize-y border-0 bg-transparent p-2 font-mono text-[12.5px] leading-6"
-              spellCheck={false}
-            />
-          </Card>
-          <Card title={t('wiki.editor.preview')} bodyClassName="p-3">
-            {draft.markdown.trim() === '' ? (
-              <p className="text-[11.5px] text-fg-3">{t('wiki.editor.previewEmpty')}</p>
-            ) : (
-              <div className="prose-lkb max-h-[420px] overflow-y-auto" dangerouslySetInnerHTML={{ __html: previewHtml }} />
-            )}
-          </Card>
-        </div>
+        <BlockEditor
+          value={draft.markdown}
+          onChange={(markdown) => setDraft((current) => ({ ...current, markdown }))}
+          defaultView="markdown"
+        />
 
         {saved && <Banner tone="accent">{t('wiki.editor.saved')}</Banner>}
       </div>

@@ -18,7 +18,7 @@ summary: lkb.toml 全字段默认值、环境变量覆盖、模型 provider 与�
 4. 归一化：按后端推断 `profile`；solo 强制固定治理 ID；非 solo 收紧限额；解析 `deployment.mode` 与功能默认值。
 5. 校验；失败则退出。
 
-`profile` 未设置时，SQLite 推断为 `solo`，PostgreSQL 推断为 `team`；solo + PostgreSQL 需显式设置 `profile = "solo"`。solo 归一化会强制 `tenant_id = t_local`、`default_space = s_default`，并关闭自助建组/建空间。`deployment.mode` 未设置时：`solo → solo`、`team → team`、`enterprise → enterprise_internal`；`enterprise_external` 只能显式配置。
+`profile` 未设置时，SQLite 推断为 `solo`，PostgreSQL 推断为 `team`；solo + PostgreSQL 需显式设置 `profile = "solo"`。solo 归一化会强制 `tenant_id = t_local`、`default_space = s_default`，并只关闭自助建组；用户仍可在 `spaces.max_per_user` 内创建自己的笔记空间。`deployment.mode` 未设置时：`solo → solo`、`team → team`、`enterprise → enterprise_internal`；`enterprise_external` 只能显式配置。
 
 ## 2. profile、server 与 auth
 
@@ -68,7 +68,7 @@ summary: lkb.toml 全字段默认值、环境变量覆盖、模型 provider 与�
 
 | 字段 | 默认值 | 说明 |
 | --- | --- | --- |
-| `spaces.allow_user_creation` | `true`（solo 强制 `false`） | 自助建空间 |
+| `spaces.allow_user_creation` | `true` | 自助建笔记空间（solo 可建自己的笔记空间；组创建仍关闭） |
 | `spaces.max_per_user` | `10` | 每个 owner 的空间数上限 |
 | `spaces.default_storage_bytes` | 无 | 新空间默认存储配额；`None` 表示不限 |
 | `spaces.default_documents` | 无 | 新空间默认文档数配额 |
@@ -98,8 +98,9 @@ summary: lkb.toml 全字段默认值、环境变量覆盖、模型 provider 与�
 | `audit` | true | true | true | true |
 | `rate_limit` | true | true | true | true |
 | `public_share` | false | false | false | true |
+| `quotas` | false | true | true | true |
 
-**`billing`、`audit` 与 `connectors` 已在运行时实际门禁。** 其余开关（`signup`、`sso`、`multi_tenant`、`public_api`、`mcp`、`public_share`）仅出现在 `GET /api/v1/features`，不改变行为；`rate_limit` 始终按 `[limits]` 生效。校验要求 `deployment.mode` 与 `profile` 匹配、solo 禁止 billing、`enterprise_external` 必须 `signup + billing + multi_tenant + public_api` 全开，enterprise 不允许关闭 audit。
+**`billing`、`audit`、`connectors` 与 `quotas` 已在运行时实际门禁。** 其余开关（`signup`、`sso`、`multi_tenant`、`public_api`、`mcp`、`public_share`）仅出现在 `GET /api/v1/features`，不改变行为；`rate_limit` 始终按 `[limits]` 生效。`quotas` 只门禁配额写/管理端点；用量读取始终可用，solo 可显式开启。校验要求 `deployment.mode` 与 `profile` 匹配、solo 禁止 billing、`enterprise_external` 必须 `signup + billing + multi_tenant + public_api` 全开，enterprise 不允许关闭 audit。
 
 ## 6. i18n
 

@@ -381,14 +381,10 @@ impl Policy {
         binds.push(self.as_of.clone());
 
         let mut acl_patterns: Vec<String> = Vec::new();
-        if self.principal.allow_all {
-            acl_patterns.push("|*|".to_string());
-        } else {
-            acl_patterns.push("|*|".to_string());
-            acl_patterns.push(format!("|u:{}|", self.principal.principal_id));
-            for group in &self.principal.groups {
-                acl_patterns.push(format!("|g:{group}|"));
-            }
+        acl_patterns.push("|*|".to_string());
+        acl_patterns.push(format!("|u:{}|", self.principal.principal_id));
+        for group in &self.principal.groups {
+            acl_patterns.push(format!("|g:{group}|"));
         }
         acl_patterns.sort();
         acl_patterns.dedup();
@@ -634,6 +630,7 @@ mod tests {
         assert!(visibility.sql.contains("c.acl_principals LIKE ?"));
         assert!(!visibility.binds.contains(&"|*|".to_string()));
         assert!(visibility.binds.iter().any(|b| b.contains("|*|")));
+        assert!(visibility.binds.iter().any(|b| b.contains("|u:local|")));
     }
 
     #[test]

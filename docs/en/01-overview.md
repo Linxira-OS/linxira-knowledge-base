@@ -31,21 +31,21 @@ The result: governance fields are written from day one; files are the source of 
 | Deployment | Single process on one machine | Service plus database | Service plus database |
 | Identity | Local-only by default; optional session and Bearer | Local session + Bearer, roles/groups/space members | Same as team; multi-tenancy via separate deployments |
 | Governance | Fixed tenant `t_local`, fixed space `s_default`, explicit allow-all | Configured `tenant_id`; space members and roles | Configured `tenant_id`; isolation via separate config or database |
-| Self-service spaces/groups | Forced off at startup | On by default, can be disabled | On by default |
+| Self-service spaces/groups | Notes spaces on by default (groups stay off) | On by default, can be disabled | On by default |
 
 `deployment.mode` is decoupled from `profile` but must match it: `solo` requires SQLite; `team`/`enterprise_internal`/`enterprise_external` require PostgreSQL. The mode provides `[features]` defaults and participates in startup validation:
 
-| Mode | signup | billing | connectors | sso | multi_tenant | public_api | mcp | audit | rate_limit | public_share |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `solo` | — | — | — | — | — | — | — | on | on | — |
-| `team` | — | — | on | — | — | — | — | on | on | — |
-| `enterprise_internal` | — | — | on | on | on | on | on | on | on | — |
-| `enterprise_external` | on | on | on | on | on | on | on | on | on | on |
+| Mode | signup | billing | connectors | sso | multi_tenant | public_api | mcp | audit | rate_limit | public_share | quotas |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `solo` | — | — | — | — | — | — | — | on | on | — | — |
+| `team` | — | — | on | — | — | — | — | on | on | — | on |
+| `enterprise_internal` | — | — | on | on | on | on | on | on | on | — | on |
+| `enterprise_external` | on | on | on | on | on | on | on | on | on | on | on |
 
 Implementation boundaries that must be stated:
 
-1. **`billing`, `audit`, and `connectors` currently gate behavior.** `signup`, `sso`, `multi_tenant`, `public_api`, `mcp`, `rate_limit`, and `public_share` exist in configuration and in `GET /api/v1/features`, but no route or domain path reads them; rate limiting always runs through `[limits]`. Connector APIs read `connectors` and return 403 `feature_disabled` when it is off.
-2. **Enterprise is not a separate implementation.** `enterprise` behaves like `team`; real SSO, HTTP-level multi-tenancy, a policy engine, and WORM audit are not implemented.
+1. **`billing`, `audit`, `connectors`, and `quotas` currently gate behavior.** `signup`, `sso`, `multi_tenant`, `public_api`, `mcp`, `rate_limit`, and `public_share` exist in configuration and in `GET /api/v1/features`, but no route or domain path reads them; rate limiting always runs through `[limits]`. Connector APIs read `connectors` and return 403 `feature_disabled` when it is off. `quotas` gates quota writes; usage reads remain available, and solo can opt in.
+2. **Enterprise is not a separate implementation.** `enterprise` behaves like `team`; real SSO, HTTP-level multi-tenancy, and WORM audit are not implemented. Quota engines exist but multi-instance enforcement still needs a shared lock.
 3. **Scale figures are design targets, not measurements.** The validated workload is the repository corpus plus the 24 seed documents.
 
 ## 4. What It Does

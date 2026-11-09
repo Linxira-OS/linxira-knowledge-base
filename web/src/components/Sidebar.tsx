@@ -32,6 +32,8 @@ export function Sidebar({ width, onCollapse }: { width: number; onCollapse: () =
   const role = principal?.tenant_role
   // Admin console needs admin scope; solo's local principal is always allowed.
   const canAdmin = features?.mode === 'solo' || role === 'owner' || role === 'admin'
+  // Solo users think in notebooks/notes, not tenant "spaces".
+  const solo = features?.mode === 'solo'
 
   return (
     <aside style={{ width }} className="flex min-h-0 shrink-0 flex-col border-r border-line bg-panel">
@@ -53,7 +55,8 @@ export function Sidebar({ width, onCollapse }: { width: number; onCollapse: () =
         <nav className="space-y-0.5">
           <NavItem to="/search" label={t('nav.search')} end />
           <NavItem to="/conversations" label={t('nav.conversations')} />
-          <NavItem to="/spaces" label={t('nav.spaceList')} />
+          <NavItem to="/notes" label={t('nav.notebooks')} />
+          <NavItem to="/spaces" label={solo ? t('nav.notebooksManage') : t('nav.spaceList')} />
           {canAdmin && <NavItem to="/admin" label={t('nav.admin')} />}
         </nav>
       </div>

@@ -88,6 +88,7 @@ async fn openapi_document_lists_real_routes_without_auth() {
         "/api/v1/auth/me",
         "/api/v1/auth/logout",
         "/api/v1/pages",
+        "/api/v1/notes/space",
         "/api/v1/pages/{space}/{slug}/revisions/{revision_id}",
         "/api/v1/conversations/{conversation_id}/restore",
         "/api/v1/answer/stream",
@@ -107,6 +108,8 @@ async fn openapi_document_lists_real_routes_without_auth() {
         "/api/v1/admin/providers",
         "/api/v1/admin/routes",
         "/api/v1/admin/quotas",
+        "/api/v1/admin/quotas/{quota_id}",
+        "/api/v1/admin/quota-overrides",
     ] {
         assert!(body["paths"][path].is_object(), "missing path {path}");
     }
@@ -117,6 +120,8 @@ async fn openapi_document_lists_real_routes_without_auth() {
         "Space",
         "User",
         "Quota",
+        "SpaceQuota",
+        "Features",
         "Usage",
         "Conversation",
         "Summary",
@@ -126,6 +131,22 @@ async fn openapi_document_lists_real_routes_without_auth() {
             "missing schema {schema}"
         );
     }
+    assert_eq!(
+        body["components"]["schemas"]["Features"]["properties"]["quotas"]["type"],
+        "boolean"
+    );
+    assert_eq!(
+        body["paths"]["/api/v1/spaces/{space_id}/quota"]["put"]["tags"][0],
+        "quotas"
+    );
+    assert_eq!(
+        body["paths"]["/api/v1/admin/quotas/{quota_id}"]["delete"]["tags"][0],
+        "quotas"
+    );
+    assert_eq!(
+        body["paths"]["/api/v1/notes/space"]["post"]["tags"][0],
+        "notes"
+    );
     assert!(body["paths"]["/openapi.json"]["get"]["security"]
         .as_array()
         .unwrap()

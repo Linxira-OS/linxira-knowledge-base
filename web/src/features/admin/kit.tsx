@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useMemo, type ReactNode } from 'react'
 import { Button } from '../../components/ui'
 import { useI18n } from '../../lib/i18n'
+import { pushToast } from '../../lib/toast'
 
 /* ------------------------------------------------------------------ skeleton */
 
@@ -17,73 +18,12 @@ export function AdminSkeleton({ rows = 4 }: { rows?: number }) {
 
 /* -------------------------------------------------------------------- toasts */
 
-type ToastTone = 'accent' | 'danger' | 'warn'
-
-interface ToastMessage {
-  id: number
-  tone: ToastTone
-  text: string
-}
-
-let toastId = 0
-let messages: ToastMessage[] = []
-const listeners = new Set<() => void>()
-
-function emitToasts() {
-  for (const listener of listeners) listener()
-}
-
-function dismissToast(id: number) {
-  messages = messages.filter((message) => message.id !== id)
-  emitToasts()
-}
-
-export function pushAdminToast(text: string, tone: ToastTone = 'accent'): void {
-  const message: ToastMessage = { id: ++toastId, tone, text }
-  messages = [...messages.slice(-3), message]
-  emitToasts()
-  window.setTimeout(() => dismissToast(message.id), 4200)
-}
-
-/** Success/error feedback for admin mutations (mounted once in AdminPage). */
-export function AdminToastHost() {
-  const [items, setItems] = useState<ToastMessage[]>(messages)
-  useEffect(() => {
-    const update = () => setItems(messages)
-    listeners.add(update)
-    update()
-    return () => {
-      listeners.delete(update)
-    }
-  }, [])
-  if (items.length === 0) return null
-  return (
-    <div className="pointer-events-none fixed bottom-4 right-4 z-[60] flex w-[300px] flex-col gap-2">
-      {items.map((item) => (
-        <div
-          key={item.id}
-          role="status"
-          className={
-            item.tone === 'danger'
-              ? 'rounded-lg border border-danger/40 bg-danger-weak px-3 py-2 text-[12px] text-danger shadow-lg'
-              : item.tone === 'warn'
-                ? 'rounded-lg border border-warn/40 bg-warn-weak px-3 py-2 text-[12px] text-warn shadow-lg'
-                : 'rounded-lg border border-accent-line bg-accent-weak px-3 py-2 text-[12px] text-accent shadow-lg'
-          }
-        >
-          {item.text}
-        </div>
-      ))}
-    </div>
-  )
-}
-
 export function useAdminToast() {
   return useMemo(
     () => ({
-      success: (text: string) => pushAdminToast(text, 'accent'),
-      warn: (text: string) => pushAdminToast(text, 'warn'),
-      error: (text: string) => pushAdminToast(text, 'danger'),
+      success: (text: string) => pushToast(text, 'accent'),
+      warn: (text: string) => pushToast(text, 'warn'),
+      error: (text: string) => pushToast(text, 'danger'),
     }),
     [],
   )

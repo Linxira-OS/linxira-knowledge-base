@@ -17,6 +17,7 @@ fn test_config(path: &Path) -> Config {
     config.auth.mode = AuthMode::None;
     config.spaces.allow_user_creation = true;
     config.groups.allow_user_creation = true;
+    config.features.quotas = Some(true);
     config
 }
 

@@ -15,6 +15,7 @@ import { useSession } from './lib/session'
 const SearchPage = lazy(async () => ({ default: (await import('./pages/SearchPage')).SearchPage }))
 const LoginPage = lazy(async () => ({ default: (await import('./pages/LoginPage')).LoginPage }))
 const ConversationsPage = lazy(async () => ({ default: (await import('./pages/ConversationsPage')).ConversationsPage }))
+const NotesPage = lazy(async () => ({ default: (await import('./pages/NotesPage')).NotesPage }))
 const SpacesListPage = lazy(async () => ({ default: (await import('./pages/spaces/SpacesListPage')).SpacesListPage }))
 const SpaceDetailPage = lazy(async () => ({ default: (await import('./pages/spaces/SpaceDetailPage')).SpaceDetailPage }))
 const WikiReaderPage = lazy(async () => ({ default: (await import('./pages/wiki/WikiReaderPage')).WikiReaderPage }))
@@ -80,6 +81,7 @@ export function App() {
             <Route path="/" element={<Navigate to="/search" replace />} />
             <Route path="/search" element={<SearchPage />} />
             <Route path="/conversations" element={<ConversationsPage />} />
+            <Route path="/notes" element={<NotesPage />} />
             <Route path="/spaces" element={<SpacesListPage />} />
             <Route path="/spaces/:spaceId" element={<SpaceDetailPage />} />
             <Route path="/w/:space/:slug" element={<WikiReaderPage />} />

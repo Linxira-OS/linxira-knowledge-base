@@ -477,7 +477,7 @@ fn user_from_row(row: &sqlx::postgres::PgRow) -> Result<UserRecord, sqlx::Error>
         password_hash: row.try_get("password_hash")?,
         display_name: row.try_get("display_name")?,
         created_at: row.try_get("created_at")?,
-        disabled: row.try_get::<i64, _>("disabled")? != 0,
+        disabled: row.try_get::<i32, _>("disabled")? != 0,
         email: row.try_get("email")?,
         external_id: row.try_get("external_id")?,
         source: row
@@ -1961,7 +1961,7 @@ impl Store for PostgresStore {
         .bind(&record.password_hash)
         .bind(&record.display_name)
         .bind(&record.created_at)
-        .bind(0i64)
+        .bind(0i32)
         .bind(record.role.as_str())
         .execute(&self.pool)
         .await
@@ -3424,7 +3424,7 @@ impl Store for PostgresStore {
         disabled: bool,
     ) -> Result<(), StoreError> {
         sqlx::query("UPDATE users SET disabled=$1 WHERE tenant_id=$2 AND user_id=$3")
-            .bind(disabled)
+            .bind(if disabled { 1i32 } else { 0i32 })
             .bind(tenant_id)
             .bind(user_id)
             .execute(&self.pool)
@@ -4143,7 +4143,7 @@ impl Store for PostgresStore {
     }
     async fn create_sso_user(&self, user: &UserRecord) -> Result<(), StoreError> {
         sqlx::query("INSERT INTO users (tenant_id, user_id, username, password_hash, display_name, created_at, disabled, role, email, external_id, source, last_sso_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)")
-            .bind(&user.tenant_id).bind(&user.user_id).bind(&user.username).bind(&user.password_hash).bind(&user.display_name).bind(&user.created_at).bind(if user.disabled {1i64} else {0i64}).bind(user.role.as_str()).bind(&user.email).bind(&user.external_id).bind(&user.source).bind(&user.last_sso_at)
+            .bind(&user.tenant_id).bind(&user.user_id).bind(&user.username).bind(&user.password_hash).bind(&user.display_name).bind(&user.created_at).bind(if user.disabled {1i32} else {0i32}).bind(user.role.as_str()).bind(&user.email).bind(&user.external_id).bind(&user.source).bind(&user.last_sso_at)
             .execute(&self.pool).await.map_err(StoreError::Database)?;
         Ok(())
     }

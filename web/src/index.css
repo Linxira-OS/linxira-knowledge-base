@@ -319,6 +319,57 @@
   color: var(--fg-2);
 }
 
+/* Plugin block renderer — built-in callout (`> [!NOTE]`). */
+.lkb-callout {
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: 10px;
+  background: var(--panel);
+  padding: 8px 12px;
+  margin: 0.85em 0;
+}
+
+.lkb-callout-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--fg);
+}
+
+.lkb-callout-body {
+  color: var(--fg-2);
+}
+
+.lkb-callout-body > *:first-child {
+  margin-top: 0.3em;
+}
+
+.lkb-callout-body > *:last-child {
+  margin-bottom: 0;
+}
+
+.lkb-callout-warning,
+.lkb-callout-example {
+  border-left-color: var(--warn);
+}
+
+.lkb-callout-warning .lkb-callout-title,
+.lkb-callout-example .lkb-callout-title {
+  color: var(--warn);
+}
+
+.lkb-callout-danger {
+  border-left-color: var(--danger);
+}
+
+.lkb-callout-danger .lkb-callout-title {
+  color: var(--danger);
+}
+
+.lkb-callout-quote {
+  border-left-color: var(--line-strong);
+}
+
 .prose-lkb table {
   width: 100%;
   border-collapse: collapse;

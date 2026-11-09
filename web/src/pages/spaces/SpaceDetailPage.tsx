@@ -4,8 +4,9 @@ import { useQuery } from '@tanstack/react-query'
 import { ApiError } from '../../api/client'
 import { getSpace } from '../../api/spaces'
 import { hasSpaceRole } from '../../api/types'
-import { Banner, EmptyState, ErrorState, LoadingState, SectionTitle, Tabs, type TabItem } from '../../components/ui'
+import { Banner, Card, EmptyState, ErrorState, LoadingState, SectionTitle, Tabs, type TabItem } from '../../components/ui'
 import { useI18n } from '../../lib/i18n'
+import { useSession } from '../../lib/session'
 import { SpaceGeneralTab } from '../../features/spaces/SpaceGeneralTab'
 import { SpaceMembersTab } from '../../features/spaces/SpaceMembersTab'
 import { SpaceQuotaTab } from '../../features/spaces/SpaceQuotaTab'
@@ -17,10 +18,14 @@ type SpaceTab = 'general' | 'members' | 'quota'
 /** `/spaces/:spaceId` — overview / members / quota, tab kept in `?tab=`. */
 export function SpaceDetailPage() {
   const { t } = useI18n()
+  const session = useSession()
+  const features = session.features?.features
   const { spaceId = '' } = useParams<{ spaceId: string }>()
   const [searchParams, setSearchParams] = useSearchParams()
   // The backend answers 404 once a space is deleted; keep the note visible.
   const [deletedFor, setDeletedFor] = useState<string | null>(null)
+  // Quotas are a team/enterprise capability; solo hides the tab by default.
+  const quotasEnabled = features?.quotas === true
 
   const spaceQuery = useQuery({
     queryKey: spaceKeys.detail(spaceId),
@@ -56,8 +61,9 @@ export function SpaceDetailPage() {
   const tabItems: TabItem<SpaceTab>[] = [
     { id: 'general', label: t('spaces.settings.tab.general') },
     { id: 'members', label: t('spaces.settings.tab.members') },
-    { id: 'quota', label: t('spaces.settings.tab.quota') },
+    ...(quotasEnabled ? [{ id: 'quota' as const, label: t('spaces.settings.tab.quota') }] : []),
   ]
+  const quotaUnavailable = tab === 'quota' && !quotasEnabled
 
   const selectTab = (next: SpaceTab) => {
     const params = new URLSearchParams(searchParams)
@@ -92,18 +98,32 @@ export function SpaceDetailPage() {
       </div>
 
       <div className="mt-4">
-        {tab === 'general' && (
-          <SpaceGeneralTab
-            key={spaceId}
-            space={space}
-            status={status}
-            canAdmin={canAdmin}
-            canOwner={canOwner}
-            onDeleted={() => setDeletedFor(spaceId)}
-          />
+        {quotaUnavailable ? (
+          <Card title={t('spaces.settings.tab.quota')}>
+            <Banner tone="neutral" title={t('spaces.quota.soloDisabled')}>
+              {t('spaces.quota.soloDisabledHint')}
+            </Banner>
+          </Card>
+        ) : (
+          <>
+            {tab === 'general' && (
+              <SpaceGeneralTab
+                key={spaceId}
+                space={space}
+                status={status}
+                canAdmin={canAdmin}
+                canOwner={canOwner}
+                onDeleted={() => setDeletedFor(spaceId)}
+              />
+            )}
+            {tab === 'members' && (
+              <SpaceMembersTab key={spaceId} spaceId={spaceId} role={space.role} active={status === 'active'} />
+            )}
+            {tab === 'quota' && (
+              <SpaceQuotaTab key={spaceId} spaceId={spaceId} canManage={canAdmin} active={status === 'active'} />
+            )}
+          </>
         )}
-        {tab === 'members' && <SpaceMembersTab key={spaceId} spaceId={spaceId} role={space.role} active={status === 'active'} />}
-        {tab === 'quota' && <SpaceQuotaTab key={spaceId} spaceId={spaceId} canManage={canAdmin} active={status === 'active'} />}
       </div>
     </div>
   )

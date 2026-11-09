@@ -16,6 +16,7 @@ import {
   TR,
 } from '../../components/ui'
 import { useI18n } from '../../lib/i18n'
+import { useSession } from '../../lib/session'
 import { SpaceCreateCard } from '../../features/spaces/SpaceCreateCard'
 import { spacePrincipalLabelKey, SpaceRoleBadge, SpaceStatusBadge, SpaceVisibilityBadge } from '../../features/spaces/badges'
 import { spaceKeys } from '../../features/spaces/keys'
@@ -24,14 +25,16 @@ import { spaceKeys } from '../../features/spaces/keys'
 export function SpacesListPage() {
   const { t } = useI18n()
   const navigate = useNavigate()
+  const { features } = useSession()
+  const solo = features?.mode === 'solo'
 
   const spacesQuery = useQuery({ queryKey: spaceKeys.list, queryFn: listSpaces })
   const spaces = spacesQuery.data?.spaces ?? []
 
   return (
     <div className="mx-auto w-full max-w-[900px] px-6 py-5">
-      <SectionTitle>{t('spaces.title')}</SectionTitle>
-      <p className="mt-1 text-[11.5px] text-fg-3">{t('spaces.subtitle')}</p>
+      <SectionTitle>{solo ? t('spaces.solo.title') : t('spaces.title')}</SectionTitle>
+      <p className="mt-1 text-[11.5px] text-fg-3">{solo ? t('spaces.solo.subtitle') : t('spaces.subtitle')}</p>
 
       <div className="mt-4">
         <SpaceCreateCard />
@@ -43,7 +46,7 @@ export function SpacesListPage() {
         ) : spacesQuery.isError ? (
           <ErrorState error={spacesQuery.error} onRetry={() => void spacesQuery.refetch()} />
         ) : spaces.length === 0 ? (
-          <EmptyState title={t('spaces.empty')} />
+          <EmptyState title={solo ? t('spaces.solo.empty') : t('spaces.empty')} description={solo ? t('spaces.solo.emptyHint') : undefined} />
         ) : (
           <TableWrap>
             <Table>

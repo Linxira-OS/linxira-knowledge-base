@@ -31,21 +31,21 @@ summary: lkb 是同一检索内核驱动的分层 AI 知识库，用 solo、team
 | 部署 | 单机单进程 | 服务 + 数据库 | 服务 + 数据库 |
 | 身份 | 默认本机免认证；可启用会话与 Bearer | 本地会话 + Bearer，角色/组/空间成员 | 同 team；多租户靠独立部署 |
 | 治理 | 固定租户 `t_local`、固定空间 `s_default`、显式 allow-all | 配置的 `tenant_id`；空间成员与角色 | 配置的 `tenant_id`；多租户靠独立配置或数据库 |
-| 自助空间/组 | 启动校验强制关闭 | 默认开启，可关 | 默认开启 |
+| 自助空间/组 | 笔记空间默认开启（组创建关闭） | 默认开启，可关 | 默认开启 |
 
 `deployment.mode` 与 profile 解耦但必须匹配：`solo` 只配 SQLite；`team`/`enterprise_internal`/`enterprise_external` 必须配 PostgreSQL。模式决定 `[features]` 的默认值，并参与启动校验：
 
-| 模式 | signup | billing | connectors | sso | multi_tenant | public_api | mcp | audit | rate_limit | public_share |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `solo` | — | — | — | — | — | — | — | 开 | 开 | — |
-| `team` | — | — | 开 | — | — | — | — | 开 | 开 | — |
-| `enterprise_internal` | — | — | 开 | 开 | 开 | 开 | 开 | 开 | 开 | — |
-| `enterprise_external` | 开 | 开 | 开 | 开 | 开 | 开 | 开 | 开 | 开 | 开 |
+| 模式 | signup | billing | connectors | sso | multi_tenant | public_api | mcp | audit | rate_limit | public_share | quotas |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `solo` | — | — | — | — | — | — | — | 开 | 开 | — | — |
+| `team` | — | — | 开 | — | — | — | — | 开 | 开 | — | 开 |
+| `enterprise_internal` | — | — | 开 | 开 | 开 | 开 | 开 | 开 | 开 | — | 开 |
+| `enterprise_external` | 开 | 开 | 开 | 开 | 开 | 开 | 开 | 开 | 开 | 开 | 开 |
 
 必须说清的实现边界：
 
-1. **`billing`、`audit` 与 `connectors` 三个开关当前真正拦截行为。** `signup`、`sso`、`multi_tenant`、`public_api`、`mcp`、`rate_limit`、`public_share` 已进入配置与 `GET /api/v1/features`，但没有路由或领域逻辑读取它们；`rate_limit` 实际由 `[limits]` 无条件执行。连接器 API 读取 `connectors`，关闭时返回 403 `feature_disabled`。
-2. **enterprise 当前不是独立实现。** `enterprise` 与 `team` 行为相同；真正的 SSO、多租户路由、配额策略引擎与 WORM 审计未实现。
+1. **`billing`、`audit`、`connectors` 与 `quotas` 四个开关当前真正拦截行为。** `signup`、`sso`、`multi_tenant`、`public_api`、`mcp`、`rate_limit`、`public_share` 已进入配置与 `GET /api/v1/features`，但没有路由或领域逻辑读取它们；`rate_limit` 实际由 `[limits]` 无条件执行。连接器 API 读取 `connectors`，关闭时返回 403 `feature_disabled`；`quotas` 门禁配额写/管理端点，用量读取仍可用，solo 可显式开启。
+2. **enterprise 当前不是独立实现。** `enterprise` 与 `team` 行为相同；真正的 SSO、多租户路由与 WORM 审计未实现。配额引擎已存在，但多实例强制仍需共享锁。
 3. **规模列是设计目标量级，不是实测结论。** 已验证规模是仓库示例语料与 24 篇种子文档。
 
 ## 4. 能做什么

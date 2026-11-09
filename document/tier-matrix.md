@@ -144,7 +144,7 @@
 | 能力 | solo | team | enterprise | 约束 / 降级 |
 | --- | --- | --- | --- | --- |
 | 用户组 | 不启用；单本地 Principal | tenant 级 groups/group_members；组可拥有空间 | 同左 + 按租户策略/外部组同步后续 | 至少一个 group_admin；跨 tenant 拒绝 |
-| 空间自助 | 默认关闭；本地单空间/手工空间 | `allow_user_creation=true`；每用户空间数/默认配额 | 同左，按租户/组配额 | 超限 429/413；solo 不因自助破坏零运维 |
+| 空间自助 | 默认允许创建自建空间/笔记本；组创建仍关闭；仍受 `spaces.max_per_user` 与默认配额约束 | `allow_user_creation=true`；每用户空间数/默认配额 | 同左，按租户/组配额 | 超限 429/413；solo 保持零运维默认，不强制开组 |
 | 空间成员/角色 | 单 owner；可选 viewer | space_owner/space_admin/editor/viewer；组映射 | 同左 + 审计强度更高 | 显式用户角色优先；组取 max；最后 owner 保护 |
 | 存储配额 | 本地磁盘软提示/可关 | tenant→group→space→user；storage/documents/chunks/members/spaces | 同左，按租户配额 | 80/95% 告警；hard 阻断；与 token 配额分开 |
 | 共享/可见性 | private 本地 | private 默认；internal 可发现元数据 | 同左 + 租户策略 | 读正文仍需成员/分享；链接分享 P2 |
@@ -170,7 +170,7 @@
 | 交付形态 | Tauri APP（installer/portable）、CLI、浏览器 | 服务 + Web/CLI | 服务/容器 + Web/CLI | 桌面壳只属个人版；企业不装壳 |
 | 存储后端 | SQLite 默认；可选 PostgreSQL | PostgreSQL | PostgreSQL | solo+PG 仍单用户/loopback/allow-all；team/ent 禁止 SQLite |
 | Web 托管 | Rust 二进制托管 web/dist，同源 | 同左或外部 nginx | 外部 nginx/网关 | Tauri/浏览器/portable 单 sidecar |
-| 笔记 | personal vault（Markdown 文件，事实源） | 每人 personal；可发布到团队空间 | 同左；按空间角色 | 笔记=Document，Wiki=Page/Revision；UI 统一 |
+| 笔记 | 私有笔记（我的笔记）；可自建空间/笔记本，组创建关闭 | 每人私有笔记空间；可发布到团队空间 | 同左；按空间角色 | 笔记复用 Wiki Page/Revision；桌面 Markdown vault 未实现；UI 统一 |
 | 首启/更新 | 向导 SQLite/PG、凭据管理、签名更新 | 配置/迁移 | 配置/迁移/HA | 便携模式密钥保护 |
 
 ## 3. 基础设施替换表

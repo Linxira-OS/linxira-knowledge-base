@@ -207,17 +207,21 @@ impl DeploymentMode {
             audit: true,
             rate_limit: true,
             public_share: false,
+            quotas: false,
         };
         match self {
             Self::Solo => {
                 features.connectors = false;
             }
-            Self::Team => {}
+            Self::Team => {
+                features.quotas = true;
+            }
             Self::EnterpriseInternal => {
                 features.sso = true;
                 features.multi_tenant = true;
                 features.public_api = true;
                 features.mcp = true;
+                features.quotas = true;
             }
             Self::EnterpriseExternal => {
                 features.signup = true;
@@ -227,6 +231,7 @@ impl DeploymentMode {
                 features.public_api = true;
                 features.mcp = true;
                 features.public_share = true;
+                features.quotas = true;
             }
         }
         features
@@ -253,6 +258,7 @@ pub enum Feature {
     Audit,
     RateLimit,
     PublicShare,
+    Quotas,
 }
 
 impl Feature {
@@ -268,6 +274,7 @@ impl Feature {
             Self::Audit => "audit",
             Self::RateLimit => "rate_limit",
             Self::PublicShare => "public_share",
+            Self::Quotas => "quotas",
         }
     }
 }
@@ -285,6 +292,7 @@ pub struct FeatureOverrides {
     pub audit: Option<bool>,
     pub rate_limit: Option<bool>,
     pub public_share: Option<bool>,
+    pub quotas: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -299,6 +307,7 @@ pub struct FeatureSet {
     pub audit: bool,
     pub rate_limit: bool,
     pub public_share: bool,
+    pub quotas: bool,
 }
 
 impl FeatureOverrides {
@@ -321,6 +330,7 @@ impl FeatureOverrides {
         apply!(audit);
         apply!(rate_limit);
         apply!(public_share);
+        apply!(quotas);
         out
     }
 }
@@ -338,6 +348,7 @@ impl FeatureSet {
             Feature::Audit => self.audit,
             Feature::RateLimit => self.rate_limit,
             Feature::PublicShare => self.public_share,
+            Feature::Quotas => self.quotas,
         }
     }
 
@@ -353,6 +364,7 @@ impl FeatureSet {
             "audit": self.audit,
             "rate_limit": self.rate_limit,
             "public_share": self.public_share,
+            "quotas": self.quotas,
         })
     }
 }
@@ -872,7 +884,9 @@ impl Config {
         if profile == ProfileName::Solo {
             self.storage.tenant_id = crate::governance::SOLO_TENANT.to_string();
             self.storage.default_space = crate::governance::SOLO_SPACE.to_string();
-            self.spaces.allow_user_creation = false;
+            // Solo keeps self-service notes spaces (bounded by
+            // `spaces.max_per_user`); group creation stays closed because
+            // solo has no multi-user groups.
             self.groups.allow_user_creation = false;
         } else {
             self.limits.tighten_for_team();
@@ -1222,7 +1236,7 @@ impl Config {
         ));
         let features = self.features();
         out.push_str(&format!(
-            "deployment.mode = {}\ndeployment.commercial = {}\nfeatures.signup = {}\nfeatures.billing = {}\nfeatures.connectors = {}\nfeatures.sso = {}\nfeatures.multi_tenant = {}\nfeatures.public_api = {}\nfeatures.mcp = {}\nfeatures.audit = {}\nfeatures.rate_limit = {}\nfeatures.public_share = {}\ni18n.default_locale = {}\ni18n.supported_locales = {:?}\npayment.provider = {}\npayment.currency = {}\npayment.mode = {}\npayment.secret_env = {}\n",
+            "deployment.mode = {}\ndeployment.commercial = {}\nfeatures.signup = {}\nfeatures.billing = {}\nfeatures.connectors = {}\nfeatures.sso = {}\nfeatures.multi_tenant = {}\nfeatures.public_api = {}\nfeatures.mcp = {}\nfeatures.audit = {}\nfeatures.rate_limit = {}\nfeatures.public_share = {}\nfeatures.quotas = {}\ni18n.default_locale = {}\ni18n.supported_locales = {:?}\npayment.provider = {}\npayment.currency = {}\npayment.mode = {}\npayment.secret_env = {}\n",
             self.deployment_mode().as_str(),
             self.deployment.commercial,
             features.signup,
@@ -1235,6 +1249,7 @@ impl Config {
             features.audit,
             features.rate_limit,
             features.public_share,
+            features.quotas,
             self.i18n.default_locale,
             self.i18n.supported_locales,
             self.payment.provider,
@@ -1342,6 +1357,23 @@ mod tests {
         config.normalize();
         assert_eq!(config.storage.tenant_id, crate::governance::SOLO_TENANT);
         assert_eq!(config.storage.default_space, crate::governance::SOLO_SPACE);
+    }
+
+    #[test]
+    fn solo_keeps_self_service_note_spaces_but_closes_groups() {
+        let mut config = Config::default();
+        config.normalize();
+        assert!(config.spaces.allow_user_creation);
+        assert_eq!(config.spaces.max_per_user, 10);
+        assert!(!config.groups.allow_user_creation);
+    }
+
+    #[test]
+    fn solo_explicitly_disabled_self_service_spaces_survive_normalize() {
+        let mut config = Config::default();
+        config.spaces.allow_user_creation = false;
+        config.normalize();
+        assert!(!config.spaces.allow_user_creation);
     }
 
     #[test]

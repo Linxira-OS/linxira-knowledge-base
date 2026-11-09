@@ -24,24 +24,46 @@ fn feature_defaults_and_overrides_follow_the_mode_matrix() {
     let solo = DeploymentMode::Solo.default_features();
     assert!(!solo.signup && !solo.billing && !solo.multi_tenant && !solo.sso);
     assert!(solo.audit && solo.rate_limit);
+    assert!(!solo.quotas, "solo quotas are opt-in");
     let team = DeploymentMode::Team.default_features();
     assert!(!team.signup && !team.billing && !team.multi_tenant);
     assert!(team.audit && team.rate_limit);
+    assert!(team.quotas);
     let internal = DeploymentMode::EnterpriseInternal.default_features();
     assert!(!internal.signup && !internal.billing);
     assert!(internal.sso && internal.multi_tenant && internal.public_api);
+    assert!(internal.quotas);
     let external = DeploymentMode::EnterpriseExternal.default_features();
     assert!(external.signup && external.billing && external.multi_tenant && external.public_api);
+    assert!(external.quotas);
 
     let overrides = FeatureOverrides {
         billing: Some(true),
         sso: Some(false),
+        quotas: Some(true),
         ..FeatureOverrides::default()
     };
     let resolved = overrides.resolve(DeploymentMode::Team);
     assert!(resolved.billing);
     assert!(!resolved.sso);
+    assert!(resolved.quotas);
     assert!(resolved.audit);
+    assert!(
+        !FeatureOverrides {
+            quotas: Some(false),
+            ..FeatureOverrides::default()
+        }
+        .resolve(DeploymentMode::Team)
+        .quotas
+    );
+    assert!(
+        FeatureOverrides {
+            quotas: Some(true),
+            ..FeatureOverrides::default()
+        }
+        .resolve(DeploymentMode::Solo)
+        .quotas
+    );
 }
 
 #[test]
@@ -288,4 +310,5 @@ async fn token_role_session_still_works_with_feature_endpoint() {
     assert_eq!(json["mode"], "solo");
     assert_eq!(json["features"]["billing"], false);
     assert_eq!(json["features"]["rate_limit"], true);
+    assert_eq!(json["features"]["quotas"], false);
 }

@@ -1,6 +1,6 @@
 # Repository Guidelines
 
-面向在本仓库工作的 AI 编码助手。仓库当前状态：P0 文档已定稿，P1（Rust 实现）已落地，并通过 `stable-x86_64-pc-windows-gnu` 的 `cargo check --all-targets` / `cargo build --release` / `cargo test`（152 tests passed；PostgreSQL 集成已通过 WSL PostgreSQL 18.6 实测、不再 SKIP，详见 `document/wsl-postgres.md`；未设置 `LKB_TEST_PG_URL` 时仍打印 SKIP）。默认 MSVC 工具链仍缺可用链接器。本文只给工作所需的指针，不重复 `document/architecture.md` 的论述。
+面向在本仓库工作的 AI 编码助手。仓库当前状态：P0 文档已定稿，P1（Rust 实现）已落地，并通过 `stable-x86_64-pc-windows-gnu` 的 `cargo check --all-targets` / `cargo build --release` / `cargo test`（162 tests passed；PostgreSQL 集成已通过 WSL PostgreSQL 18.6 实测、不再 SKIP，详见 `document/wsl-postgres.md`；未设置 `LKB_TEST_PG_URL` 时仍打印 SKIP）。默认 MSVC 工具链仍缺可用链接器。本文只给工作所需的指针，不重复 `document/architecture.md` 的论述。
 
 ## 1. Project Overview
 
@@ -10,7 +10,7 @@
   - `solo`：默认 SQLite 单文件（同一二进制也允许 PostgreSQL），单进程，默认 `auth.mode = none` 且只绑 loopback，零外部服务依赖。
   - `team`：PostgreSQL 后端，会话/Bearer 认证，共享空间。
   - `enterprise`：PostgreSQL 多租户；当前代码行为与 `team` 相同，仅名称与配置不同（多租户靠独立配置/数据库或外部路由，HTTP 层不解析租户）。
-- **当前阶段**：P1 solo 闭环（导入 → 检索 → 带引用回答 → CLI/本地 Web + 最小 Wiki + 认证 + 导入导出 + 内置种子知识库）已实现并通过 GNU 工具链验证；PostgreSQL 后端同时提供，并已通过 WSL PostgreSQL 18.6 实测（152 tests，PG 集成不再 SKIP；本机凭据在 `.lkb/pg.env`，已 gitignore；无 PG 环境时仍 SKIP）。所有“能构建/能通过”的结论仍以实际命令输出为准。
+- **当前阶段**：P1 solo 闭环（导入 → 检索 → 带引用回答 → CLI/本地 Web + 最小 Wiki + 认证 + 导入导出 + 内置种子知识库）已实现并通过 GNU 工具链验证；PostgreSQL 后端同时提供，并已通过 WSL PostgreSQL 18.6 实测（162 tests，PG 集成不再 SKIP；本机凭据在 `.lkb/pg.env`，已 gitignore；无 PG 环境时仍 SKIP）。所有“能构建/能通过”的结论仍以实际命令输出为准。
 - **素材现状**：`examples/docs/` 有 20 篇 Markdown，`examples/questions.jsonl` 有 20 条问题（满足 roadmap 的 P1 评测素材数量要求）。
 
 ## 2. Architecture & Data Flow
@@ -89,7 +89,7 @@ docs/                        产品使用文档（zh/en 各 12 篇）；编译�
 
 ## 4. Development Commands
 
-> **构建门禁仍然有效**：执行任何 `cargo`/`rustup`/清理命令前先获得用户明确确认。当前已实际执行 `cargo +stable-x86_64-pc-windows-gnu check --all-targets`、`build --release` 与 `test`（152 passed；PG 集成已实测、不再 SKIP）；下列命令中未实际执行的项目仍不得当作已通过。
+> **构建门禁仍然有效**：执行任何 `cargo`/`rustup`/清理命令前先获得用户明确确认。当前已实际执行 `cargo +stable-x86_64-pc-windows-gnu check --all-targets`、`build --release` 与 `test`（162 passed；PG 集成已实测、不再 SKIP）；下列命令中未实际执行的项目仍不得当作已通过。
 
 **构建门禁（强制）**
 
@@ -199,7 +199,7 @@ Windows 二进制为 `target\release\lkb.exe`；PowerShell 设环境变量用 `$
 ## 8. Testing & QA
 
 ```text
-cargo test                                   # 已执行（GNU，152 passed；仍需用户确认后重跑）
+cargo test                                   # 已执行（GNU，162 passed；仍需用户确认后重跑）
 cargo test --test integration_sqlite         # 已执行
 cargo test --test axum_oneshot               # 已执行
 cargo test --test cli                        # 已执行
@@ -208,7 +208,7 @@ cargo test --test event_entity               # 已执行
 cargo test --test postgres_integration       # 已执行（WSL PG 18.6 实测通过；无 LKB_TEST_PG_URL 时 SKIP）
 ```
 
-**测试布局**（17 个集成测试文件 + 各模块 `#[cfg(test)]` 单测，`cargo test` 合计 152 个）：
+**测试布局**（17 个集成测试文件 + 各模块 `#[cfg(test)]` 单测，`cargo test` 合计 162 个）：
 
 | 文件 | 覆盖 |
 | --- | --- |
@@ -231,7 +231,7 @@ cargo test --test postgres_integration       # 已执行（WSL PG 18.6 实测通
 | `tests/event_entity.rs` | event-entity 通道、ACL/租户/有效期过滤、抽取失败降级、hybrid RRF |
 
 - 测试数据来自仓库 `examples/`（通过 `env!("CARGO_MANIFEST_DIR")` 定位）；临时库放在 `tempfile::tempdir()`。
-- **PG SKIP 语义**：`LKB_TEST_PG_URL` 未设置或为空白时，测试打印 `SKIP postgres integration test: ... refusing to pretend it passed` 后直接 `return`；Cargo 仍记为 passed。无 PG 环境时报告必须写“未验证/SKIP”，不得写成“PostgreSQL 测试通过”；本机已通过 WSL PostgreSQL 18.6 实测（152 tests，PG 集成不再 SKIP，见 `document/wsl-postgres.md`）。设置 URL 时也只覆盖导入+搜索，并非与 SQLite 同一组用例。
+- **PG SKIP 语义**：`LKB_TEST_PG_URL` 未设置或为空白时，测试打印 `SKIP postgres integration test: ... refusing to pretend it passed` 后直接 `return`；Cargo 仍记为 passed。无 PG 环境时报告必须写“未验证/SKIP”，不得写成“PostgreSQL 测试通过”；本机已通过 WSL PostgreSQL 18.6 实测（162 tests，PG 集成不再 SKIP，见 `document/wsl-postgres.md`）。设置 URL 时也只覆盖导入+搜索，并非与 SQLite 同一组用例。
 - 测试默认不触网；但代码中没有“无出站请求”的断言。
 
 **P1 出口标准（`document/roadmap.md`，验收以此为准）**：Recall@5 ≥ 0.8（20 条问题）；20/20 引用可回跳到源文件行号且文本包含答案；断网可完成全流程；删索引重建后 doc_id 集合一致且 Recall 下降 ≤ 0.05；能力未启用/不可用必须在 `degraded[]` 声明；重复导入幂等；未认证 401、缺 CSRF 403、loopback 启动保护；模型 stub/timeout/retry 生效；Wiki revision +1 且旧版可读、新版可检索；导入导出计数 20/0/0；干净目录单二进制启动；设置 `LKB_TEST_PG_URL` 时与 SQLite 跑同一组用例。

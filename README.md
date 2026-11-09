@@ -58,6 +58,14 @@ See [document/tier-matrix.md](document/tier-matrix.md) for per-item differences.
   share one `Store` abstraction with matching migrations.
 - **Wiki** with pages, revisions, history, and rollback; `lkb seed` embeds the
   bilingual product docs (12 pages per language) as an idempotent seed.
+- **Private notes (every user, every tier)**: each signed-in user gets a private
+  `notes_<principal>` space; `/notes` is “My notes” and a space is a notebook.
+  Notes are Wiki `Page / Revision` entries with owner-only ACL (admins cannot read
+  their content); a desktop local Markdown vault is not implemented.
+  See [document/notes.md](document/notes.md).
+- **Block editor + plugin v0**: Markdown/Blocks editing with Markdown as the
+  source of truth; plugins are compiled-in modules registered by the Web bundle
+  (remote loading is not implemented).
 - **Retrieval modes**: `auto` (default) resolves to `hybrid` when an embedding
   provider has indexed vectors or an extractor has events, otherwise `bm25`;
   explicit modes are `bm25`, `bm25_judge`, `event` / `event_entity`, `hybrid`;
@@ -71,6 +79,10 @@ See [document/tier-matrix.md](document/tier-matrix.md) for per-item differences.
 - **Model gateway, quotas, billing**: public aliases only; provider endpoints
   stay admin-only; token quota reservation, wallet/ledger, plans, entitlements,
   and payment adapters.
+- **Layered quotas**: solo defaults to usage-only (no hard quotas);
+  team/enterprise enable `features.quotas` by default, with space
+  storage/document/chunk/member quotas plus token/request/cost quotas. See
+  [document/quotas.md](document/quotas.md).
 - **Auth**: loopback `none`, HttpOnly session + CSRF, Bearer tokens for
   agents/CLI, trusted reverse-proxy header SSO (OIDC/SAML/SCIM not implemented).
 - **Operations**: structured JSON logs, Prometheus `/metrics`, rate limits and
@@ -158,6 +170,10 @@ export `LKB_DATABASE_URL`, and run `lkb serve`.
   implementation details, migrations, verification record
 - [document/retrieval-and-models.md](document/retrieval-and-models.md) —
   retrieval modes and model dependencies
+- [document/notes.md](document/notes.md) — private notes (all tiers):
+  `notes_<principal>`, `/notes`, ACL, and desktop-vault boundaries
+- [document/quotas.md](document/quotas.md) — layered storage and
+  token/request/cost quotas, `features.quotas`
 - [document/product-spec.md](document/product-spec.md) — naming, paths,
   versioning, UI, packaging, and license freeze
 - [document/knowledge-freshness.md](document/knowledge-freshness.md) ·
@@ -265,6 +281,12 @@ the author to offer commercial licenses. DCO sign-off is required. See
   共用同一 `Store` 抽象，迁移脚本各自配套。
 - **Wiki**：页面 / 版本 / 历史 / 回滚；`lkb seed` 内置中英各 12 篇产品文档，
   幂等且不覆盖用户修改。
+- **私有笔记（所有层级，每个用户）**：每个登录用户都有私有 `notes_<principal>`
+  空间，ACL 仅本人，管理员不可读内容；`/notes` 是「我的笔记」，空间即笔记本。
+  笔记是 Wiki `Page / Revision`，桌面本地 Markdown vault 未实现。
+  详见 [document/notes.md](document/notes.md)。
+- **块编辑器 + 插件 v0**：Markdown/Blocks 编辑，Markdown 为事实源；插件为编译内置
+  模块（随 Web 包注册），远程加载未实现。
 - **检索模式**：默认 `auto`：embedding 已有索引向量或抽取器已有 events 时解析为
   `hybrid`，否则 `bm25`；显式模式为 `bm25`、`bm25_judge`、`event` /
   `event_entity`、`hybrid`；judge 仅重排 Top 30（不是召回上限），并默认在
@@ -276,6 +298,9 @@ the author to offer commercial licenses. DCO sign-off is required. See
   `conflicts[]`、`degraded[]`、`knowledge_as_of`、`mode`。
 - **模型网关 / 配额 / 计费**：对外只暴露 alias，provider 端点仅 admin 可见；
   调用前 token 预留，钱包 / 账本 / 套餐 / entitlement / 支付适配器齐备。
+- **配额分层**：solo 默认只展示用量、不启用硬配额；team/enterprise 默认开启
+  `features.quotas`，支持 space 存储/文档/切片/成员配额与 token/请求/成本配额。
+  详见 [document/quotas.md](document/quotas.md)。
 - **认证**：loopback `none`、HttpOnly 会话 + CSRF、Agent/CLI Bearer token、
   可信反代 Header SSO（OIDC/SAML/SCIM 未实现）。
 - **运维**：结构化 JSON 日志、Prometheus `/metrics`、限流与背压、审计事件、
@@ -357,6 +382,10 @@ team / enterprise：设置 `profile = "team"`、`[storage] backend = "postgres"`
   迁移与验证记录
 - [document/retrieval-and-models.md](document/retrieval-and-models.md) — 检索模式与
   模型依赖
+- [document/notes.md](document/notes.md) — 私有笔记（我的笔记）：`notes_<principal>`、
+  `/notes`、ACL 与桌面 vault 边界
+- [document/quotas.md](document/quotas.md) — 存储与 token/请求/成本配额分层、
+  `features.quotas` 门禁
 - [document/product-spec.md](document/product-spec.md) — 命名、路径、版本、UI、打包
   与许可证冻结
 - [document/knowledge-freshness.md](document/knowledge-freshness.md) ·

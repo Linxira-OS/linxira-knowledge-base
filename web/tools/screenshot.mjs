@@ -193,6 +193,128 @@ const shotGroups = {
       label: 'login / dark',
     },
   ],
+  // Personal notes experience: notebook wording, the page-as-note list, the
+  // top-bar create action and quota UI hidden for the solo tier.
+  notes: [
+    {
+      file: 'notes-solo-light.png',
+      url: `${base}/notes`,
+      theme: 'light',
+      before: "localStorage.setItem('lkb-space', 'product')",
+      ready:
+        'document.body.innerText.includes("我的笔记") && document.querySelectorAll("main table tbody tr").length > 0',
+      label: 'notes list / solo / light',
+    },
+    {
+      file: 'notes-solo-dark.png',
+      url: `${base}/notes`,
+      theme: 'dark',
+      before: "localStorage.setItem('lkb-space', 'product')",
+      ready:
+        'document.body.innerText.includes("我的笔记") && document.querySelectorAll("main table tbody tr").length > 0',
+      label: 'notes list / solo / dark',
+    },
+    {
+      file: 'notes-create-private-light.png',
+      url: `${base}/notes`,
+      theme: 'light',
+      before: "localStorage.setItem('lkb-space', 'product')",
+      ready: 'document.body.innerText.includes("我的笔记")',
+      after:
+        "const header = document.querySelector('header'); const button = header ? Array.from(header.querySelectorAll('button')).find((el) => (el.textContent || '').includes('新建笔记')) : null; if (button) button.click();",
+      label: 'new note opens private-space create page / light',
+    },
+    {
+      file: 'spaces-solo-light.png',
+      url: `${base}/spaces`,
+      theme: 'light',
+      ready: 'document.body.innerText.includes("我的笔记本") && document.body.innerText.includes("共享与自建空间")',
+      label: 'notebooks list / solo / light',
+    },
+    {
+      file: 'space-detail-solo-light.png',
+      url: `${base}/spaces/product?tab=general`,
+      theme: 'light',
+      ready: 'document.body.innerText.includes("成员") && !document.body.innerText.includes("配额与用量")',
+      label: 'space detail without quota tab / solo / light',
+    },
+    {
+      file: 'space-quota-solo-banner-light.png',
+      url: `${base}/spaces/product?tab=quota`,
+      theme: 'light',
+      ready: 'document.body.innerText.includes("个人版默认不启用空间配额")',
+      label: 'direct quota tab banner / solo / light',
+    },
+    {
+      file: 'admin-quotas-solo-light.png',
+      url: `${base}/admin/quotas`,
+      theme: 'light',
+      ready: 'document.body.innerText.includes("当前版本层级未启用配额管理")',
+      label: 'admin quotas tier banner / solo / light',
+    },
+    {
+      file: 'admin-solo-tabs-light.png',
+      url: `${base}/admin`,
+      theme: 'light',
+      ready:
+        'document.body.innerText.includes("最近 24 小时") && !Array.from(document.querySelectorAll("div[class*=\\"overflow-y-hidden\\"] button")).some((button) => (button.textContent || "").trim() === "配额")',
+      label: 'admin tabs without quotas / solo / light',
+    },
+  ],
+  // All-tier notes: run against an instance (or features proxy) whose
+  // `/api/v1/features` reports team mode; the private notes space flow must be
+  // identical to solo (no solo-only gating).
+  notesTeam: [
+    {
+      file: 'notes-team-light.png',
+      url: `${base}/notes`,
+      theme: 'light',
+      before: "localStorage.setItem('lkb-space', 'product')",
+      ready:
+        'document.body.innerText.includes("我的笔记") && document.querySelectorAll("main table tbody tr").length > 0',
+      label: 'private notes / team mode / light',
+    },
+  ],
+  // Older/degraded backends without POST /api/v1/notes/space: run this group
+  // against a base whose notes endpoint answers 404 (see the notes fallback
+  // proxy in the e2e notes) to verify the explicit fallback banner.
+  notesFallback: [
+    {
+      file: 'notes-fallback-solo-light.png',
+      url: `${base}/notes`,
+      theme: 'light',
+      before: "localStorage.setItem('lkb-space', 'product')",
+      ready:
+        'document.body.innerText.includes("笔记空间暂不可用，回退到当前空间") && document.querySelectorAll("main table tbody tr").length > 0',
+      label: 'notes fallback banner / light',
+    },
+  ],
+  // Quota-enabled tier (team/enterprise defaults): run against an instance
+  // whose `/api/v1/features` reports `features.quotas = true`.
+  quotas: [
+    {
+      file: 'space-quota-tab-enabled-light.png',
+      url: `${base}/spaces/product?tab=quota`,
+      theme: 'light',
+      ready: 'document.body.innerText.includes("空间配额") && document.body.innerText.includes("生效配额链")',
+      label: 'space quota tab / quotas enabled / light',
+    },
+    {
+      file: 'admin-quotas-enabled-light.png',
+      url: `${base}/admin/quotas`,
+      theme: 'light',
+      ready: 'document.body.innerText.includes("新建配额") && !document.body.innerText.includes("当前版本层级未启用配额管理")',
+      label: 'admin quotas / quotas enabled / light',
+    },
+    {
+      file: 'admin-quotas-enabled-tabs-light.png',
+      url: `${base}/admin`,
+      theme: 'light',
+      ready:
+        'document.body.innerText.includes("最近 24 小时") && Array.from(document.querySelectorAll("div[class*=\\"overflow-y-hidden\\"] button")).some((button) => (button.textContent || "").trim() === "配额")',
+      label: 'admin tabs with quotas / quotas enabled / light',
+    },
+  ],
   // Connector panel needs `features.connectors = true`, which the solo
   // profile disables by default: run this group against an instance started
   // with `[features] connectors = true` (see tools/check-layout.mjs notes).

@@ -3,6 +3,7 @@ import { commonMessages } from './messages/common'
 import { errorMessages } from './messages/errors'
 import { queryMessages } from './messages/query'
 import { wikiMessages } from './messages/wiki'
+import { notesMessages } from './messages/notes'
 import { spaceMessages } from './messages/spaces'
 import { adminMessages } from './messages/admin'
 import { accountMessages } from './messages/account'
@@ -12,6 +13,7 @@ const catalogs: Messages[] = [
   errorMessages,
   queryMessages,
   wikiMessages,
+  notesMessages,
   spaceMessages,
   adminMessages,
   accountMessages,

@@ -81,7 +81,7 @@
 
 | 项 | 契约 |
 | --- | --- |
-| `spaces.allow_user_creation` | solo 默认 `false`；team/enterprise 默认 `true`（可关） |
+| `spaces.allow_user_creation` | solo 默认 `true`（可显式关闭，组创建仍关闭）；team/enterprise 默认 `true`（可关） |
 | 每用户最大空间数 | `spaces.max_per_user`；user/group 创建时校验 |
 | 默认配额 | `spaces.default_storage_bytes` / `documents` / `chunks` / `members` |
 | 创建者 | 自动成为 `space_owner`；group 创建时 group 为 owner，创建者 group_admin 获 `space_admin` |
@@ -120,6 +120,25 @@
 - 归档：只读，成员仍可读；不再接受写入；可恢复。
 - 软删除：写 tombstone；保留期后物理清理；恢复需 space_owner/tenant admin。
 - 删除空间：仅 space_owner/tenant owner；必须无未完成写入；写审计。
+
+### 4.4 每用户私有笔记空间（系统空间）
+
+笔记空间是**系统能力**，不是自助空间：solo/team/enterprise 的每个 principal 都有且只有一个私有笔记空间。
+
+| 项 | 契约 |
+| --- | --- |
+| 端点 | `POST /api/v1/notes/space` 幂等 ensure；`GET /api/v1/notes/space` 查询（未创建返回 `404 not_found`） |
+| `space_id` | `notes_<safe_principal>`；principal_id 含非 `[A-Za-z0-9_-]` 字符时截断并追加 principal_id 的稳定 sha256 后缀；`notes_` 前缀保留，普通建空间请求返回 `400` |
+| owner | `owner_type=user`、`owner_id=owner_principal_id=<principal_id>` |
+| 可见性/状态 | `visibility=private`、`status=active`；名称 `My notes` |
+| ACL | 空间默认 ACL 与页面 ACL 均为 `allow_list(users=[principal_id])`；租户管理员默认读不到正文/历史，需要审计式 break-glass |
+| 配额 | 绕开 `spaces.allow_user_creation` 与 `spaces.max_per_user`（系统空间）；页面写入仍走 tenant/owner/space 配额与审计 |
+| 冲突 | 目标 `space_id` 已存在但 owner/类型不匹配时返回 `409 conflict`，不静默复用 |
+| 修改 | 系统笔记空间拒绝 `PATCH /spaces/{id}`（防止移除 `settings.kind=notes` 后弱化页面 ACL） |
+| 生命周期 | `DELETE` / archive / restore / transfer 对系统笔记空间返回 `403 notes_space_immutable`；系统笔记空间不可删除/归档/转移，删除单条笔记请删除页面 |
+| 审计 | `POST` 写 `notes.space.ensure`（actor/tenant/space/result，detail 含 `created`） |
+
+与共享 space 的边界：笔记空间只服务 owner，不提供成员/共享/发布语义；需要协作时使用普通空间，将页面复制/导入到共享空间。笔记内容仍是 Document/Page/Revision，复用现有配额、审计与检索管道。
 
 ## 5. 配额层级与存储计量
 

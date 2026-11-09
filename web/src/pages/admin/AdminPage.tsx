@@ -13,7 +13,6 @@ import { RolesPanel } from '../../features/admin/RolesPanel'
 import { SpacesPanel } from '../../features/admin/SpacesPanel'
 import { UsagePanel } from '../../features/admin/UsagePanel'
 import { UsersPanel } from '../../features/admin/UsersPanel'
-import { AdminToastHost } from '../../features/admin/kit'
 import { useI18n } from '../../lib/i18n'
 import { useSession } from '../../lib/session'
 
@@ -72,12 +71,15 @@ export function AdminPage() {
     { id: 'spaces', label: t('admin.tab.spaces') },
     { id: 'models', label: t('admin.tab.models') },
     { id: 'usage', label: t('admin.tab.usage') },
-    { id: 'quotas', label: t('admin.tab.quotas') },
+    // Solo defaults quotas off. Keep the deep link working (read-only panel
+    // with a tier banner) but remove the entry point from the tab strip.
+    ...(session.features?.features.quotas === false ? [] : [{ id: 'quotas' as const, label: t('admin.tab.quotas') }]),
     { id: 'billing', label: t('admin.tab.billing') },
     { id: 'connectors', label: t('admin.tab.connectors') },
     { id: 'audit', label: t('admin.tab.audit') },
   ]
-  const activeLabel = items.find((item) => item.id === active)?.label ?? active
+  const activeLabel =
+    items.find((item) => item.id === active)?.label ?? (active === 'quotas' ? t('admin.tab.quotas') : active)
 
   return (
     <div className="mx-auto w-full max-w-[900px] px-6 py-5">
@@ -107,7 +109,6 @@ export function AdminPage() {
         {active === 'audit' && <AuditPanel />}
         <NotProvidedCards />
       </div>
-      <AdminToastHost />
     </div>
   )
 }

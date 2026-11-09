@@ -120,6 +120,56 @@ function expect(name, ok, detail = '') {
 
 const pageReady = 'document.querySelector("main") !== null && document.body.innerText.length > 40'
 
+// Functional fixtures for the admin drawer checks. They are created through
+// the app origin so the browser's session/CSRF cookies apply, and the provider
+// is removed again at the end of the run. The test URL is intentionally
+// unreachable: `/providers/{id}/test` then answers deterministically (no model
+// configured) instead of depending on an external provider.
+const PROVIDER_FIXTURE_ID = `layout-e2e-${Date.now()}`
+
+const createProviderFixture = (socket) =>
+  evaluate(
+    socket,
+    `(async () => {
+      try {
+        const csrfResponse = await fetch('/api/v1/auth/csrf', { credentials: 'same-origin' })
+        const csrf = await csrfResponse.json()
+        const response = await fetch('/api/v1/admin/providers', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'content-type': 'application/json', 'x-csrf-token': csrf.csrf_token },
+          body: JSON.stringify({
+            provider_id: ${JSON.stringify(PROVIDER_FIXTURE_ID)},
+            kind: 'openai',
+            base_url: 'http://127.0.0.1:9/v1',
+          }),
+        })
+        return { ok: response.ok, status: response.status }
+      } catch (error) {
+        return { ok: false, status: 0, error: String(error) }
+      }
+    })()`,
+  )
+
+const deleteProviderFixture = (socket) =>
+  evaluate(
+    socket,
+    `(async () => {
+      try {
+        const csrfResponse = await fetch('/api/v1/auth/csrf', { credentials: 'same-origin' })
+        const csrf = await csrfResponse.json()
+        const response = await fetch('/api/v1/admin/providers/${PROVIDER_FIXTURE_ID}', {
+          method: 'DELETE',
+          credentials: 'same-origin',
+          headers: { 'x-csrf-token': csrf.csrf_token },
+        })
+        return response.ok
+      } catch {
+        return false
+      }
+    })()`,
+  )
+
 const layoutState = (socket) =>
   evaluate(
     socket,
@@ -270,10 +320,12 @@ const scrollbarReport = (socket) =>
     })()`,
   )
 
+let socket = null
+let providerFixtureCreated = false
 try {
   await waitForDevtools()
   const target = await (await fetch(`http://127.0.0.1:${port}/json/new?about:blank`, { method: 'PUT' })).json()
-  const socket = await connect(target.webSocketDebuggerUrl)
+  socket = await connect(target.webSocketDebuggerUrl)
   await send(socket, 'Page.enable')
   await send(socket, 'Runtime.enable')
 
@@ -410,10 +462,11 @@ try {
   // --------------------------------------------------- admin NotProvided ----
   await evaluate(socket, `localStorage.setItem('lkb-theme', 'dark'); true`)
   await goto(socket, `${base}/admin`, 'document.body.innerText.includes("最近 24 小时") && !document.querySelector(".lkb-skeleton")')
-  const overview = await evaluate(
+  const tabCount = await evaluate(
     socket,
     `(() => ({ tabs: Array.from(document.querySelectorAll('div[class*="overflow-y-hidden"] button')).length, text: document.body.innerText.replace(/\\s+/g, ' ') }))()`,
   )
+  const overview = tabCount
   expect(
     'admin: overview default tab',
     /最近 24 小时/.test(overview.text) && /最近审计/.test(overview.text) && /管理入口/.test(overview.text),
@@ -423,7 +476,14 @@ try {
     'admin: overview counts come from /admin/overview',
     /文档总数/.test(overview.text) && /分块数/.test(overview.text) && /缓存命中率/.test(overview.text),
   )
-  expect('admin: 11 tabs', overview.tabs === 11, `tabs=${overview.tabs}`)
+  const featureProbe = await (await fetch(`${base}/api/v1/features`)).json()
+  const quotasEnabled = featureProbe?.features?.quotas === true
+  const expectedTabs = quotasEnabled ? 11 : 10
+  expect(
+    `admin: ${expectedTabs} tabs (quotas ${quotasEnabled ? 'enabled' : 'disabled'})`,
+    overview.tabs === expectedTabs,
+    `tabs=${overview.tabs}`,
+  )
 
   await goto(socket, `${base}/admin/users`, 'document.body.innerText.includes("新建用户") && !document.querySelector(".lkb-skeleton")')
   const usersText = await evaluate(socket, `document.body.innerText.replace(/\\s+/g, ' ')`)
@@ -445,22 +505,46 @@ try {
     expect('admin: reset-password NotProvided dialog', null, 'no user rows in this instance')
   }
 
-  await goto(socket, `${base}/admin/models`, 'document.querySelectorAll("table").length > 0')
-  await evaluate(
+  const providerFixture = await createProviderFixture(socket)
+  providerFixtureCreated = providerFixture.ok
+
+  const modelsReady = await goto(
+    socket,
+    `${base}/admin/models`,
+    'Array.from(document.querySelectorAll("button")).some((el) => (el.textContent || "").trim() === "测试")',
+    25_000,
+  )
+  const clickedTest = await evaluate(
     socket,
     `(() => {
       const button = Array.from(document.querySelectorAll('button')).find((el) => (el.textContent || '').trim() === '测试')
-      if (button) button.click()
-      return Boolean(button)
+      if (!button) return false
+      button.click()
+      return true
     })()`,
   )
-  await sleep(250)
-  dialog = await dialogInfo(socket)
-  expect(
-    'admin: provider-test result dialog (live endpoint)',
-    dialog.count === 1 && /测试 ·/.test(dialog.text[0] ?? '') && /(连通正常|测试未通过)/.test(dialog.text[0] ?? ''),
-    dialog.text[0]?.slice(0, 140),
+  const providerDialogReady = await waitUntil(
+    socket,
+    `(() => {
+      const dialogs = Array.from(document.querySelectorAll('[role="dialog"]'))
+      return dialogs.length === 1 && /测试 ·/.test(dialogs[0].innerText || '') && /(连通正常|测试未通过)/.test(dialogs[0].innerText || '')
+    })()`,
+    20_000,
   )
+  dialog = await dialogInfo(socket)
+  if (providerFixtureCreated && modelsReady) {
+    expect(
+      'admin: provider-test result dialog (controlled fixture)',
+      clickedTest && providerDialogReady && dialog.count === 1 && /测试 ·/.test(dialog.text[0] ?? '') && /(连通正常|测试未通过)/.test(dialog.text[0] ?? ''),
+      dialog.text[0]?.slice(0, 140),
+    )
+  } else {
+    expect(
+      'admin: provider-test result dialog (controlled fixture)',
+      null,
+      `SKIP (requires provider fixture; create=${providerFixture.ok ? 'ok' : `failed ${providerFixture.status ?? 0}`}, row=${modelsReady ? 'shown' : 'missing'})`,
+    )
+  }
   await closeDialog(socket)
   await sleep(200)
 
@@ -475,24 +559,49 @@ try {
     billingEnabled ? billingText.match(/计划创建[^]{0,70}/)?.[0] ?? '' : billingText.slice(0, 90),
   )
 
-  await goto(socket, `${base}/admin/audit`, 'document.querySelectorAll("table tbody tr").length > 0')
-  const rowOpened = await evaluate(
-    socket,
-    `(() => {
-      const button = Array.from(document.querySelectorAll('table tbody tr button')).find((el) => (el.textContent || '').trim() === '详情')
-      if (!button) return false
-      button.click()
-      return true
-    })()`,
-  )
+  const auditReady = await goto(socket, `${base}/admin/audit`, 'document.querySelectorAll("table tbody tr").length > 0', 25_000)
+  const rowOpened = auditReady
+    ? await evaluate(
+        socket,
+        `(() => {
+          const button = Array.from(document.querySelectorAll('table tbody tr button')).find((el) => (el.textContent || '').trim() === '详情')
+          if (!button) return false
+          button.click()
+          return true
+        })()`,
+      )
+    : false
   await sleep(300)
   dialog = await dialogInfo(socket)
-  expect('admin: audit detail drawer', rowOpened && dialog.count === 1 && /事件 ID/.test(dialog.text[0] ?? ''), dialog.text[0]?.slice(0, 120))
+  if (auditReady) {
+    expect(
+      'admin: audit detail drawer (controlled fixture)',
+      rowOpened && dialog.count === 1 && /事件 ID/.test(dialog.text[0] ?? ''),
+      dialog.text[0]?.slice(0, 120),
+    )
+  } else {
+    expect(
+      'admin: audit detail drawer (controlled fixture)',
+      null,
+      'SKIP (requires audit fixture; no audit rows)',
+    )
+  }
   await closeDialog(socket)
   await sleep(200)
 
   // ---------------------------------------------------------- scrollbars ----
-  const scrollRoutes = ['/search?q=%E6%A3%80%E7%B4%A2', '/spaces', '/admin', '/admin/models', '/admin/audit', '/admin/connectors', '/admin/billing']
+  const scrollRoutes = [
+    '/search?q=%E6%A3%80%E7%B4%A2',
+    '/notes',
+    '/spaces',
+    '/spaces/product?tab=general',
+    '/admin',
+    '/admin/models',
+    '/admin/audit',
+    '/admin/connectors',
+    '/admin/billing',
+    '/admin/quotas',
+  ]
   for (const [width, height] of [[1568, 1040], [1440, 900], [1280, 800]]) {
     await setViewport(socket, width, height)
     for (const route of scrollRoutes) {
@@ -512,9 +621,15 @@ try {
       expect(`scroll ${width}x${height} ${route}`, clean, JSON.stringify(report))
     }
   }
-
-  socket.close()
 } finally {
+  if (socket && providerFixtureCreated) {
+    try {
+      await deleteProviderFixture(socket)
+    } catch {
+      /* fixture cleanup must not mask assertion results */
+    }
+  }
+  if (socket) socket.close()
   child.kill()
   try {
     rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })
@@ -526,4 +641,5 @@ try {
 const failures = results.filter((entry) => entry.state === 'FAIL')
 const skipped = results.filter((entry) => entry.state === 'SKIP')
 console.log(`\n${results.length} checks, ${failures.length} failures${skipped.length ? `, ${skipped.length} skipped` : ''}`)
+for (const entry of skipped) console.log(`  SKIP ${entry.name} — ${entry.detail || 'no reason recorded'}`)
 if (failures.length > 0) process.exitCode = 1

@@ -76,6 +76,10 @@ pub fn router(state: AppState) -> Router {
         .route("/api/ask", post(api_ask))
         .route("/api/v1/spaces", get(list_spaces_v1).post(create_space_v1))
         .route(
+            "/api/v1/notes/space",
+            get(notes_space_get_v1).post(notes_space_ensure_v1),
+        )
+        .route(
             "/api/v1/spaces/{space_id}",
             get(get_space_v1)
                 .patch(patch_space_v1)
@@ -1804,18 +1808,16 @@ async fn page_save(
             "page exists but is outside the principal's ACL",
         ));
     }
-    let acl = match &existing {
-        Some(view) => {
-            Acl::from_json(&view.page.acl_json).unwrap_or_else(|_| page_acl(&state, &principal))
-        }
-        None => page_acl(&state, &principal),
-    };
-    if state
-        .store
-        .get_space(&principal.tenant_id, &space)
-        .await?
-        .is_none()
-    {
+    let space_meta = state.store.get_space(&principal.tenant_id, &space).await?;
+    let acl = space_meta
+        .as_ref()
+        .and_then(notes_acl_for_space)
+        .unwrap_or_else(|| match &existing {
+            Some(view) => Acl::from_json(&view.page.acl_json)
+                .unwrap_or_else(|_| page_acl(space_meta.as_ref())),
+            None => page_acl(space_meta.as_ref()),
+        });
+    if space_meta.is_none() {
         state
             .store
             .ensure_space(&SpaceRecord::new(
@@ -1932,7 +1934,18 @@ async fn page_save(
     Ok(Redirect::to(target.as_str()).into_response())
 }
 
-fn page_acl(_state: &AppState, _principal: &Principal) -> Acl {
+fn notes_acl_for_space(space: &SpaceRecord) -> Option<Acl> {
+    is_notes_space(space).then(|| Acl::user(&space.owner_id))
+}
+
+fn page_acl(space: Option<&SpaceRecord>) -> Acl {
+    // Private notes always stay owner-only, even for tenant admins; break-glass
+    // access to notes must go through an explicit audit path, not content APIs.
+    if let Some(space) = space {
+        if let Some(acl) = notes_acl_for_space(space) {
+            return acl;
+        }
+    }
     // Space membership/roles gate access; document ACL stays allow-all so all
     // authenticated space members can be checked against their space role.
     Acl::allow_all()
@@ -2495,6 +2508,180 @@ async fn v1_auth(
     Ok((principal, auth.session, guard))
 }
 
+/// Build the per-principal private notes space id. Valid principal ids keep
+/// their readable form; anything else gets a stable hash suffix so the id is
+/// deterministic and cannot collide through sanitization.
+fn notes_space_id(principal_id: &str) -> String {
+    let valid = !principal_id.is_empty()
+        && principal_id.len() <= 90
+        && principal_id
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || ch == '-' || ch == '_');
+    if valid {
+        return format!("notes_{principal_id}");
+    }
+    let mut safe: String = principal_id
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' {
+                ch
+            } else {
+                '_'
+            }
+        })
+        .take(64)
+        .collect();
+    if safe.is_empty() {
+        safe.push_str("user");
+    }
+    let hash = crate::util::sha256_hex(principal_id.as_bytes());
+    format!("notes_{safe}_{}", &hash[..12])
+}
+
+fn notes_space_settings(owner_id: &str) -> String {
+    json!({"kind": "notes", "notes_owner": owner_id}).to_string()
+}
+
+fn is_notes_space(space: &SpaceRecord) -> bool {
+    if space.owner_type != "user" {
+        return false;
+    }
+    serde_json::from_str::<Value>(&space.settings)
+        .ok()
+        .and_then(|value| {
+            value
+                .get("kind")
+                .and_then(Value::as_str)
+                .map(|kind| kind == "notes")
+        })
+        .unwrap_or(false)
+}
+
+async fn notes_space_or_conflict(
+    state: &AppState,
+    principal: &Principal,
+    space_id: &str,
+) -> Result<Option<SpaceRecord>, AppError> {
+    let Some(space) = state
+        .store
+        .get_space(&principal.tenant_id, space_id)
+        .await?
+    else {
+        return Ok(None);
+    };
+    if space.owner_type != "user"
+        || space.owner_id != principal.principal_id
+        || !is_notes_space(&space)
+    {
+        return Err(AppError::new(
+            StatusCode::CONFLICT,
+            "conflict",
+            "notes space id is already owned by another principal",
+        ));
+    }
+    Ok(Some(space))
+}
+
+async fn notes_space_ensure_v1(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<Value>, AppError> {
+    let (principal, session, _limits) = v1_auth(
+        &state,
+        &headers,
+        TokenScope::Write,
+        "notes.space.ensure",
+        None,
+    )
+    .await?;
+    v1_session_write_guard(&state, &headers, session)?;
+    let space_id = notes_space_id(&principal.principal_id);
+    let request_id = v1_request_id();
+    let now = now_rfc3339();
+    let existing = match notes_space_or_conflict(&state, &principal, &space_id).await {
+        Ok(existing) => existing,
+        Err(err) => {
+            if err.status() == StatusCode::CONFLICT {
+                crate::audit::record(
+                    &state.store,
+                    &principal.tenant_id,
+                    Some(&space_id),
+                    &principal.principal_id,
+                    v1_actor_type(&principal),
+                    "notes.space.ensure",
+                    "space",
+                    &space_id,
+                    "deny",
+                    409,
+                    Some(&request_id),
+                    client_ip(&headers).as_deref(),
+                    user_agent(&headers).as_deref(),
+                    json!({"reason": "owner_mismatch"}),
+                )
+                .await;
+            }
+            return Err(err);
+        }
+    };
+    let (space, created) = match existing {
+        Some(space) => (space, false),
+        None => {
+            let acl = Acl::user(&principal.principal_id);
+            let mut space = SpaceRecord::new(
+                &principal.tenant_id,
+                &space_id,
+                "My notes",
+                &acl,
+                &principal.principal_id,
+                &now,
+            );
+            space.owner_type = "user".to_string();
+            space.owner_id = principal.principal_id.clone();
+            space.owner_principal_id = principal.principal_id.clone();
+            space.visibility = "private".to_string();
+            space.status = "active".to_string();
+            space.settings = notes_space_settings(&principal.principal_id);
+            state.store.ensure_space(&space).await?;
+            (space, true)
+        }
+    };
+    crate::audit::record(
+        &state.store,
+        &principal.tenant_id,
+        Some(&space_id),
+        &principal.principal_id,
+        v1_actor_type(&principal),
+        "notes.space.ensure",
+        "space",
+        &space_id,
+        "allow",
+        200,
+        Some(&request_id),
+        client_ip(&headers).as_deref(),
+        user_agent(&headers).as_deref(),
+        json!({"created": created}),
+    )
+    .await;
+    Ok(Json(json!({
+        "space": space_json(&space, Some(SpaceRole::SpaceOwner)),
+    })))
+}
+
+async fn notes_space_get_v1(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<Value>, AppError> {
+    let (principal, _session, _limits) =
+        v1_auth(&state, &headers, TokenScope::Read, "notes.space.get", None).await?;
+    let space_id = notes_space_id(&principal.principal_id);
+    let space = notes_space_or_conflict(&state, &principal, &space_id)
+        .await?
+        .ok_or_else(|| AppError::not_found("notes space not found"))?;
+    Ok(Json(json!({
+        "space": space_json(&space, Some(SpaceRole::SpaceOwner)),
+    })))
+}
+
 async fn list_spaces_v1(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -2641,10 +2828,13 @@ async fn create_space_v1(
             "visibility must be private or internal",
         ));
     }
-    space.settings = request
-        .settings
-        .map(|value| value.to_string())
-        .unwrap_or_else(|| "{}".to_string());
+    space.settings = match request.settings {
+        Some(settings) => {
+            reject_reserved_notes_kind(&settings)?;
+            settings.to_string()
+        }
+        None => "{}".to_string(),
+    };
     state.store.ensure_space(&space).await?;
 
     if owner_type == "user" {
@@ -2762,6 +2952,11 @@ async fn patch_space_v1(
     )
     .await?;
     require_active_space(&space).await?;
+    if is_notes_space(&space) {
+        return Err(AppError::forbidden(
+            "system notes spaces cannot be modified",
+        ));
+    }
     if let Some(name) = request.name {
         if name.trim().is_empty() {
             return Err(AppError::bad_request("name must not be empty"));
@@ -2777,6 +2972,7 @@ async fn patch_space_v1(
         space.visibility = visibility;
     }
     if let Some(settings) = request.settings {
+        reject_reserved_notes_kind(&settings)?;
         space.settings = settings.to_string();
     }
     state.store.update_space(&space).await?;
@@ -2803,6 +2999,28 @@ async fn patch_space_v1(
     ))
 }
 
+fn reject_reserved_notes_kind(settings: &Value) -> Result<(), AppError> {
+    if settings
+        .get("kind")
+        .and_then(Value::as_str)
+        .map(|kind| kind == "notes")
+        .unwrap_or(false)
+    {
+        return Err(AppError::bad_request(
+            "settings.kind = \"notes\" is reserved for system notes spaces",
+        ));
+    }
+    Ok(())
+}
+
+fn notes_space_immutable() -> AppError {
+    AppError::new(
+        StatusCode::FORBIDDEN,
+        "notes_space_immutable",
+        "system notes spaces cannot be deleted, archived, restored or transferred; delete individual note pages instead",
+    )
+}
+
 async fn delete_space_v1(
     State(state): State<AppState>,
     AxumPath(space_id): AxumPath<String>,
@@ -2822,6 +3040,9 @@ async fn delete_space_v1(
         .get_space(&principal.tenant_id, &space_id)
         .await?
         .ok_or_else(|| AppError::not_found("space not found"))?;
+    if is_notes_space(&space) {
+        return Err(notes_space_immutable());
+    }
     require_space_role(
         &state,
         &principal,
@@ -2876,6 +3097,9 @@ async fn archive_space_v1(
         .get_space(&principal.tenant_id, &space_id)
         .await?
         .ok_or_else(|| AppError::not_found("space not found"))?;
+    if is_notes_space(&space) {
+        return Err(notes_space_immutable());
+    }
     require_space_role(
         &state,
         &principal,
@@ -2933,6 +3157,9 @@ async fn restore_space_v1(
         .get_space(&principal.tenant_id, &space_id)
         .await?
         .ok_or_else(|| AppError::not_found("space not found"))?;
+    if is_notes_space(&space) {
+        return Err(notes_space_immutable());
+    }
     require_space_role(
         &state,
         &principal,
@@ -2989,6 +3216,9 @@ async fn transfer_space_v1(
         .get_space(&principal.tenant_id, &space_id)
         .await?
         .ok_or_else(|| AppError::not_found("space not found"))?;
+    if is_notes_space(&space) {
+        return Err(notes_space_immutable());
+    }
     let access = crate::access::effective_space_role(&state.store, &principal, &space)
         .await
         .map_err(AppError::from)?;
@@ -3150,6 +3380,11 @@ fn validate_space_id(value: &str) -> Result<(), AppError> {
     {
         return Err(AppError::bad_request(
             "space_id must be an ASCII alphanumeric/-/_ segment",
+        ));
+    }
+    if value.starts_with("notes_") {
+        return Err(AppError::bad_request(
+            "space_id prefix notes_ is reserved for private notes spaces",
         ));
     }
     Ok(())
@@ -3531,6 +3766,7 @@ async fn set_space_quota_v1(
         Some(&space_id),
     )
     .await?;
+    require_feature(&state, Feature::Quotas)?;
     v1_session_write_guard(&state, &headers, session)?;
     require_space_role(
         &state,
@@ -3599,6 +3835,7 @@ async fn create_quota_override_v1(
 ) -> Result<Json<Value>, AppError> {
     let (principal, session, _limits) =
         v1_auth(&state, &headers, TokenScope::Admin, "quota.override", None).await?;
+    require_feature(&state, Feature::Quotas)?;
     v1_session_write_guard(&state, &headers, session)?;
     if request.reason.trim().is_empty() {
         return Err(AppError::bad_request("reason is required"));
@@ -4274,6 +4511,12 @@ async fn page_history_v1(
         Some(&space),
     )
     .await?;
+    let policy = Policy::new(principal.clone(), None).map_err(AppError::bad_request)?;
+    state
+        .store
+        .get_page(&policy, &space, &slug, None)
+        .await?
+        .ok_or_else(|| AppError::not_found("page not found"))?;
     let revisions = state
         .store
         .list_revisions(
@@ -4357,6 +4600,26 @@ async fn page_save_json_v1(
         .store
         .get_page(&policy, &space, &slug, Some(&lang))
         .await?;
+    if existing.is_none()
+        && state
+            .store
+            .get_page_unfiltered(&principal.tenant_id, &space, &slug, Some(&lang))
+            .await?
+            .is_some()
+    {
+        return Err(AppError::forbidden(
+            "page exists but is outside the principal's ACL",
+        ));
+    }
+    let space_meta = state.store.get_space(&principal.tenant_id, &space).await?;
+    let acl = space_meta
+        .as_ref()
+        .and_then(notes_acl_for_space)
+        .unwrap_or_else(|| match &existing {
+            Some(view) => Acl::from_json(&view.page.acl_json)
+                .unwrap_or_else(|_| page_acl(space_meta.as_ref())),
+            None => page_acl(space_meta.as_ref()),
+        });
     let current_revision = existing
         .as_ref()
         .map(|view| view.page.current_revision_id.clone());
@@ -4370,18 +4633,7 @@ async fn page_save_json_v1(
     if existing.is_none() && if_match != "*" {
         return Err(AppError::not_found("page not found"));
     }
-    let acl = match &existing {
-        Some(view) => {
-            Acl::from_json(&view.page.acl_json).unwrap_or_else(|_| page_acl(&state, &principal))
-        }
-        None => page_acl(&state, &principal),
-    };
-    if state
-        .store
-        .get_space(&principal.tenant_id, &space)
-        .await?
-        .is_none()
-    {
+    if space_meta.is_none() {
         state
             .store
             .ensure_space(&crate::store::SpaceRecord::new(
@@ -7766,6 +8018,7 @@ async fn admin_quota_create_v1(
     Json(body): Json<TokenQuotaBody>,
 ) -> Result<Response, AppError> {
     let (principal, _guard) = admin_auth(&state, &headers, "models.quota.create").await?;
+    require_feature(&state, Feature::Quotas)?;
     if body.limit_tokens.is_none()
         && body.limit_requests.is_none()
         && body.limit_cost_micros.is_none()
@@ -7825,6 +8078,7 @@ async fn admin_quota_delete_v1(
 ) -> Result<Json<Value>, AppError> {
     let audit_target = quota_id.clone();
     let (principal, _guard) = admin_auth(&state, &headers, "models.quota.delete").await?;
+    require_feature(&state, Feature::Quotas)?;
     let removed = state
         .store
         .delete_token_quota(&principal.tenant_id, &quota_id)
@@ -8584,6 +8838,19 @@ mod tests {
         assert!(!limiter.allowed("ip|user"));
         limiter.clear("ip|user");
         assert!(limiter.allowed("ip|user"));
+    }
+
+    #[test]
+    fn notes_space_id_is_stable_and_collision_resistant() {
+        assert_eq!(notes_space_id("alice"), "notes_alice");
+        assert_eq!(notes_space_id("usr_0123-ab_cd"), "notes_usr_0123-ab_cd");
+
+        let email = notes_space_id("alice@example.com");
+        assert!(email.starts_with("notes_alice_example_com_"), "{email}");
+        assert_eq!(email, notes_space_id("alice@example.com"));
+        assert!(email.len() <= 100, "{email}");
+        assert_ne!(email, notes_space_id("alice-example.com"));
+        assert!(notes_space_id("").starts_with("notes_user_"));
     }
 
     #[test]

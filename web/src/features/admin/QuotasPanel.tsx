@@ -4,6 +4,7 @@ import { createQuotaOverride, createTokenQuota, deleteTokenQuota, listTokenQuota
 import type { TokenQuota } from '../../api/types'
 import { Badge, Banner, Button, Card, EmptyState, ErrorState, Table, TableWrap, TBody, TD, TH, THead, TR } from '../../components/ui'
 import { useI18n } from '../../lib/i18n'
+import { useSession } from '../../lib/session'
 import { AdminQueryGate, SelectInput, TextInput, adminKeys, parseOptionalNumber, useAdminInvalidate } from './shared'
 import { ConfirmDialog } from './kit'
 
@@ -19,10 +20,18 @@ type OverrideScope = (typeof OVERRIDE_SCOPES)[number]
 
 export function QuotasPanel() {
   const { t, format } = useI18n()
+  const session = useSession()
+  const features = session.features?.features
   const invalidate = useAdminInvalidate()
   const [notice, setNotice] = useState<string | null>(null)
   const [confirmQuota, setConfirmQuota] = useState<TokenQuota | null>(null)
-  const query = useQuery({ queryKey: adminKeys.quotas, queryFn: listTokenQuotas })
+  // Quotas are a team/enterprise tier capability. When the flag is absent
+  // (older backend) keep read-only counters as a safe degradation; when the
+  // backend explicitly disables it, skip the request and hide every write.
+  const quotasEnabled = features?.quotas === true
+  const tierRestricted = features?.quotas !== true
+  const canQuery = features?.quotas !== false
+  const query = useQuery({ queryKey: adminKeys.quotas, queryFn: listTokenQuotas, enabled: canQuery })
   const remove = useMutation({
     mutationFn: deleteTokenQuota,
     onSuccess: () => {
@@ -37,20 +46,28 @@ export function QuotasPanel() {
 
   return (
     <div className="space-y-4">
+      {tierRestricted && (
+        <Banner tone="warn" title={t('admin.quotas.tierDisabled')}>
+          {t('admin.quotas.tierDisabledHint')}
+        </Banner>
+      )}
       {notice && <Banner tone="accent">{notice}</Banner>}
       {remove.isError && <ErrorState error={remove.error} compact />}
-      <ConfirmDialog
-        open={confirmQuota !== null}
-        title={t('admin.quotas.delete')}
-        description={t('admin.quotas.deleteConfirm', { quota: confirmQuota?.quota_id ?? '' })}
-        confirmLabel={t('action.delete')}
-        pending={remove.isPending}
-        onConfirm={() => {
-          if (confirmQuota !== null) remove.mutate(confirmQuota.quota_id)
-        }}
-        onCancel={() => setConfirmQuota(null)}
-      />
-      <AdminQueryGate pending={query.isPending} error={query.error} onRetry={() => void query.refetch()}>
+      {quotasEnabled && (
+        <ConfirmDialog
+          open={confirmQuota !== null}
+          title={t('admin.quotas.delete')}
+          description={t('admin.quotas.deleteConfirm', { quota: confirmQuota?.quota_id ?? '' })}
+          confirmLabel={t('action.delete')}
+          pending={remove.isPending}
+          onConfirm={() => {
+            if (confirmQuota !== null) remove.mutate(confirmQuota.quota_id)
+          }}
+          onCancel={() => setConfirmQuota(null)}
+        />
+      )}
+      {canQuery ? (
+        <AdminQueryGate pending={query.isPending} error={query.error} onRetry={() => void query.refetch()}>
         <div className="space-y-4">
           <Card title={t('admin.quotas.title')}>
             {quotas.length === 0 ? (
@@ -69,7 +86,7 @@ export function QuotasPanel() {
                       <TH>{t('admin.quotas.action')}</TH>
                       <TH>{t('admin.quotas.enabled')}</TH>
                       <TH>{t('label.updatedAt')}</TH>
-                      <TH>{t('label.actions')}</TH>
+                      {quotasEnabled && <TH>{t('label.actions')}</TH>}
                     </TR>
                   </THead>
                   <TBody>
@@ -98,19 +115,21 @@ export function QuotasPanel() {
                           </Badge>
                         </TD>
                         <TD className="whitespace-nowrap text-[11.5px] text-fg-3">{format.dateTime(quota.updated_at)}</TD>
-                        <TD>
-                          <Button
-                            size="sm"
-                            variant="danger"
-                            disabled={remove.isPending && remove.variables === quota.quota_id}
-                            onClick={() => {
-                              setNotice(null)
-                              setConfirmQuota(quota)
-                            }}
-                          >
-                            {t('action.delete')}
-                          </Button>
-                        </TD>
+                        {quotasEnabled && (
+                          <TD>
+                            <Button
+                              size="sm"
+                              variant="danger"
+                              disabled={remove.isPending && remove.variables === quota.quota_id}
+                              onClick={() => {
+                                setNotice(null)
+                                setConfirmQuota(quota)
+                              }}
+                            >
+                              {t('action.delete')}
+                            </Button>
+                          </TD>
+                        )}
                       </TR>
                     ))}
                   </TBody>
@@ -159,9 +178,14 @@ export function QuotasPanel() {
             )}
           </Card>
         </div>
-      </AdminQueryGate>
-      <CreateQuotaCard />
-      <OverrideCard />
+        </AdminQueryGate>
+      ) : (
+        <Card title={t('admin.quotas.counters')}>
+          <p className="text-[11.5px] leading-5 text-fg-3">{t('admin.quotas.tierDisabledCounters')}</p>
+        </Card>
+      )}
+      {quotasEnabled && <CreateQuotaCard />}
+      {quotasEnabled && <OverrideCard />}
     </div>
   )
 }

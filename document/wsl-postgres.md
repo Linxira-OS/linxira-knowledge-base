@@ -179,6 +179,6 @@ try { $c.Connect('127.0.0.1', 5432); 'OPEN' } catch { 'FAIL: ' + $_.Exception.Me
 - 聚焦测试（真实 PG，未 SKIP）：
   `cargo +stable-x86_64-pc-windows-gnu test --test postgres_integration -- --nocapture`
   → `1 passed; 0 failed`（约 1.15s；输出中无 “SKIP postgres integration test”），链路为 connect → migrate → import examples → BM25 搜索命中。
-- 全量测试：`cargo +stable-x86_64-pc-windows-gnu test` → **152 passed; 0 failed**（17 个集成测试文件；`postgres_integration` 复跑同样通过）。
+- 全量测试：`cargo +stable-x86_64-pc-windows-gnu test` → **162 passed; 0 failed**（17 个集成测试文件；`postgres_integration` 复跑同样通过）。
 - 期间修复的真实问题：`src/store/postgres.rs::execute_script` 原先按 `sql.split(';')` 客户端切分迁移脚本，被 `migrations/postgres/0002_search.sql` 注释中的分号截断，PostgreSQL 报 `42601 syntax error at or near "the"`。已改为整个脚本一次下发、由服务器解析（simple-query 协议）；注意调用形式必须是 `sqlx::Executor::execute(connection, sqlx::raw_sql(sql))`，`RawSql::execute` 在 async 上下文会触发高阶生命周期推断失败（sqlx#3581）。
 

@@ -1422,6 +1422,9 @@ pub async fn run() -> anyhow::Result<()> {
                 bail!("visibility must be private or internal");
             }
             let space_id = space_id.unwrap_or_else(|| format!("sp_{}", random_hex(8)));
+            if space_id.starts_with("notes_") {
+                bail!("space_id prefix notes_ is reserved for private notes spaces");
+            }
             crate::quota::check_space_creation(
                 &store,
                 &config.storage.tenant_id,

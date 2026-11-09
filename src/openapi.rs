@@ -88,6 +88,18 @@ pub fn document() -> Value {
     );
     add("/api/v1/spaces", "get", "List spaces", "kb.read");
     add("/api/v1/spaces", "post", "Create space", "kb.write");
+    add(
+        "/api/v1/notes/space",
+        "get",
+        "Get my private notes space",
+        "kb.read",
+    );
+    add(
+        "/api/v1/notes/space",
+        "post",
+        "Ensure my private notes space",
+        "kb.write",
+    );
     add("/api/v1/spaces/{space_id}", "get", "Get space", "kb.read");
     add(
         "/api/v1/spaces/{space_id}",
@@ -338,6 +350,12 @@ pub fn document() -> Value {
         "kb.admin",
     );
     add(
+        "/api/v1/admin/quotas/{quota_id}",
+        "delete",
+        "Admin: delete quota",
+        "kb.admin",
+    );
+    add(
         "/api/v1/admin/usage",
         "get",
         "Admin: usage events",
@@ -399,6 +417,64 @@ pub fn document() -> Value {
         "Admin: quota override",
         "kb.admin",
     );
+    for (path, method) in [
+        ("/api/v1/spaces/{space_id}/usage", "get"),
+        ("/api/v1/spaces/{space_id}/quota", "put"),
+        ("/api/v1/admin/quotas", "get"),
+        ("/api/v1/admin/quotas", "post"),
+        ("/api/v1/admin/quotas/{quota_id}", "delete"),
+        ("/api/v1/admin/quota-overrides", "post"),
+    ] {
+        if let Some(operation) = paths
+            .get_mut(path)
+            .and_then(|item| item.get_mut(method))
+            .and_then(|value| value.as_object_mut())
+        {
+            operation.insert("tags".to_string(), json!(["quotas"]));
+        }
+    }
+    for method in ["get", "post"] {
+        if let Some(operation) = paths
+            .get_mut("/api/v1/notes/space")
+            .and_then(|item| item.get_mut(method))
+            .and_then(|value| value.as_object_mut())
+        {
+            operation.insert("tags".to_string(), json!(["notes"]));
+            operation.insert(
+                "description".to_string(),
+                json!(
+                    "Per-principal private notes space (`notes_<principal>`, owner-only ACL). \
+                     POST is an idempotent ensure; GET returns 404 before the first ensure. \
+                     Notes spaces do not consume self-service space quotas."
+                ),
+            );
+        }
+    }
+    if let Some(get) = paths
+        .get_mut("/api/v1/features")
+        .and_then(|path| path.get_mut("get"))
+        .and_then(|operation| operation.as_object_mut())
+    {
+        get.insert(
+            "description".to_string(),
+            json!(
+                "Resolved feature flags. `quotas` enables quota write/management \
+                 endpoints (space quota, token quota, quota overrides); `solo` \
+                 deployments default it to false while usage stays readable."
+            ),
+        );
+        get.insert(
+            "responses".to_string(),
+            json!({"200": {"description": "OK", "content": {"application/json": {"schema": {
+                "type": "object",
+                "properties": {
+                    "mode": {"type": "string"},
+                    "features": {"$ref": "#/components/schemas/Features"},
+                    "i18n": {"type": "object"}
+                }
+            }}}}}),
+        );
+    }
 
     let schemas = json!({
         "Answer": {"type": "object", "required": ["mode"], "properties": {
@@ -410,9 +486,11 @@ pub fn document() -> Value {
             "doc_id": {"type": "string"}, "chunk_id": {"type": "string"}, "path": {"type": ["string", "null"]},
             "line_start": {"type": ["integer", "null"]}, "line_end": {"type": ["integer", "null"]}, "quote": {"type": ["string", "null"]}}},
         "Degraded": {"type": "object", "required": ["code"], "properties": {"code": {"type": "string"}, "category": {"type": "string"}, "message": {"type": ["string", "null"]}}},
-        "Space": {"type": "object", "properties": {"space_id": {"type": "string"}, "name": {"type": "string"}, "status": {"type": "string"}, "storage_quota_bytes": {"type": "integer"}}},
+        "Space": {"type": "object", "properties": {"space_id": {"type": "string"}, "tenant_id": {"type": "string"}, "name": {"type": "string"}, "visibility": {"type": "string"}, "owner_type": {"type": "string"}, "owner_id": {"type": "string"}, "status": {"type": "string"}, "role": {"type": ["string", "null"]}, "storage_quota_bytes": {"type": "integer"}, "created_at": {"type": "string"}}},
         "User": {"type": "object", "properties": {"user_id": {"type": "string"}, "username": {"type": "string"}, "display_name": {"type": "string"}, "role": {"type": "string"}, "disabled": {"type": "boolean"}}},
-        "Quota": {"type": "object", "properties": {"quota_id": {"type": "string"}, "scope_type": {"type": "string"}, "scope_id": {"type": "string"}, "period": {"type": "string"}, "limit_tokens": {"type": "integer"}, "enforcement": {"type": "string"}}},
+        "Quota": {"type": "object", "properties": {"quota_id": {"type": "string"}, "scope_type": {"type": "string"}, "scope_id": {"type": "string"}, "period": {"type": "string"}, "limit_tokens": {"type": "integer"}, "limit_requests": {"type": "integer"}, "limit_cost_micros": {"type": "integer"}, "enforcement": {"type": "string"}, "action": {"type": ["string", "null"]}, "enabled": {"type": "boolean"}}},
+        "SpaceQuota": {"type": "object", "properties": {"scope_type": {"type": "string"}, "scope_id": {"type": "string"}, "storage_bytes": {"type": ["integer", "null"]}, "documents": {"type": ["integer", "null"]}, "chunks": {"type": ["integer", "null"]}, "members": {"type": ["integer", "null"]}, "spaces": {"type": ["integer", "null"]}, "enforcement": {"type": "string"}, "updated_by": {"type": "string"}, "updated_at": {"type": "string"}}},
+        "Features": {"type": "object", "required": ["signup", "billing", "connectors", "sso", "multi_tenant", "public_api", "mcp", "audit", "rate_limit", "public_share", "quotas"], "properties": {"signup": {"type": "boolean"}, "billing": {"type": "boolean"}, "connectors": {"type": "boolean"}, "sso": {"type": "boolean"}, "multi_tenant": {"type": "boolean"}, "public_api": {"type": "boolean"}, "mcp": {"type": "boolean"}, "audit": {"type": "boolean"}, "rate_limit": {"type": "boolean"}, "public_share": {"type": "boolean"}, "quotas": {"type": "boolean", "description": "Quota write/management endpoints are enabled. Usage remains read-only when false."}}},
         "Usage": {"type": "object", "properties": {"usage_event_id": {"type": "string"}, "source": {"type": "string"}, "alias": {"type": "string"}, "input_tokens": {"type": "integer"}, "output_tokens": {"type": "integer"}, "cost_micros": {"type": "integer"}, "at": {"type": "string"}}},
         "Conversation": {"type": "object", "properties": {"conversation_id": {"type": "string"}, "space_id": {"type": "string"}, "owner_id": {"type": "string"}, "title": {"type": "string"}, "external_session_id": {"type": ["string", "null"]}, "status": {"type": "string"}, "updated_at": {"type": "string"}}},
         "Summary": {"type": "object", "properties": {"doc_id": {"type": "string"}, "revision_id": {"type": "string"}, "lang": {"type": "string"}, "model": {"type": "string"}, "status": {"type": "string"}, "summary": {"type": "object"}, "generated_at": {"type": ["string", "null"]}}}
@@ -422,6 +500,7 @@ pub fn document() -> Value {
         "openapi": "3.1.0",
         "info": {"title": "lkb API", "version": env!("CARGO_PKG_VERSION"), "description": "Layered knowledge base REST API."},
         "servers": [{"url": "/"}],
+        "tags": [{"name": "quotas", "description": "Layered quota management; writes require features.quotas."}, {"name": "notes", "description": "Per-principal private notes spaces."}],
         "components": {
             "securitySchemes": {"bearerAuth": {"type": "http", "scheme": "bearer"}},
             "schemas": schemas

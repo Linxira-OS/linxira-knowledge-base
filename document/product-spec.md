@@ -48,6 +48,8 @@
 
 - **同一二进制**支持 SQLite 与 PostgreSQL；不得发布“SQLite 版/PostgreSQL 版”两个包。
 - `profile` 与 `storage.backend` 解耦：solo 允许 `sqlite|postgres`；team/enterprise 只 PG。
+- solo 默认允许用户创建自建空间/笔记本（受 `spaces.max_per_user` 与默认配额约束），组创建仍关闭；team/enterprise 默认允许空间与组自助，均可显式关闭。
+- 每个用户另有且仅有一个系统私有笔记空间：`notes_<principal>`，owner-only ACL，所有层级可用；不占自助空间数量配额，页面写入仍计配额与审计。
 - `lkb --version` 输出同一 semver；Cargo、web、release tag 三者一致。
 - 档位差异只在配置/适配器，不产生第二套代码或第二套 UI。
 
