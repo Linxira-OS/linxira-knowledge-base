@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { getHealth } from '../api/system'
 import { PageTree } from '../features/wiki/PageTree'
 import { useQueryState } from '../features/query/QueryProvider'
+import { useSession } from '../lib/session'
 import { Badge, cx } from './ui'
 import { useI18n } from '../lib/i18n'
 
@@ -23,28 +24,43 @@ function NavItem({ to, label, end }: { to: string; label: string; end?: boolean 
   )
 }
 
-export function Sidebar() {
+export function Sidebar({ width, onCollapse }: { width: number; onCollapse: () => void }) {
   const { t } = useI18n()
   const { currentSpace, readableSpaces } = useQueryState()
+  const { principal, features } = useSession()
   const health = useQuery({ queryKey: ['health'], queryFn: getHealth, staleTime: 60_000, retry: false })
+  const role = principal?.tenant_role
+  // Admin console needs admin scope; solo's local principal is always allowed.
+  const canAdmin = features?.mode === 'solo' || role === 'owner' || role === 'admin'
 
   return (
-    <aside className="hidden w-60 shrink-0 flex-col border-r border-line bg-panel lg:flex">
-      <div className="px-2 pb-1 pt-3">
-        <div className="px-2 pb-1 text-[10.5px] font-medium uppercase tracking-[0.14em] text-fg-3">
-          {t('nav.search')}
+    <aside style={{ width }} className="flex min-h-0 shrink-0 flex-col border-r border-line bg-panel">
+      <div className="px-2 pb-1 pt-2">
+        <div className="flex items-center justify-between px-2 pb-1">
+          <span className="text-[10.5px] font-medium uppercase tracking-[0.14em] text-fg-3">{t('nav.search')}</span>
+          <button
+            type="button"
+            onClick={onCollapse}
+            aria-label={t('layout.collapseLeft')}
+            title={t('layout.collapseLeft')}
+            className="rounded p-0.5 text-fg-3 transition-colors hover:bg-raise hover:text-fg"
+          >
+            <svg viewBox="0 0 16 16" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
+              <path d="M10 4L6 8l4 4" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
         </div>
         <nav className="space-y-0.5">
           <NavItem to="/search" label={t('nav.search')} end />
           <NavItem to="/conversations" label={t('nav.conversations')} />
           <NavItem to="/spaces" label={t('nav.spaceList')} />
-          <NavItem to="/admin" label={t('nav.admin')} />
+          {canAdmin && <NavItem to="/admin" label={t('nav.admin')} />}
         </nav>
       </div>
 
       <div className="mx-3 my-2 border-t border-line" />
 
-      <div className="thin-scroll flex-1 overflow-y-auto px-2 pb-4">
+      <div className="thin-scroll min-h-0 flex-1 overflow-y-auto px-2 pb-4">
         <PageTree />
       </div>
 

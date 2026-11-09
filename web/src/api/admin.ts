@@ -1,5 +1,7 @@
 import { api, queryString } from './client'
 import type {
+  AdminOverview,
+  AdminPlan,
   AdminRole,
   AdminUser,
   AuditEvent,
@@ -43,6 +45,20 @@ export function patchProvider(providerId: string, body: ProviderBody): Promise<{
 
 export function deleteProvider(providerId: string): Promise<{ removed: boolean }> {
   return api(`/api/v1/admin/providers/${encodeURIComponent(providerId)}`, { method: 'DELETE' })
+}
+
+export interface ProviderTestResult {
+  provider_id: string
+  ok: boolean
+  status_code?: number
+  latency_ms?: number
+  code?: string | null
+  message?: string | null
+}
+
+/** `POST /admin/providers/{id}/test` — metadata only, never keys or upstream bodies. */
+export function testAdminProvider(providerId: string): Promise<ProviderTestResult> {
+  return api(`/api/v1/admin/providers/${encodeURIComponent(providerId)}/test`, { method: 'POST' })
 }
 
 export function listProviderModels(): Promise<{ models: ProviderModel[] }> {
@@ -208,6 +224,18 @@ export function listAdminUsers(params: { offset?: number; limit?: number }): Pro
   return api(`/api/v1/admin/users${queryString(params)}`)
 }
 
+export interface AdminUserCreateInput {
+  username: string
+  password: string
+  display_name?: string
+  role?: string
+}
+
+/** `POST /admin/users` — 409 `conflict` when the username is taken. */
+export function createAdminUser(input: AdminUserCreateInput): Promise<{ user: AdminUser }> {
+  return api('/api/v1/admin/users', { method: 'POST', body: input })
+}
+
 export function patchAdminUser(userId: string, body: { role?: string; disabled?: boolean }): Promise<{
   user_id: string
   updated: boolean
@@ -215,8 +243,19 @@ export function patchAdminUser(userId: string, body: { role?: string; disabled?:
   return api(`/api/v1/admin/users/${encodeURIComponent(userId)}`, { method: 'PATCH', body })
 }
 
-export function disableAdminUser(userId: string): Promise<{ user_id: string; disabled: boolean }> {
-  return api(`/api/v1/admin/users/${encodeURIComponent(userId)}/disable`, { method: 'POST' })
+/** `DELETE /admin/users/{id}` — soft disable: sign-in blocked, records kept. */
+export function deleteAdminUser(userId: string): Promise<{ user_id: string; disabled: boolean }> {
+  return api(`/api/v1/admin/users/${encodeURIComponent(userId)}`, { method: 'DELETE' })
+}
+
+export function resetAdminUserPassword(userId: string, password: string): Promise<{
+  user_id: string
+  password_reset: boolean
+}> {
+  return api(`/api/v1/admin/users/${encodeURIComponent(userId)}/reset-password`, {
+    method: 'POST',
+    body: { password },
+  })
 }
 
 export function listAdminRoles(): Promise<{ roles: AdminRole[] }> {
@@ -242,4 +281,43 @@ export function listAudit(params: {
   limit?: number
 }): Promise<{ events: AuditEvent[] }> {
   return api(`/api/v1/admin/audit${queryString(params)}`)
+}
+
+export function getAuditEvent(eventId: string): Promise<{ event: AuditEvent }> {
+  return api(`/api/v1/admin/audit/${encodeURIComponent(eventId)}`)
+}
+
+/* -------------------------------------------------------------- billing plans */
+
+export interface AdminPlanInput {
+  plan_id?: string
+  name?: string
+  price_micros?: number
+  included_tokens?: number
+  currency?: string
+  status?: string
+  features_json?: string
+}
+
+export function listAdminPlans(): Promise<{ plans: AdminPlan[] }> {
+  return api('/api/v1/admin/billing/plans')
+}
+
+export function createAdminPlan(input: AdminPlanInput): Promise<{ plan: AdminPlan }> {
+  return api('/api/v1/admin/billing/plans', { method: 'POST', body: input })
+}
+
+export function patchAdminPlan(planId: string, input: AdminPlanInput): Promise<{ plan: AdminPlan }> {
+  return api(`/api/v1/admin/billing/plans/${encodeURIComponent(planId)}`, { method: 'PATCH', body: input })
+}
+
+/** DELETE refuses with 409 `plan_in_use` while active subscriptions exist. */
+export function deleteAdminPlan(planId: string): Promise<{ plan_id: string; removed: boolean }> {
+  return api(`/api/v1/admin/billing/plans/${encodeURIComponent(planId)}`, { method: 'DELETE' })
+}
+
+/* -------------------------------------------------------------------- overview */
+
+export function getAdminOverview(): Promise<AdminOverview> {
+  return api('/api/v1/admin/overview')
 }

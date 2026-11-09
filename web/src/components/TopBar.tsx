@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useQueryState } from '../features/query/QueryProvider'
 import { hitReaderPath } from '../api/wiki'
 import { Badge, Button, cx } from './ui'
+import { BrandMark } from './BrandMark'
 import { useI18n } from '../lib/i18n'
 import { useSession } from '../lib/session'
 import { useTheme } from '../lib/theme'
@@ -11,9 +12,7 @@ function Logo() {
   const { t } = useI18n()
   return (
     <Link to="/search" className="flex shrink-0 items-center gap-2.5">
-      <span className="grid h-7 w-7 place-items-center rounded-lg border border-accent-line bg-accent-weak text-[13px] font-semibold text-accent">
-        L
-      </span>
+      <BrandMark className="h-6 w-6 shrink-0 text-fg" />
       <span className="hidden leading-tight sm:block">
         <span className="block text-[13px] font-semibold tracking-[-0.01em] text-fg">{t('app.name')}</span>
         <span className="block text-[10px] text-fg-3">{t('app.tagline')}</span>

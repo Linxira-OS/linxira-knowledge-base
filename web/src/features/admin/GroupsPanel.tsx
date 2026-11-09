@@ -3,24 +3,45 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import {
   addGroupMember,
   createGroup,
+  deleteGroup,
   listGroupMembers,
+  patchGroup,
   patchGroupMember,
   removeGroupMember,
 } from '../../api/spaces'
 import { listAdminGroups } from '../../api/admin'
 import type { Group } from '../../api/types'
-import { Badge, Banner, Button, Card, EmptyState, ErrorState, Table, TableWrap, TBody, TD, TH, THead, TR, statusTone } from '../../components/ui'
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  ErrorState,
+  Table,
+  TableWrap,
+  TBody,
+  TD,
+  TH,
+  THead,
+  TR,
+  statusTone,
+} from '../../components/ui'
 import { useI18n } from '../../lib/i18n'
+import { useUnsavedWarning } from '../../lib/hooks'
 import { AdminQueryGate, SelectInput, TextInput, adminKeys, useAdminInvalidate } from './shared'
+import { ConfirmDialog, useAdminToast } from './kit'
 
 const GROUP_ROLES = ['group_member', 'group_admin'] as const
 const GROUP_ROLE_OPTIONS = GROUP_ROLES.map((role) => ({ value: role, label: role }))
 
 export function GroupsPanel() {
-  const { t, format } = useI18n()
+  const { t } = useI18n()
   const invalidate = useAdminInvalidate()
-  const [notice, setNotice] = useState<string | null>(null)
+  const toast = useAdminToast()
+  const [filter, setFilter] = useState('')
   const [selected, setSelected] = useState<string | null>(null)
+  const [editing, setEditing] = useState<string | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState<Group | null>(null)
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
 
@@ -28,22 +49,50 @@ export function GroupsPanel() {
   const create = useMutation({
     mutationFn: () => createGroup({ name: name.trim(), description: description.trim() || undefined }),
     onSuccess: () => {
-      setNotice(t('admin.groups.created'))
+      toast.success(`${t('admin.groups.created')} · ${t('admin.toast.audited')}`)
       setName('')
       setDescription('')
       invalidate(adminKeys.groups)
     },
   })
+  const remove = useMutation({
+    mutationFn: deleteGroup,
+    onSuccess: (_result, groupId) => {
+      toast.success(`${t('admin.groups.deleted')} · ${t('admin.toast.audited')}`)
+      if (selected === groupId) setSelected(null)
+      if (editing === groupId) setEditing(null)
+      setConfirmDelete(null)
+      invalidate(adminKeys.groups)
+    },
+  })
+
+  useUnsavedWarning(name.trim() !== '' || description.trim() !== '')
 
   const groups = query.data?.groups ?? []
+  const needle = filter.trim().toLowerCase()
+  const visible =
+    needle === ''
+      ? groups
+      : groups.filter(
+          (group) =>
+            group.name.toLowerCase().includes(needle) || group.group_id.toLowerCase().includes(needle),
+        )
   const selectedGroup = groups.find((group) => group.group_id === selected) ?? null
 
   return (
     <div className="space-y-4">
-      {notice && <Banner tone="accent">{notice}</Banner>}
       {create.isError && <ErrorState error={create.error} compact />}
+      {remove.isError && <ErrorState error={remove.error} compact />}
+      <div className="sm:max-w-[320px]">
+        <TextInput
+          label={t('admin.groups.filter')}
+          value={filter}
+          onChange={setFilter}
+          hint={t('admin.groups.filterHint')}
+        />
+      </div>
       <AdminQueryGate pending={query.isPending} error={query.error} onRetry={() => void query.refetch()}>
-        {groups.length === 0 ? (
+        {visible.length === 0 ? (
           <EmptyState title={t('admin.groups.empty')} />
         ) : (
           <TableWrap>
@@ -59,24 +108,22 @@ export function GroupsPanel() {
                 </TR>
               </THead>
               <TBody>
-                {groups.map((group) => (
-                  <TR key={group.group_id} className={selected === group.group_id ? 'bg-panel' : undefined}>
-                    <TD className="text-fg">{group.name}</TD>
-                    <TD>{group.description || t('label.none')}</TD>
-                    <TD>
-                      <Badge tone={statusTone(group.status)}>{group.status}</Badge>
-                    </TD>
-                    <TD className="font-mono text-[11.5px]">{group.created_by}</TD>
-                    <TD className="whitespace-nowrap text-[11.5px] text-fg-3">{format.dateTime(group.created_at)}</TD>
-                    <TD>
-                      <Button
-                        size="sm"
-                        onClick={() => setSelected(selected === group.group_id ? null : group.group_id)}
-                      >
-                        {t('admin.groups.viewMembers')}
-                      </Button>
-                    </TD>
-                  </TR>
+                {visible.map((group) => (
+                  <GroupRows
+                    key={group.group_id}
+                    group={group}
+                    editing={editing === group.group_id}
+                    selected={selected === group.group_id}
+                    removePending={remove.isPending && remove.variables === group.group_id}
+                    onToggleMembers={() => setSelected(selected === group.group_id ? null : group.group_id)}
+                    onToggleEdit={() => setEditing(editing === group.group_id ? null : group.group_id)}
+                    onDelete={() => setConfirmDelete(group)}
+                    onEdited={(updated) => {
+                      if (updated) toast.success(`${t('admin.groups.updated')} · ${t('admin.toast.audited')}`)
+                      setEditing(null)
+                      invalidate(adminKeys.groups)
+                    }}
+                  />
                 ))}
               </TBody>
             </Table>
@@ -101,12 +148,109 @@ export function GroupsPanel() {
         </form>
       </Card>
       {selectedGroup && (
-        <GroupMembersCard
-          key={selectedGroup.group_id}
-          group={selectedGroup}
-          onClose={() => setSelected(null)}
-        />
+        <GroupMembersCard key={selectedGroup.group_id} group={selectedGroup} onClose={() => setSelected(null)} />
       )}
+      <ConfirmDialog
+        open={confirmDelete !== null}
+        title={t('action.delete')}
+        description={t('admin.groups.deleteConfirm', { group: confirmDelete?.name ?? '' })}
+        confirmLabel={t('action.delete')}
+        pending={remove.isPending}
+        onConfirm={() => {
+          if (confirmDelete !== null) remove.mutate(confirmDelete.group_id)
+        }}
+        onCancel={() => setConfirmDelete(null)}
+      />
+    </div>
+  )
+}
+
+function GroupRows({
+  group,
+  editing,
+  selected,
+  removePending,
+  onToggleMembers,
+  onToggleEdit,
+  onDelete,
+  onEdited,
+}: {
+  group: Group
+  editing: boolean
+  selected: boolean
+  removePending: boolean
+  onToggleMembers: () => void
+  onToggleEdit: () => void
+  onDelete: () => void
+  onEdited: (updated: boolean) => void
+}) {
+  const { t, format } = useI18n()
+  return (
+    <>
+      <TR className={selected ? 'bg-panel' : undefined}>
+        <TD className="text-fg">
+          {group.name}
+          <div className="font-mono text-[10px] text-fg-3">{group.group_id}</div>
+        </TD>
+        <TD>{group.description || t('label.none')}</TD>
+        <TD>
+          <Badge tone={statusTone(group.status)}>{group.status}</Badge>
+        </TD>
+        <TD className="font-mono text-[11.5px]">{group.created_by}</TD>
+        <TD className="whitespace-nowrap text-[11.5px] text-fg-3">{format.dateTime(group.created_at)}</TD>
+        <TD>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Button size="sm" onClick={onToggleMembers}>
+              {t('admin.groups.viewMembers')}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={onToggleEdit}>
+              {t('action.edit')}
+            </Button>
+            <Button size="sm" variant="danger" disabled={removePending} onClick={onDelete}>
+              {t('action.delete')}
+            </Button>
+          </div>
+        </TD>
+      </TR>
+      {editing && (
+        <TR>
+          <TD colSpan={6} className="bg-panel">
+            <GroupEditRow group={group} onDone={onEdited} />
+          </TD>
+        </TR>
+      )}
+    </>
+  )
+}
+
+function GroupEditRow({ group, onDone }: { group: Group; onDone: (updated: boolean) => void }) {
+  const { t } = useI18n()
+  const [name, setName] = useState(group.name)
+  const [description, setDescription] = useState(group.description)
+  const dirty = name !== group.name || description !== group.description
+
+  const save = useMutation({
+    mutationFn: () => patchGroup(group.group_id, { name: name.trim(), description: description.trim() }),
+    onSuccess: () => onDone(true),
+    onError: () => onDone(false),
+  })
+  useUnsavedWarning(dirty)
+
+  return (
+    <div className="space-y-2">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <TextInput label={t('label.name')} value={name} onChange={setName} />
+        <TextInput label={t('label.description')} value={description} onChange={setDescription} />
+      </div>
+      <div className="flex items-center gap-2">
+        <Button size="sm" variant="primary" disabled={!dirty || save.isPending || name.trim() === ''} onClick={() => save.mutate()}>
+          {t('action.save')}
+        </Button>
+        <Button size="sm" variant="ghost" disabled={save.isPending} onClick={() => onDone(false)}>
+          {t('action.cancel')}
+        </Button>
+        {save.error != null && <ErrorState error={save.error} compact />}
+      </div>
     </div>
   )
 }

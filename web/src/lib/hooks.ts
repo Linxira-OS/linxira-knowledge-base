@@ -26,3 +26,29 @@ export function useStickToBottom<T extends HTMLElement>(dep: unknown) {
   }, [])
   return { ref, onScroll }
 }
+
+/** Subscribes to a CSS media query (layout breakpoints). */
+export function useMediaQuery(query: string): boolean {
+  const [matches, setMatches] = useState(() => window.matchMedia(query).matches)
+  useEffect(() => {
+    const list = window.matchMedia(query)
+    const update = () => setMatches(list.matches)
+    update()
+    list.addEventListener('change', update)
+    return () => list.removeEventListener('change', update)
+  }, [query])
+  return matches
+}
+
+/** Prompts before a page unload leaves unsaved form data behind. */
+export function useUnsavedWarning(dirty: boolean): void {
+  useEffect(() => {
+    if (!dirty) return
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [dirty])
+}

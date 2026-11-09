@@ -11,3 +11,13 @@ export function asJsonObject(value: unknown): Record<string, unknown> | null {
     ? (value as Record<string, unknown>)
     : null
 }
+
+/** True when `text` parses as JSON; guards raw `*_json` form fields. */
+export function isJsonText(text: string): boolean {
+  try {
+    JSON.parse(text)
+    return true
+  } catch {
+    return false
+  }
+}

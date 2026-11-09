@@ -4,6 +4,7 @@ import { archiveSpace, deleteSpace, patchSpace, restoreSpace, transferSpace } fr
 import type { Space } from '../../api/types'
 import { Banner, Button, Card, ErrorState, Field, KeyValue } from '../../components/ui'
 import { useI18n } from '../../lib/i18n'
+import { ConfirmDialog } from '../admin/kit'
 import { invalidateSpaceQueries } from './keys'
 import { spaceStatusLabelKey, spaceVisibilityLabelKey } from './badges'
 
@@ -68,10 +69,12 @@ export function SpaceGeneralTab({ space, status, canAdmin, canOwner, onDeleted }
   const [transferType, setTransferType] = useState<'user' | 'group'>('user')
   const [transferId, setTransferId] = useState('')
   const [transferDone, setTransferDone] = useState(false)
+  const [confirmTransfer, setConfirmTransfer] = useState(false)
   const transferMutation = useMutation({
     mutationFn: () => transferSpace(space.space_id, { owner_type: transferType, owner_id: transferId.trim() }),
     onSuccess: () => {
       setTransferDone(true)
+      setConfirmTransfer(false)
       setTransferId('')
       invalidateSpaceQueries(queryClient, space.space_id)
     },
@@ -239,7 +242,7 @@ export function SpaceGeneralTab({ space, status, canAdmin, canOwner, onDeleted }
               event.preventDefault()
               if (!active || transferId.trim() === '' || transferMutation.isPending) return
               setTransferDone(false)
-              transferMutation.mutate()
+              setConfirmTransfer(true)
             }}
           >
             <Field label={t('spaces.settings.transferOwnerType')}>
@@ -286,6 +289,15 @@ export function SpaceGeneralTab({ space, status, canAdmin, canOwner, onDeleted }
           )}
         </Card>
       )}
+      <ConfirmDialog
+        open={confirmTransfer}
+        title={t('spaces.settings.transfer')}
+        description={t('spaces.settings.transferConfirm', { target: `${transferType}/${transferId}` })}
+        confirmLabel={t('action.transfer')}
+        pending={transferMutation.isPending}
+        onConfirm={() => transferMutation.mutate()}
+        onCancel={() => setConfirmTransfer(false)}
+      />
     </div>
   )
 }

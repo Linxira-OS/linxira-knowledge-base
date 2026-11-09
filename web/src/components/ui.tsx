@@ -366,7 +366,7 @@ export function Tabs<T extends string>({
   onChange: (id: T) => void
 }) {
   return (
-    <div className="thin-scroll flex items-center gap-1 overflow-x-auto border-b border-line">
+    <div className="thin-scroll flex items-center gap-1 overflow-x-auto overflow-y-hidden border-b border-line pb-px">
       {items.map((item) => (
         <button
           key={item.id}

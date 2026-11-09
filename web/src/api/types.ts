@@ -430,6 +430,29 @@ export interface AdminUser {
   role: 'owner' | 'admin' | 'user'
   disabled: boolean
   created_at: string
+  email: string | null
+  source: string
+  last_login_at: string | null
+  last_sso_at: string | null
+}
+
+export interface AdminPlan {
+  plan_id: string
+  name: string
+  price_micros: number
+  included_tokens: number
+  currency: string
+  period: string
+  status: string
+  features: unknown
+  created_at: string
+  updated_at: string
+}
+
+export interface AdminOverview {
+  counts: { users: number; spaces: number; documents: number; chunks: number }
+  last_24h: { requests: number; errors: number; cost_micros: number; cache_hit_rate: number }
+  recent_audit: AuditEvent[]
 }
 
 export interface AdminRole {

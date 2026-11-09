@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { ensureCsrfToken } from '../api/client'
 import { Banner, Button, Card, Field } from '../components/ui'
+import { BrandMark } from '../components/BrandMark'
 import { useI18n } from '../lib/i18n'
 import { ISSUES_URL, REPOSITORY_URL, SECURITY_URL } from '../lib/repo'
 import { useLoginErrorMessage, useSession } from '../lib/session'
@@ -61,6 +62,9 @@ export function LoginPage() {
   return (
     <div className="flex min-h-full items-center justify-center bg-canvas px-6 py-10">
       <div className="w-full max-w-[360px] space-y-3">
+        <div className="flex justify-center pb-1">
+          <BrandMark className="h-10 w-10 text-fg" />
+        </div>
         {expired && <Banner tone="warn" title={t('account.sessionExpired')} />}
         {features?.mode === 'solo' && (
           <Banner

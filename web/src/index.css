@@ -361,3 +361,36 @@
   border-radius: 3px;
   scroll-margin-top: 24px;
 }
+
+/* Resize drag: block text selection and iframe hit-testing while dragging. */
+html.lkb-resizing,
+html.lkb-resizing * {
+  user-select: none !important;
+}
+
+html.lkb-resizing {
+  cursor: col-resize;
+}
+
+html.lkb-resizing iframe {
+  pointer-events: none !important;
+}
+
+/* Skeleton placeholder used by the admin query gate. */
+@keyframes lkb-shimmer {
+  0% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.5;
+  }
+}
+
+.lkb-skeleton {
+  border-radius: 8px;
+  background: var(--raise);
+  animation: lkb-shimmer 1.3s ease-in-out infinite;
+}

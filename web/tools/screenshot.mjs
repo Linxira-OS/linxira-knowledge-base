@@ -1,7 +1,11 @@
 // Captures the production build in Chrome (headless, no visible window, no
 // focus stealing) and writes 1440x900 PNGs plus per-shot assertions to stdout.
 //
-// usage: node tools/screenshot.mjs [--base http://127.0.0.1:4173] [--out screenshots]
+// usage: node tools/screenshot.mjs [--base http://127.0.0.1:4173] [--out screenshots] [--group main]
+//
+// Shots may override the viewport (`width`/`height`), preload state
+// (`before`, e.g. a localStorage layout) and run a post-ready interaction
+// (`after`, e.g. opening a drawer) before the capture.
 //
 // Chrome is driven over the DevTools protocol with a throwaway profile; the
 // script never talks to Edge and never opens a window.
@@ -101,6 +105,50 @@ const shotGroups = {
     label: 'admin audit / light',
   },
   {
+    file: 'admin-overview-dark.png',
+    url: `${base}/admin`,
+    theme: 'dark',
+    ready: 'document.body.innerText.includes("最近 24 小时") && !document.querySelector(".lkb-skeleton")',
+    label: 'admin overview / dark',
+  },
+  {
+    file: 'admin-overview-light.png',
+    url: `${base}/admin`,
+    theme: 'light',
+    ready: 'document.body.innerText.includes("最近 24 小时") && !document.querySelector(".lkb-skeleton")',
+    label: 'admin overview / light',
+  },
+  {
+    file: 'admin-users-light.png',
+    url: `${base}/admin/users`,
+    theme: 'light',
+    ready: 'document.body.innerText.includes("新建用户") && !document.querySelector(".lkb-skeleton")',
+    label: 'admin users / light',
+  },
+  {
+    file: 'admin-groups-light.png',
+    url: `${base}/admin/groups`,
+    theme: 'light',
+    ready: '!document.querySelector(".lkb-skeleton") && document.body.innerText.length > 80',
+    label: 'admin groups / light',
+  },
+  {
+    file: 'admin-quotas-light.png',
+    url: `${base}/admin/quotas`,
+    theme: 'light',
+    ready: '!document.querySelector(".lkb-skeleton") && document.body.innerText.length > 80',
+    label: 'admin quotas / light',
+  },
+  {
+    file: 'admin-audit-drawer-dark.png',
+    url: `${base}/admin/audit`,
+    theme: 'dark',
+    ready: 'document.querySelectorAll("table tbody tr button").length > 0',
+    after:
+      "const button = Array.from(document.querySelectorAll('table tbody tr button')).find((el) => (el.textContent || '').trim() === '详情'); if (button) button.click();",
+    label: 'admin audit drawer / dark',
+  },
+  {
     file: 'admin-billing-dark.png',
     url: `${base}/admin/billing`,
     theme: 'dark',
@@ -113,20 +161,6 @@ const shotGroups = {
     theme: 'light',
     ready: 'document.body.innerText.includes("计费功能未启用") || document.body.innerText.includes("订阅与权益")',
     label: 'admin billing / light',
-  },
-  {
-    file: 'admin-connectors-dark.png',
-    url: `${base}/admin/connectors`,
-    theme: 'dark',
-    ready: 'document.body.innerText.includes("连接器功能未启用") || document.body.innerText.includes("新建连接器")',
-    label: 'admin connectors / dark',
-  },
-  {
-    file: 'admin-connectors-light.png',
-    url: `${base}/admin/connectors`,
-    theme: 'light',
-    ready: 'document.body.innerText.includes("连接器功能未启用") || document.body.innerText.includes("新建连接器")',
-    label: 'admin connectors / light',
   },
   {
     file: 'editor-dark.png',
@@ -157,6 +191,87 @@ const shotGroups = {
       theme: 'dark',
       ready: 'document.querySelector("input[type=password]") !== null',
       label: 'login / dark',
+    },
+  ],
+  // Connector panel needs `features.connectors = true`, which the solo
+  // profile disables by default: run this group against an instance started
+  // with `[features] connectors = true` (see tools/check-layout.mjs notes).
+  connectors: [
+    {
+      file: 'admin-connectors-dark.png',
+      url: `${base}/admin/connectors`,
+      theme: 'dark',
+      ready: 'document.body.innerText.includes("新建连接器") && !document.querySelector(".lkb-skeleton")',
+      label: 'admin connectors / dark',
+    },
+    {
+      file: 'admin-connectors-light.png',
+      url: `${base}/admin/connectors`,
+      theme: 'light',
+      ready: 'document.body.innerText.includes("新建连接器") && !document.querySelector(".lkb-skeleton")',
+      label: 'admin connectors / light',
+    },
+    {
+      file: 'admin-connectors-edit-dark.png',
+      url: `${base}/admin/connectors`,
+      theme: 'dark',
+      ready: 'document.querySelectorAll("table tbody tr button").length > 0',
+      after:
+        "const row = document.querySelector('table tbody tr'); const button = row ? Array.from(row.querySelectorAll('button')).find((el) => (el.textContent || '').trim() === '编辑') : null; if (button) button.click();",
+      label: 'admin connector edit dialog / dark',
+    },
+  ],
+  // Layout evidence: default viewports used during the scrollbar audit, a
+  // dragged three-column state, a collapsed right rail and the <1024px
+  // breakpoint where the sidebar hides.
+  layout: [
+    {
+      file: 'layout-default-1568.png',
+      url: `${base}/admin/users`,
+      theme: 'dark',
+      width: 1568,
+      height: 1040,
+      before: "localStorage.removeItem('lkb-layout')",
+      ready: 'document.body.innerText.includes("新建用户") && !document.querySelector(".lkb-skeleton")',
+      label: 'layout default / 1568x1040 / admin users',
+    },
+    {
+      file: 'layout-default-1280.png',
+      url: `${base}/admin/models`,
+      theme: 'light',
+      width: 1280,
+      height: 800,
+      before: "localStorage.removeItem('lkb-layout')",
+      ready: 'document.querySelectorAll("table").length > 0',
+      label: 'layout default / 1280x800 / admin models',
+    },
+    {
+      file: 'layout-dragged-1440.png',
+      url: `${base}/search?q=${encodeURIComponent('检索模式')}`,
+      theme: 'dark',
+      before:
+        "localStorage.setItem('lkb-layout', JSON.stringify({ left: 400, right: 520, leftCollapsed: false, rightCollapsed: false }))",
+      ready: 'document.querySelectorAll("[role=separator]").length === 2',
+      label: 'layout dragged (400/520) / dark',
+    },
+    {
+      file: 'layout-right-collapsed.png',
+      url: `${base}/admin/models`,
+      theme: 'light',
+      before:
+        "localStorage.setItem('lkb-layout', JSON.stringify({ left: 240, right: 336, leftCollapsed: false, rightCollapsed: true }))",
+      ready: 'document.querySelectorAll("[role=separator]").length === 1',
+      label: 'layout right rail collapsed / light',
+    },
+    {
+      file: 'layout-breakpoint-1000.png',
+      url: `${base}/search?q=${encodeURIComponent('检索模式')}`,
+      theme: 'dark',
+      width: 1000,
+      height: 800,
+      before: "localStorage.removeItem('lkb-layout')",
+      ready: 'document.querySelector("aside") === null && document.querySelector("main") !== null',
+      label: 'layout < 1024px hides sidebar',
     },
   ],
 }
@@ -266,6 +381,14 @@ try {
   await sleep(1200)
 
   for (const shot of shots) {
+    const shotWidth = shot.width ?? width
+    const shotHeight = shot.height ?? height
+    await send(socket, 'Emulation.setDeviceMetricsOverride', {
+      width: shotWidth,
+      height: shotHeight,
+      deviceScaleFactor: 1,
+      mobile: false,
+    })
     await send(socket, 'Emulation.setEmulatedMedia', {
       features: [{ name: 'prefers-color-scheme', value: shot.theme }],
     })
@@ -273,6 +396,9 @@ try {
       socket,
       `(() => { try { localStorage.setItem('lkb-theme', ${JSON.stringify(shot.theme)}); localStorage.setItem('lkb-locale', 'zh-CN') } catch (error) { return false } return true })()`,
     )
+    if (shot.before) {
+      await evaluate(socket, `(() => { ${shot.before} ; return true })()`)
+    }
     await send(socket, 'Page.navigate', { url: shot.url })
     const ready = await waitUntil(socket, shot.ready)
     if (shot.clickAsk) {
@@ -287,6 +413,10 @@ try {
         })()`,
       )
       await sleep(3500)
+    }
+    if (shot.after) {
+      await evaluate(socket, `(() => { ${shot.after} ; return true })()`)
+      await sleep(500)
     }
     await sleep(650)
     const metrics = await evaluate(
@@ -306,7 +436,7 @@ try {
     )
     const shotData = await send(socket, 'Page.captureScreenshot', {
       format: 'png',
-      clip: { x: 0, y: 0, width, height, scale: 1 },
+      clip: { x: 0, y: 0, width: shotWidth, height: shotHeight, scale: 1 },
       captureBeyondViewport: false,
     })
     const file = path.join(outDir, shot.file)

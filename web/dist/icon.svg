@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-labelledby="lkb-icon-title">
+  <title id="lkb-icon-title">lkb app icon</title>
+  <rect width="256" height="256" rx="56" fill="#0d0d0f"/>
+  <!-- mark 与主标完全同几何（直接复用 32 网格坐标，7 倍缩放，活动区 168/256） -->
+  <g transform="translate(44 44) scale(7)">
+    <g fill="#f5f5f7">
+      <rect x="4" y="4" width="8" height="7.25" rx="2"/>
+      <path d="M6 12.75H10A2 2 0 0 1 12 14.75V18.8A1.2 1.2 0 0 0 13.2 20H26A2 2 0 0 1 28 22V26A2 2 0 0 1 26 28H6A2 2 0 0 1 4 26V14.75A2 2 0 0 1 6 12.75Z"/>
+    </g>
+    <circle cx="20" cy="12" r="3.5" fill="#32d74b"/>
+  </g>
+</svg>

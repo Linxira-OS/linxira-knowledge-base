@@ -1,6 +1,13 @@
 import { useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import {
+  createAdminPlan,
+  deleteAdminPlan,
+  listAdminPlans,
+  patchAdminPlan,
+  type AdminPlanInput,
+} from '../../api/admin'
+import {
   SUBSCRIPTION_TRANSITIONS,
   createBillingCheckout,
   getBillingPlans,
@@ -16,6 +23,7 @@ import {
   type BillingWallet,
   type SubscriptionStatus,
 } from '../../api/billing'
+import type { AdminPlan } from '../../api/types'
 import {
   Badge,
   Banner,
@@ -34,10 +42,17 @@ import {
   statusTone,
   type BadgeTone,
 } from '../../components/ui'
-import { asJsonObject } from '../../lib/json'
+import { asJsonObject, isJsonText } from '../../lib/json'
 import { useI18n, type MessageKey } from '../../lib/i18n'
+import { useUnsavedWarning } from '../../lib/hooks'
 import { useSession } from '../../lib/session'
-import { AdminQueryGate, SelectInput, TextInput, adminKeys, useAdminInvalidate } from './shared'
+import { AdminQueryGate, JsonInput, SelectInput, TextInput, adminKeys, useAdminInvalidate } from './shared'
+import { ConfirmDialog, FormDialog, useAdminToast } from './kit'
+
+/** Plan statuses the admin console offers; the backend stores a free string. */
+const PLAN_STATUSES = ['active', 'archived'] as const
+/** Key for the admin plan list (distinct from the public `/billing/plans` one). */
+const ADMIN_PLANS_KEY = [...adminKeys.billing, 'admin-plans'] as const
 
 /** Ledger/invoice page size; the backend ledger endpoint pages by `limit` only. */
 const LEDGER_PAGE = 100
@@ -158,56 +173,254 @@ function BillingConsole({ isAdmin }: { isAdmin: boolean }) {
 
 function PlansCard() {
   const { t, format } = useI18n()
-  const query = useQuery({ queryKey: [...adminKeys.billing, 'plans'], queryFn: getBillingPlans })
+  const invalidate = useAdminInvalidate()
+  const toast = useAdminToast()
+  const [editing, setEditing] = useState<AdminPlan | 'new' | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState<AdminPlan | null>(null)
+
+  const query = useQuery({ queryKey: ADMIN_PLANS_KEY, queryFn: listAdminPlans })
+  const remove = useMutation({
+    mutationFn: deleteAdminPlan,
+    onSuccess: (_result, planId) => {
+      toast.success(`${t('admin.billing.planDeleted')} · ${t('admin.toast.audited')}`)
+      setConfirmDelete((current) => (current?.plan_id === planId ? null : current))
+      invalidate(ADMIN_PLANS_KEY)
+    },
+  })
   const plans = query.data?.plans ?? []
 
   return (
-    <Card title={t('admin.billing.section.plans')}>
-      <AdminQueryGate
-        pending={query.isPending}
-        error={query.error}
-        onRetry={() => void query.refetch()}
-        featureDisabledKey="admin.billing.disabled"
-      >
-        {plans.length === 0 ? (
-          <EmptyState title={t('admin.billing.emptyPlans')} />
-        ) : (
-          <TableWrap>
-            <Table>
-              <THead>
-                <TR>
-                  <TH>{t('admin.billing.field.plan')}</TH>
-                  <TH>{t('admin.billing.field.price')}</TH>
-                  <TH>{t('admin.billing.field.includedTokens')}</TH>
-                  <TH>{t('admin.billing.field.planPeriod')}</TH>
-                  <TH>{t('admin.billing.field.status')}</TH>
-                </TR>
-              </THead>
-              <TBody>
-                {plans.map((plan) => (
-                  <TR key={plan.plan_id}>
-                    <TD>
-                      <span className="font-medium text-fg">{plan.name}</span>
-                      <span className="ml-1.5 font-mono text-[10.5px] text-fg-3">{plan.plan_id}</span>
-                    </TD>
-                    <TD>
-                      {plan.price_micros === 0
-                        ? t('admin.billing.planFree')
-                        : format.currency(plan.price_micros, plan.currency)}
-                    </TD>
-                    <TD>{format.number(plan.included_tokens)}</TD>
-                    <TD>{plan.period}</TD>
-                    <TD>
-                      <Badge tone={statusTone(plan.status)}>{plan.status}</Badge>
-                    </TD>
+    <Card
+      title={t('admin.billing.section.plans')}
+      actions={
+        <Button size="sm" variant="primary" onClick={() => setEditing('new')}>
+          {t('admin.billing.planNew')}
+        </Button>
+      }
+    >
+      <div className="space-y-3">
+        {remove.error != null && <ErrorState error={remove.error} compact />}
+        <AdminQueryGate
+          pending={query.isPending}
+          error={query.error}
+          onRetry={() => void query.refetch()}
+          featureDisabledKey="admin.billing.disabled"
+        >
+          {plans.length === 0 ? (
+            <EmptyState title={t('admin.billing.emptyPlans')} />
+          ) : (
+            <TableWrap>
+              <Table>
+                <THead>
+                  <TR>
+                    <TH>{t('admin.billing.field.plan')}</TH>
+                    <TH>{t('admin.billing.field.price')}</TH>
+                    <TH>{t('admin.billing.field.includedTokens')}</TH>
+                    <TH>{t('admin.billing.field.planPeriod')}</TH>
+                    <TH>{t('admin.billing.field.status')}</TH>
+                    <TH>{t('label.actions')}</TH>
                   </TR>
-                ))}
-              </TBody>
-            </Table>
-          </TableWrap>
-        )}
-      </AdminQueryGate>
+                </THead>
+                <TBody>
+                  {plans.map((plan) => (
+                    <TR key={plan.plan_id}>
+                      <TD>
+                        <span className="font-medium text-fg">{plan.name}</span>
+                        <span className="ml-1.5 font-mono text-[10.5px] text-fg-3">{plan.plan_id}</span>
+                      </TD>
+                      <TD>
+                        {plan.price_micros === 0
+                          ? t('admin.billing.planFree')
+                          : format.currency(plan.price_micros, plan.currency)}
+                      </TD>
+                      <TD>{format.number(plan.included_tokens)}</TD>
+                      <TD>{plan.period}</TD>
+                      <TD>
+                        <Badge tone={statusTone(plan.status)}>{plan.status}</Badge>
+                      </TD>
+                      <TD>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <Button size="sm" variant="ghost" onClick={() => setEditing(plan)}>
+                            {t('action.edit')}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="danger"
+                            disabled={remove.isPending && remove.variables === plan.plan_id}
+                            onClick={() => setConfirmDelete(plan)}
+                          >
+                            {t('action.delete')}
+                          </Button>
+                        </div>
+                      </TD>
+                    </TR>
+                  ))}
+                </TBody>
+              </Table>
+            </TableWrap>
+          )}
+        </AdminQueryGate>
+      </div>
+      {editing !== null && (
+        <PlanDialog
+          key={editing === 'new' ? 'new' : editing.plan_id}
+          plan={editing === 'new' ? null : editing}
+          onClose={() => setEditing(null)}
+        />
+      )}
+      <ConfirmDialog
+        open={confirmDelete !== null}
+        title={t('admin.billing.planDelete')}
+        description={t('admin.billing.planDeleteConfirm', { plan: confirmDelete?.plan_id ?? '' })}
+        confirmLabel={t('action.delete')}
+        pending={remove.isPending}
+        onConfirm={() => {
+          if (confirmDelete !== null) remove.mutate(confirmDelete.plan_id)
+        }}
+        onCancel={() => setConfirmDelete(null)}
+      />
     </Card>
+  )
+}
+
+/** Price in major currency units (e.g. `4.00`); the API stores micros. */
+function parsePriceMicros(text: string): number | null {
+  const trimmed = text.trim()
+  if (trimmed === '') return 0
+  if (!/^\d+(\.\d{1,6})?$/.test(trimmed)) return null
+  const value = Number(trimmed)
+  return Number.isFinite(value) ? Math.round(value * 1_000_000) : null
+}
+
+function parseTokenCount(text: string): number | null {
+  const trimmed = text.trim()
+  if (trimmed === '') return 0
+  if (!/^\d+$/.test(trimmed)) return null
+  return Number(trimmed)
+}
+
+/**
+ * Create/edit dialog for `POST/PATCH /admin/billing/plans`. Plan id is
+ * immutable after creation; a delete attempt with active subscriptions fails
+ * with 409 `plan_in_use` and is surfaced through `error.plan_in_use`.
+ */
+function PlanDialog({ plan, onClose }: { plan: AdminPlan | null; onClose: () => void }) {
+  const { t } = useI18n()
+  const invalidate = useAdminInvalidate()
+  const toast = useAdminToast()
+  const [planId, setPlanId] = useState(plan?.plan_id ?? '')
+  const [name, setName] = useState(plan?.name ?? '')
+  const [price, setPrice] = useState(plan && plan.price_micros !== 0 ? String(plan.price_micros / 1_000_000) : '')
+  const [tokens, setTokens] = useState(plan && plan.included_tokens !== 0 ? String(plan.included_tokens) : '')
+  const [currency, setCurrency] = useState(plan?.currency ?? '')
+  const [status, setStatus] = useState(plan?.status ?? 'active')
+  const [features, setFeatures] = useState(
+    plan && typeof plan.features === 'object' && plan.features !== null ? JSON.stringify(plan.features) : '',
+  )
+
+  const priceMicros = parsePriceMicros(price)
+  const tokenCount = parseTokenCount(tokens)
+  const featuresValid = features.trim() === '' || isJsonText(features)
+  const canSubmit =
+    name.trim() !== '' &&
+    (plan !== null || planId.trim() !== '') &&
+    priceMicros !== null &&
+    tokenCount !== null &&
+    featuresValid
+  useUnsavedWarning(
+    plan === null
+      ? planId !== '' || name !== '' || price !== '' || tokens !== ''
+      : name !== plan.name ||
+          priceMicros !== plan.price_micros ||
+          tokenCount !== plan.included_tokens ||
+          currency !== plan.currency ||
+          status !== plan.status ||
+          features !== (typeof plan.features === 'object' && plan.features !== null ? JSON.stringify(plan.features) : ''),
+  )
+
+  const save = useMutation({
+    mutationFn: () => {
+      const input: AdminPlanInput = {
+        name: name.trim(),
+        price_micros: priceMicros ?? 0,
+        included_tokens: tokenCount ?? 0,
+        ...(currency.trim() !== '' ? { currency: currency.trim() } : {}),
+        status,
+        ...(features.trim() !== '' ? { features_json: features.trim() } : {}),
+      }
+      return plan === null ? createAdminPlan({ plan_id: planId.trim(), ...input }) : patchAdminPlan(plan.plan_id, input)
+    },
+    onSuccess: () => {
+      toast.success(
+        `${plan === null ? t('admin.billing.planCreated') : t('admin.billing.planUpdated')} · ${t('admin.toast.audited')}`,
+      )
+      invalidate(ADMIN_PLANS_KEY)
+      onClose()
+    },
+  })
+
+  return (
+    <FormDialog
+      open
+      title={plan === null ? t('admin.billing.planNew') : t('admin.billing.planEdit')}
+      pending={save.isPending}
+      submitLabel={plan === null ? t('action.create') : t('action.save')}
+      submitDisabled={!canSubmit}
+      onSubmit={() => save.mutate()}
+      onClose={onClose}
+    >
+      {plan === null ? (
+        <TextInput
+          label={t('admin.billing.field.planId')}
+          value={planId}
+          onChange={setPlanId}
+          hint={t('admin.billing.planIdHint')}
+        />
+      ) : (
+        <KeyValue
+          items={[
+            [t('admin.billing.field.planId'), plan.plan_id],
+            [t('admin.billing.field.planPeriod'), plan.period],
+          ]}
+        />
+      )}
+      <TextInput label={t('admin.billing.field.planName')} value={name} onChange={setName} />
+      <TextInput
+        label={t('admin.billing.field.price')}
+        value={price}
+        onChange={setPrice}
+        hint={t('admin.billing.priceHint')}
+        error={priceMicros === null ? t('error.bad_request') : undefined}
+      />
+      <TextInput
+        label={t('admin.billing.field.includedTokens')}
+        value={tokens}
+        onChange={setTokens}
+        type="number"
+        hint={t('admin.billing.tokensHint')}
+        error={tokenCount === null ? t('error.bad_request') : undefined}
+      />
+      <TextInput
+        label={t('admin.billing.field.currency')}
+        value={currency}
+        onChange={setCurrency}
+        hint={t('admin.billing.currencyHint')}
+      />
+      <SelectInput
+        label={t('admin.billing.field.status')}
+        value={status}
+        onChange={setStatus}
+        options={PLAN_STATUSES.map((value) => ({ value, label: value }))}
+      />
+      <JsonInput
+        label={t('admin.billing.featuresJson')}
+        value={features}
+        onChange={setFeatures}
+        hint={t('admin.billing.featuresHint')}
+        error={!featuresValid ? t('error.bad_request') : undefined}
+      />
+      {save.error != null && <ErrorState error={save.error} compact />}
+    </FormDialog>
   )
 }
 

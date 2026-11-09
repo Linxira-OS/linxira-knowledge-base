@@ -1,4 +1,4 @@
-import { Fragment, useState, type FormEvent } from 'react'
+import { Fragment, useEffect, useState, type FormEvent } from 'react'
 import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query'
 import {
   createAlias,
@@ -13,12 +13,25 @@ import {
   listProviders,
   listRoutes,
   patchAlias,
+  patchProvider,
   patchRoute,
+  testAdminProvider,
 } from '../../api/admin'
-import type { ModelAlias, ModelRoute } from '../../api/types'
-import { Badge, Banner, Button, Card, EmptyState, ErrorState, Table, TableWrap, TBody, TD, TH, THead, TR, statusTone } from '../../components/ui'
-import { useI18n } from '../../lib/i18n'
+import type { ModelAlias, ModelRoute, Provider } from '../../api/types'
+import { Badge, Button, Card, EmptyState, ErrorState, KeyValue, Table, TableWrap, TBody, TD, TH, THead, TR, statusTone } from '../../components/ui'
+import { isJsonText } from '../../lib/json'
+import { useI18n, type MessageKey } from '../../lib/i18n'
+import { hasMessage } from '../../lib/i18n/catalog'
+import { useUnsavedWarning } from '../../lib/hooks'
 import { AdminQueryGate, JsonInput, SelectInput, TextInput, adminKeys, parseOptionalNumber, useAdminInvalidate, useJsonDraft } from './shared'
+import { ConfirmDialog, useAdminToast } from './kit'
+
+/** Provider-test result codes with a localized explanation. */
+const TEST_CODE_KEYS: Record<string, MessageKey> = {
+  provider_not_configured: 'admin.models.test.code.provider_not_configured',
+  provider_unreachable: 'admin.models.test.code.provider_unreachable',
+  provider_http_error: 'admin.models.test.code.provider_http_error',
+}
 
 export function ModelsPanel() {
   return (
@@ -34,7 +47,7 @@ export function ModelsPanel() {
 function ProvidersCard() {
   const { t, format } = useI18n()
   const invalidate = useAdminInvalidate()
-  const [notice, setNotice] = useState<string | null>(null)
+  const toast = useAdminToast()
   const [formError, setFormError] = useState<string | null>(null)
   const [providerId, setProviderId] = useState('')
   const [kind, setKind] = useState('')
@@ -44,12 +57,18 @@ function ProvidersCard() {
   const [priority, setPriority] = useState('')
   const [weight, setWeight] = useState('')
   const json = useJsonDraft(['limits_json', 'timeouts_json'])
+  useUnsavedWarning(
+    [providerId, kind, baseUrl, apiKeyEnv, status, priority, weight].some((value) => value.trim() !== ''),
+  )
+  const [editingProvider, setEditingProvider] = useState<string | null>(null)
+  const [confirmProvider, setConfirmProvider] = useState<Provider | null>(null)
+  const [testProvider, setTestProvider] = useState<Provider | null>(null)
 
   const query = useQuery({ queryKey: adminKeys.providers, queryFn: listProviders })
   const create = useMutation({
     mutationFn: createProvider,
     onSuccess: () => {
-      setNotice(t('admin.models.created'))
+      toast.success(t('admin.models.created'))
       setProviderId('')
       setKind('')
       setBaseUrl('')
@@ -64,7 +83,8 @@ function ProvidersCard() {
   const remove = useMutation({
     mutationFn: deleteProvider,
     onSuccess: () => {
-      setNotice(t('admin.models.deleted'))
+      toast.success(t('admin.models.deleted'))
+      setConfirmProvider(null)
       invalidate(adminKeys.providers)
     },
   })
@@ -98,7 +118,6 @@ function ProvidersCard() {
     <>
       <Card title={t('admin.models.providers')}>
         <div className="space-y-3">
-          {notice && <Banner tone="accent">{notice}</Banner>}
           {remove.isError && <ErrorState error={remove.error} compact />}
           <AdminQueryGate pending={query.isPending} error={query.error} onRetry={() => void query.refetch()}>
             {providers.length === 0 ? (
@@ -120,7 +139,8 @@ function ProvidersCard() {
                   </THead>
                   <TBody>
                     {providers.map((provider) => (
-                      <TR key={provider.provider_id}>
+                      <Fragment key={provider.provider_id}>
+                        <TR>
                         <TD className="font-mono text-[11.5px]">{provider.provider_id}</TD>
                         <TD>{provider.kind}</TD>
                         <TD className="break-all font-mono text-[11px]">{provider.base_url}</TD>
@@ -135,19 +155,47 @@ function ProvidersCard() {
                         <TD>{format.number(provider.priority)}</TD>
                         <TD>{format.number(provider.weight)}</TD>
                         <TD>
-                          <Button
-                            size="sm"
-                            variant="danger"
-                            disabled={remove.isPending && remove.variables === provider.provider_id}
-                            onClick={() => {
-                              setNotice(null)
-                              remove.mutate(provider.provider_id)
-                            }}
-                          >
-                            {t('action.delete')}
-                          </Button>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <Button size="sm" variant="ghost" onClick={() => setTestProvider(provider)}>
+                              {t('admin.models.providerTest')}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() =>
+                                setEditingProvider(editingProvider === provider.provider_id ? null : provider.provider_id)
+                              }
+                            >
+                              {t('action.edit')}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="danger"
+                              disabled={remove.isPending && remove.variables === provider.provider_id}
+                              onClick={() => {
+                                setConfirmProvider(provider)
+                              }}
+                            >
+                              {t('action.delete')}
+                            </Button>
+                          </div>
                         </TD>
                       </TR>
+                      {editingProvider === provider.provider_id && (
+                        <TR>
+                          <TD colSpan={8} className="bg-panel">
+                            <ProviderEditRow
+                              provider={provider}
+                              onDone={(updated) => {
+                                if (updated) toast.success(t('admin.models.updated'))
+                                setEditingProvider(null)
+                                invalidate(adminKeys.providers)
+                              }}
+                            />
+                          </TD>
+                        </TR>
+                      )}
+                      </Fragment>
                     ))}
                   </TBody>
                 </Table>
@@ -193,26 +241,125 @@ function ProvidersCard() {
           </div>
         </form>
       </Card>
+      {testProvider !== null && (
+        <ProviderTestDialog
+          key={testProvider.provider_id}
+          provider={testProvider}
+          onClose={() => setTestProvider(null)}
+        />
+      )}
+      <ConfirmDialog
+        open={confirmProvider !== null}
+        title={t('admin.models.deleteProvider')}
+        description={t('admin.models.deleteConfirm', { name: confirmProvider?.provider_id ?? '' })}
+        confirmLabel={t('action.delete')}
+        pending={remove.isPending}
+        onConfirm={() => {
+          if (confirmProvider !== null) remove.mutate(confirmProvider.provider_id)
+        }}
+        onCancel={() => setConfirmProvider(null)}
+      />
     </>
+  )
+}
+
+function ProviderEditRow({ provider, onDone }: { provider: Provider; onDone: (updated: boolean) => void }) {
+  const { t } = useI18n()
+  const [kind, setKind] = useState(provider.kind)
+  const [baseUrl, setBaseUrl] = useState(provider.base_url)
+  const [apiKeyEnv, setApiKeyEnv] = useState('')
+  const [status, setStatus] = useState(provider.status)
+  const [priority, setPriority] = useState(String(provider.priority))
+  const [weight, setWeight] = useState(String(provider.weight))
+  const [limits, setLimits] = useState(provider.limits_json)
+  const [timeouts, setTimeouts] = useState(provider.timeouts_json)
+  const [formError, setFormError] = useState<string | null>(null)
+
+  const save = useMutation({
+    mutationFn: (values: { priority: number; weight: number }) =>
+      patchProvider(provider.provider_id, {
+        provider_id: provider.provider_id,
+        kind: kind.trim(),
+        base_url: baseUrl.trim(),
+        status: status.trim() || undefined,
+        priority: values.priority,
+        weight: values.weight,
+        limits_json: limits.trim() || undefined,
+        timeouts_json: timeouts.trim() || undefined,
+        ...(apiKeyEnv.trim() !== '' ? { api_key_env: apiKeyEnv.trim() } : {}),
+      }),
+    onSuccess: () => onDone(true),
+    onError: () => onDone(false),
+  })
+
+  const submit = () => {
+    const priorityValue = parseOptionalNumber(priority)
+    const weightValue = parseOptionalNumber(weight)
+    if (
+      priorityValue === null ||
+      weightValue === null ||
+      priorityValue === undefined ||
+      weightValue === undefined ||
+      !isJsonText(limits) ||
+      !isJsonText(timeouts) ||
+      kind.trim() === '' ||
+      baseUrl.trim() === ''
+    ) {
+      setFormError(t('error.bad_request'))
+      return
+    }
+    setFormError(null)
+    save.mutate({ priority: priorityValue, weight: weightValue })
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <TextInput label={t('admin.models.kind')} value={kind} onChange={setKind} />
+        <TextInput label={t('admin.models.baseUrl')} value={baseUrl} onChange={setBaseUrl} />
+        <TextInput
+          label={t('admin.models.apiKeyEnv')}
+          value={apiKeyEnv}
+          onChange={setApiKeyEnv}
+          hint={t('admin.models.apiKeyHint')}
+        />
+        <TextInput label={t('admin.models.status')} value={status} onChange={setStatus} />
+        <TextInput type="number" label={t('admin.models.priority')} value={priority} onChange={setPriority} />
+        <TextInput type="number" label={t('admin.models.weight')} value={weight} onChange={setWeight} />
+        <JsonInput label={t('admin.models.limitsJson')} value={limits} onChange={setLimits} />
+        <JsonInput label={t('admin.models.timeoutsJson')} value={timeouts} onChange={setTimeouts} />
+      </div>
+      {formError && <p className="text-[11.5px] text-danger">{formError}</p>}
+      <div className="flex items-center gap-2">
+        <Button size="sm" variant="primary" disabled={save.isPending} onClick={submit}>
+          {t('action.save')}
+        </Button>
+        <Button size="sm" variant="ghost" disabled={save.isPending} onClick={() => onDone(false)}>
+          {t('action.cancel')}
+        </Button>
+        {save.error != null && <ErrorState error={save.error} compact />}
+      </div>
+    </div>
   )
 }
 
 function ProviderModelsCard() {
   const { t, format } = useI18n()
   const invalidate = useAdminInvalidate()
-  const [notice, setNotice] = useState<string | null>(null)
+  const toast = useAdminToast()
   const [formError, setFormError] = useState<string | null>(null)
   const [modelId, setModelId] = useState('')
   const [providerId, setProviderId] = useState('')
   const [upstreamModel, setUpstreamModel] = useState('')
   const [contextWindow, setContextWindow] = useState('')
   const json = useJsonDraft(['pricing_json', 'capabilities_json'])
+  useUnsavedWarning([modelId, providerId, upstreamModel, contextWindow].some((value) => value.trim() !== ''))
 
   const query = useQuery({ queryKey: adminKeys.providerModels, queryFn: listProviderModels })
   const create = useMutation({
     mutationFn: createProviderModel,
     onSuccess: () => {
-      setNotice(t('admin.models.created'))
+      toast.success(t('admin.models.created'))
       setModelId('')
       setProviderId('')
       setUpstreamModel('')
@@ -247,7 +394,6 @@ function ProviderModelsCard() {
     <>
       <Card title={t('admin.models.providerModels')}>
         <div className="space-y-3">
-          {notice && <Banner tone="accent">{notice}</Banner>}
           <AdminQueryGate pending={query.isPending} error={query.error} onRetry={() => void query.refetch()}>
             {models.length === 0 ? (
               <EmptyState title={t('admin.models.empty')} />
@@ -327,18 +473,20 @@ function ProviderModelsCard() {
 function AliasesCard() {
   const { t, format } = useI18n()
   const invalidate = useAdminInvalidate()
-  const [notice, setNotice] = useState<string | null>(null)
+  const toast = useAdminToast()
   const [editing, setEditing] = useState<string | null>(null)
   const [publicId, setPublicId] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [status, setStatus] = useState('')
   const json = useJsonDraft(['capabilities_json', 'access_policy_json', 'price_json'])
+  useUnsavedWarning([publicId, displayName, status].some((value) => value.trim() !== ''))
+  const [confirmAlias, setConfirmAlias] = useState<ModelAlias | null>(null)
 
   const query = useQuery({ queryKey: adminKeys.aliases, queryFn: listAliases })
   const create = useMutation({
     mutationFn: createAlias,
     onSuccess: () => {
-      setNotice(t('admin.models.created'))
+      toast.success(t('admin.models.created'))
       setPublicId('')
       setDisplayName('')
       setStatus('')
@@ -349,7 +497,8 @@ function AliasesCard() {
   const remove = useMutation({
     mutationFn: deleteAlias,
     onSuccess: () => {
-      setNotice(t('admin.models.deleted'))
+      toast.success(t('admin.models.deleted'))
+      setConfirmAlias(null)
       invalidate(adminKeys.aliases, adminKeys.routes)
     },
   })
@@ -373,7 +522,6 @@ function AliasesCard() {
     <>
       <Card title={t('admin.models.aliases')}>
         <div className="space-y-3">
-          {notice && <Banner tone="accent">{notice}</Banner>}
           {remove.isError && <ErrorState error={remove.error} compact />}
           <AdminQueryGate pending={query.isPending} error={query.error} onRetry={() => void query.refetch()}>
             {aliases.length === 0 ? (
@@ -415,8 +563,7 @@ function AliasesCard() {
                                 variant="danger"
                                 disabled={remove.isPending && remove.variables === alias.public_id}
                                 onClick={() => {
-                                  setNotice(null)
-                                  remove.mutate(alias.public_id)
+                                  setConfirmAlias(alias)
                                 }}
                               >
                                 {t('action.delete')}
@@ -430,7 +577,7 @@ function AliasesCard() {
                               <AliasEditRow
                                 alias={alias}
                                 onDone={() => {
-                                  setNotice(t('admin.models.updated'))
+                                  toast.success(t('admin.models.updated'))
                                   setEditing(null)
                                 }}
                               />
@@ -481,6 +628,17 @@ function AliasesCard() {
           </div>
         </form>
       </Card>
+      <ConfirmDialog
+        open={confirmAlias !== null}
+        title={t('admin.models.deleteAlias')}
+        description={t('admin.models.deleteConfirm', { name: confirmAlias?.public_id ?? '' })}
+        confirmLabel={t('action.delete')}
+        pending={remove.isPending}
+        onConfirm={() => {
+          if (confirmAlias !== null) remove.mutate(confirmAlias.public_id)
+        }}
+        onCancel={() => setConfirmAlias(null)}
+      />
     </>
   )
 }
@@ -564,7 +722,7 @@ function AliasEditRow({ alias, onDone }: { alias: ModelAlias; onDone: () => void
 function RoutesCard() {
   const { t, format } = useI18n()
   const invalidate = useAdminInvalidate()
-  const [notice, setNotice] = useState<string | null>(null)
+  const toast = useAdminToast()
   const [formError, setFormError] = useState<string | null>(null)
   const [editing, setEditing] = useState<string | null>(null)
   const [aliasFilter, setAliasFilter] = useState('')
@@ -573,6 +731,10 @@ function RoutesCard() {
   const [providerModelId, setProviderModelId] = useState('')
   const [weight, setWeight] = useState('')
   const [priority, setPriority] = useState('')
+  const [confirmRoute, setConfirmRoute] = useState<ModelRoute | null>(null)
+  useUnsavedWarning(
+    [routeId, aliasPublicId, providerModelId, weight, priority].some((value) => value.trim() !== ''),
+  )
 
   const aliasesQuery = useQuery({ queryKey: adminKeys.aliases, queryFn: listAliases })
   const query = useQuery({
@@ -583,7 +745,7 @@ function RoutesCard() {
   const create = useMutation({
     mutationFn: createRoute,
     onSuccess: () => {
-      setNotice(t('admin.models.created'))
+      toast.success(t('admin.models.created'))
       setRouteId('')
       setAliasPublicId('')
       setProviderModelId('')
@@ -595,7 +757,8 @@ function RoutesCard() {
   const remove = useMutation({
     mutationFn: deleteRoute,
     onSuccess: () => {
-      setNotice(t('admin.models.deleted'))
+      toast.success(t('admin.models.deleted'))
+      setConfirmRoute(null)
       invalidate(adminKeys.routes)
     },
   })
@@ -628,7 +791,6 @@ function RoutesCard() {
     <>
       <Card title={t('admin.models.routes')}>
         <div className="space-y-3">
-          {notice && <Banner tone="accent">{notice}</Banner>}
           {remove.isError && <ErrorState error={remove.error} compact />}
           <div className="max-w-[220px]">
             <SelectInput label={t('admin.models.filterAlias')} value={aliasFilter} onChange={setAliasFilter} options={aliasOptions} />
@@ -685,8 +847,7 @@ function RoutesCard() {
                                 variant="danger"
                                 disabled={remove.isPending && remove.variables === route.route_id}
                                 onClick={() => {
-                                  setNotice(null)
-                                  remove.mutate(route.route_id)
+                                  setConfirmRoute(route)
                                 }}
                               >
                                 {t('action.delete')}
@@ -700,7 +861,7 @@ function RoutesCard() {
                               <RouteEditRow
                                 route={route}
                                 onDone={() => {
-                                  setNotice(t('admin.models.updated'))
+                                  toast.success(t('admin.models.updated'))
                                   setEditing(null)
                                 }}
                               />
@@ -744,6 +905,17 @@ function RoutesCard() {
           </div>
         </form>
       </Card>
+      <ConfirmDialog
+        open={confirmRoute !== null}
+        title={t('admin.models.deleteRoute')}
+        description={t('admin.models.deleteConfirm', { name: confirmRoute?.route_id ?? '' })}
+        confirmLabel={t('action.delete')}
+        pending={remove.isPending}
+        onConfirm={() => {
+          if (confirmRoute !== null) remove.mutate(confirmRoute.route_id)
+        }}
+        onCancel={() => setConfirmRoute(null)}
+      />
     </>
   )
 }
@@ -812,5 +984,83 @@ function RouteEditRow({ route, onDone }: { route: ModelRoute; onDone: () => void
         </Button>
       </div>
     </form>
+  )
+}
+
+/**
+ * Provider connectivity test dialog. `POST /admin/providers/{id}/test` always
+ * answers 200 with an outcome object; only metadata is shown — never the API
+ * key or the upstream response body.
+ */
+function ProviderTestDialog({ provider, onClose }: { provider: Provider; onClose: () => void }) {
+  const { t, locale, format } = useI18n()
+  const test = useMutation({ mutationFn: () => testAdminProvider(provider.provider_id) })
+
+  useEffect(() => {
+    test.mutate()
+    // Runs once per mount; the dialog is keyed by provider id.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const result = test.data
+  const codeKey = result?.code ? TEST_CODE_KEYS[result.code] : undefined
+  const localized = codeKey !== undefined && hasMessage(locale, codeKey)
+  const codeText = localized ? t(codeKey) : (result?.code ?? '—')
+  const messageText = !localized && result?.message ? result.message : undefined
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose()
+      }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={t('admin.models.providerTest')}
+        className="w-full max-w-[440px] rounded-xl border border-line bg-surface p-4 shadow-xl"
+      >
+        <h2 className="text-[13.5px] font-semibold text-fg">
+          {t('admin.models.providerTest')} ·{' '}
+          <span className="font-mono text-[11px] text-fg-3">{provider.provider_id}</span>
+        </h2>
+        <div className="mt-3 space-y-2">
+          {test.isPending && <p className="text-[12px] text-fg-2">{t('admin.models.test.running')}</p>}
+          {test.error != null && <ErrorState error={test.error} compact />}
+          {result && (
+            <>
+              <Badge tone={result.ok ? 'accent' : 'warn'}>
+                {result.ok ? t('admin.models.test.ok') : t('admin.models.test.failed')}
+              </Badge>
+              <KeyValue
+                items={[
+                  [t('admin.models.test.code'), codeText],
+                  [
+                    t('admin.models.test.latency'),
+                    result.latency_ms === undefined ? '—' : `${format.number(result.latency_ms)} ms`,
+                  ],
+                  [
+                    t('admin.models.test.statusCode'),
+                    result.status_code === undefined ? '—' : format.number(result.status_code),
+                  ],
+                ]}
+              />
+              {messageText && <p className="text-[11.5px] leading-5 text-fg-3">{messageText}</p>}
+            </>
+          )}
+          <p className="text-[11px] leading-5 text-fg-3">{t('admin.models.test.privacy')}</p>
+        </div>
+        <div className="mt-4 flex justify-end gap-2">
+          <Button size="sm" variant="ghost" disabled={test.isPending} onClick={() => test.mutate()}>
+            {t('admin.models.test.retest')}
+          </Button>
+          <Button size="sm" onClick={onClose}>
+            {t('action.close')}
+          </Button>
+        </div>
+      </div>
+    </div>
   )
 }

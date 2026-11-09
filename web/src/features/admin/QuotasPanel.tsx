@@ -1,9 +1,11 @@
 import { useState, type FormEvent } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { createQuotaOverride, createTokenQuota, deleteTokenQuota, listTokenQuotas } from '../../api/admin'
+import type { TokenQuota } from '../../api/types'
 import { Badge, Banner, Button, Card, EmptyState, ErrorState, Table, TableWrap, TBody, TD, TH, THead, TR } from '../../components/ui'
 import { useI18n } from '../../lib/i18n'
 import { AdminQueryGate, SelectInput, TextInput, adminKeys, parseOptionalNumber, useAdminInvalidate } from './shared'
+import { ConfirmDialog } from './kit'
 
 const QUOTA_SCOPES = ['tenant', 'space', 'user', 'role'] as const
 const QUOTA_SCOPE_OPTIONS = QUOTA_SCOPES.map((value) => ({ value, label: value }))
@@ -19,11 +21,13 @@ export function QuotasPanel() {
   const { t, format } = useI18n()
   const invalidate = useAdminInvalidate()
   const [notice, setNotice] = useState<string | null>(null)
+  const [confirmQuota, setConfirmQuota] = useState<TokenQuota | null>(null)
   const query = useQuery({ queryKey: adminKeys.quotas, queryFn: listTokenQuotas })
   const remove = useMutation({
     mutationFn: deleteTokenQuota,
     onSuccess: () => {
       setNotice(t('admin.quotas.deleted'))
+      setConfirmQuota(null)
       invalidate(adminKeys.quotas)
     },
   })
@@ -35,6 +39,17 @@ export function QuotasPanel() {
     <div className="space-y-4">
       {notice && <Banner tone="accent">{notice}</Banner>}
       {remove.isError && <ErrorState error={remove.error} compact />}
+      <ConfirmDialog
+        open={confirmQuota !== null}
+        title={t('admin.quotas.delete')}
+        description={t('admin.quotas.deleteConfirm', { quota: confirmQuota?.quota_id ?? '' })}
+        confirmLabel={t('action.delete')}
+        pending={remove.isPending}
+        onConfirm={() => {
+          if (confirmQuota !== null) remove.mutate(confirmQuota.quota_id)
+        }}
+        onCancel={() => setConfirmQuota(null)}
+      />
       <AdminQueryGate pending={query.isPending} error={query.error} onRetry={() => void query.refetch()}>
         <div className="space-y-4">
           <Card title={t('admin.quotas.title')}>
@@ -90,7 +105,7 @@ export function QuotasPanel() {
                             disabled={remove.isPending && remove.variables === quota.quota_id}
                             onClick={() => {
                               setNotice(null)
-                              remove.mutate(quota.quota_id)
+                              setConfirmQuota(quota)
                             }}
                           >
                             {t('action.delete')}

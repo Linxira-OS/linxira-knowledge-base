@@ -1,8 +1,9 @@
 import { useCallback, useState, type ReactNode } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { ApiError } from '../../api/client'
-import { Banner, Button, ErrorState, Field, LoadingState } from '../../components/ui'
+import { Banner, Button, ErrorState, Field } from '../../components/ui'
 import { useI18n } from '../../lib/i18n'
+import { AdminSkeleton } from './kit'
 
 /** Page size for the offset-paginated admin tables. */
 export const ADMIN_PAGE_SIZE = 25
@@ -20,6 +21,7 @@ export const adminKeys = {
   quotas: ['admin', 'quotas'] as const,
   usage: ['admin', 'usage'] as const,
   audit: ['admin', 'audit'] as const,
+  overview: ['admin', 'overview'] as const,
   billing: ['admin', 'billing'] as const,
   connectors: ['admin', 'connectors'] as const,
 }
@@ -54,7 +56,7 @@ export function AdminQueryGate({
   children: ReactNode
 }) {
   const { t } = useI18n()
-  if (pending) return <LoadingState />
+  if (pending) return <AdminSkeleton />
   if (error) {
     if (error instanceof ApiError && error.status === 403) {
       const disabled = error.code === 'feature_disabled'
@@ -116,7 +118,7 @@ export function TextInput({
   label: ReactNode
   value: string
   onChange: (value: string) => void
-  type?: 'text' | 'number'
+  type?: 'text' | 'number' | 'password'
   hint?: ReactNode
   error?: ReactNode
 }) {

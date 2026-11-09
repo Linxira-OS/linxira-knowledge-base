@@ -6,6 +6,7 @@ import { getPage, isRevisionConflictError, savePage } from '../../api/wiki'
 import { Badge, Banner, Button, Card, EmptyState, ErrorState, Field, LoadingState, SectionTitle } from '../../components/ui'
 import { useI18n } from '../../lib/i18n'
 import { renderMarkdown } from '../../lib/markdown'
+import { useUnsavedWarning } from '../../lib/hooks'
 
 const SLUG_PATTERN = /^[^/\\]{1,200}$/
 
@@ -90,6 +91,7 @@ function EditorForm({ space, slug, creating }: { space: string; slug: string; cr
       draft.lang !== original.lang ||
       effectiveSlug !== slug ||
       original.baseRevisionId !== draft.baseRevisionId)
+  useUnsavedWarning(dirty)
 
   const previewHtml = useMemo(() => renderMarkdown(draft.markdown), [draft.markdown])
 

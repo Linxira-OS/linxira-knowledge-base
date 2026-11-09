@@ -9,6 +9,7 @@ import {
   listConnectorJobs,
   listConnectors,
   listExternalRefs,
+  patchConnector,
   syncConnector,
   testConnector,
   type Connector,
@@ -35,8 +36,11 @@ import {
 } from '../../components/ui'
 import { hasMessage } from '../../lib/i18n/catalog'
 import { useI18n, type MessageKey } from '../../lib/i18n'
+import { isJsonText } from '../../lib/json'
 import { useSession } from '../../lib/session'
+import { useUnsavedWarning } from '../../lib/hooks'
 import { AdminQueryGate, JsonInput, SelectInput, TextInput, adminKeys, useAdminInvalidate } from './shared'
+import { ConfirmDialog, useAdminToast } from './kit'
 
 const JOB_STATUS_KEYS: Record<string, MessageKey> = {
   queued: 'admin.connectors.jobStatus.queued',
@@ -44,15 +48,6 @@ const JOB_STATUS_KEYS: Record<string, MessageKey> = {
   completed: 'admin.connectors.jobStatus.completed',
   partial: 'admin.connectors.jobStatus.partial',
   failed: 'admin.connectors.jobStatus.failed',
-}
-
-function isJsonText(text: string): boolean {
-  try {
-    JSON.parse(text)
-    return true
-  } catch {
-    return false
-  }
 }
 
 /**
@@ -92,6 +87,7 @@ function ConnectorsConsole() {
   const invalidate = useAdminInvalidate()
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const [editing, setEditing] = useState<Connector | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [lastTest, setLastTest] = useState<{ name: string; result: ConnectorTestResult } | null>(null)
 
@@ -220,6 +216,9 @@ function ConnectorsConsole() {
                               >
                                 {t('admin.connectors.action.sync')}
                               </Button>
+                              <Button size="sm" variant="ghost" onClick={() => setEditing(connector)}>
+                                {t('action.edit')}
+                              </Button>
                               <Button size="sm" variant="ghost" onClick={() => setConfirmDeleteId(connector.connector_id)}>
                                 {t('action.delete')}
                               </Button>
@@ -247,35 +246,26 @@ function ConnectorsConsole() {
             {test.error != null && <ErrorState error={test.error} compact />}
             {sync.error != null && <ErrorState error={sync.error} compact />}
             {remove.error != null && <ErrorState error={remove.error} compact />}
-            {confirmDeleteId !== null && (
-              <Banner
-                tone="warn"
-                title={t('admin.connectors.deleteConfirmTitle')}
-                actions={
-                  <>
-                    <Button
-                      size="sm"
-                      variant="danger"
-                      disabled={remove.isPending}
-                      onClick={() => remove.mutate(confirmDeleteId)}
-                    >
-                      {t('action.confirm')}
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => setConfirmDeleteId(null)}>
-                      {t('action.cancel')}
-                    </Button>
-                  </>
-                }
-              >
-                {t('admin.connectors.deleteConfirm')}
-              </Banner>
-            )}
+            <ConfirmDialog
+              open={confirmDeleteId !== null}
+              title={t('admin.connectors.deleteConfirmTitle')}
+              description={t('admin.connectors.deleteConfirm')}
+              confirmLabel={t('action.delete')}
+              pending={remove.isPending}
+              onConfirm={() => {
+                if (confirmDeleteId !== null) remove.mutate(confirmDeleteId)
+              }}
+              onCancel={() => setConfirmDeleteId(null)}
+            />
           </div>
         </AdminQueryGate>
       </Card>
       <JobsCard connectorId={selectedId} connectors={connectors} />
       <CreateConnectorCard />
       <ExternalRefsCard />
+      {editing !== null && (
+        <ConnectorEditDialog key={editing.connector_id} connector={editing} onClose={() => setEditing(null)} />
+      )}
     </div>
   )
 }
@@ -294,6 +284,7 @@ function CreateConnectorCard() {
   const spaces = spacesQuery.data?.spaces ?? []
   const selectedSpaceId = spaceId !== '' ? spaceId : (spaces[0]?.space_id ?? '')
   const configValid = config.trim() === '' || isJsonText(config)
+  useUnsavedWarning(name.trim() !== '' || config.trim() !== '' || secretEnv.trim() !== '')
 
   const create = useMutation({
     mutationFn: () =>
@@ -560,5 +551,121 @@ function ExternalRefsCard() {
         </AdminQueryGate>
       </div>
     </Card>
+  )
+}
+
+function ConnectorEditDialog({ connector, onClose }: { connector: Connector; onClose: () => void }) {
+  const { t } = useI18n()
+  const invalidate = useAdminInvalidate()
+  const toast = useAdminToast()
+  const spacesQuery = useQuery({ queryKey: ['spaces'], queryFn: listSpaces })
+  const [name, setName] = useState(connector.name)
+  const [spaceId, setSpaceId] = useState(connector.space_id)
+  const [status, setStatus] = useState(connector.status)
+  const [secretEnv, setSecretEnv] = useState(connector.secret_env ?? '')
+  const [config, setConfig] = useState('')
+
+  const configValid = config.trim() === '' || isJsonText(config)
+  const dirty =
+    name !== connector.name ||
+    spaceId !== connector.space_id ||
+    status !== connector.status ||
+    secretEnv !== (connector.secret_env ?? '') ||
+    config.trim() !== ''
+  useUnsavedWarning(dirty)
+
+  const save = useMutation({
+    mutationFn: () =>
+      patchConnector(connector.connector_id, {
+        name: name.trim(),
+        space_id: spaceId,
+        status: status.trim(),
+        ...(secretEnv !== (connector.secret_env ?? '')
+          ? { secret_env: secretEnv.trim() === '' ? null : secretEnv.trim() }
+          : {}),
+        ...(config.trim() !== '' ? { config_json: config.trim() } : {}),
+      }),
+    onSuccess: () => {
+      toast.success(`${t('admin.connectors.updated')} · ${t('admin.toast.audited')}`)
+      invalidate(adminKeys.connectors)
+      onClose()
+    },
+  })
+
+  const spaces = spacesQuery.data?.spaces ?? []
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose()
+      }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={t('admin.connectors.editTitle')}
+        className="thin-scroll max-h-[90vh] w-full max-w-[540px] overflow-y-auto rounded-xl border border-line bg-surface p-4 shadow-xl"
+      >
+        <h2 className="text-[13.5px] font-semibold text-fg">
+          {t('admin.connectors.editTitle')} ·{' '}
+          <span className="font-mono text-[11px] text-fg-3">{connector.connector_id}</span>
+        </h2>
+        <div className="mt-3 space-y-3">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <TextInput label={t('admin.connectors.field.name')} value={name} onChange={setName} />
+            <SelectInput
+              label={t('admin.connectors.field.space')}
+              value={spaceId}
+              onChange={setSpaceId}
+              options={spaces.map((space) => ({ value: space.space_id, label: `${space.name} (${space.space_id})` }))}
+            />
+            <TextInput
+              label={t('admin.connectors.field.status')}
+              value={status}
+              onChange={setStatus}
+              hint={t('admin.connectors.statusHint')}
+            />
+            <TextInput
+              label={t('admin.connectors.field.secretEnv')}
+              value={secretEnv}
+              onChange={setSecretEnv}
+              hint={t('admin.connectors.secretEnvEditHint')}
+            />
+          </div>
+          <div className="rounded-lg border border-line bg-panel px-3 py-2">
+            <div className="text-[10.5px] uppercase tracking-[0.1em] text-fg-3">
+              {t('admin.connectors.currentConfig')}
+            </div>
+            <pre className="mt-1 whitespace-pre-wrap break-all font-mono text-[10.5px] text-fg-2">
+              {JSON.stringify(connector.config, null, 2)}
+            </pre>
+            <p className="mt-1 text-[10.5px] text-fg-3">{t('admin.connectors.configRedactedHint')}</p>
+          </div>
+          <JsonInput
+            label={t('admin.connectors.field.config')}
+            value={config}
+            onChange={setConfig}
+            hint={t('admin.connectors.configEditHint')}
+            error={!configValid ? t('error.bad_request') : undefined}
+          />
+          {save.error != null && <ErrorState error={save.error} />}
+          <div className="flex justify-end gap-2">
+            <Button size="sm" variant="ghost" disabled={save.isPending} onClick={onClose}>
+              {t('action.cancel')}
+            </Button>
+            <Button
+              size="sm"
+              variant="primary"
+              disabled={save.isPending || !configValid || name.trim() === '' || spaceId === ''}
+              onClick={() => save.mutate()}
+            >
+              {t('action.save')}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
   )
 }

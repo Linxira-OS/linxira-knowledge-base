@@ -11,7 +11,7 @@ import { useStickToBottom } from '../lib/hooks'
  * turn) plus the in-flight stream, and it shares query/conversation state with
  * the top bar and the search page through `useQueryState()`.
  */
-export function QaPanel() {
+export function QaPanel({ width, onCollapse }: { width: number; onCollapse: () => void }) {
   const { t, format } = useI18n()
   const navigate = useNavigate()
   const {
@@ -47,7 +47,7 @@ export function QaPanel() {
   }
 
   return (
-    <aside className="hidden w-[336px] shrink-0 flex-col border-l border-line bg-panel xl:flex">
+    <aside style={{ width }} className="flex min-h-0 shrink-0 flex-col border-l border-line bg-panel">
       <div className="flex h-11 shrink-0 items-center justify-between gap-2 border-b border-line px-3.5">
         <div className="flex min-w-0 items-center gap-2">
           <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
@@ -60,10 +60,21 @@ export function QaPanel() {
           <Button size="sm" variant="ghost" onClick={startNewConversation} disabled={!conversationId}>
             {t('nav.newConversation')}
           </Button>
+          <button
+            type="button"
+            onClick={onCollapse}
+            aria-label={t('layout.collapseRight')}
+            title={t('layout.collapseRight')}
+            className="rounded p-0.5 text-fg-3 transition-colors hover:bg-raise hover:text-fg"
+          >
+            <svg viewBox="0 0 16 16" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
+              <path d="M6 4l4 4-4 4" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
         </div>
       </div>
 
-      <div ref={ref} onScroll={onScroll} className="thin-scroll flex-1 space-y-3 overflow-y-auto px-3 py-3">
+      <div ref={ref} onScroll={onScroll} className="thin-scroll min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-3">
         {conversationLoading && <p className="px-1 text-[11.5px] text-fg-3">{t('state.loading')}</p>}
 
         {messages.map(({ message, citations, degraded, usage }) => {
