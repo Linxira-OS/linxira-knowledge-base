@@ -733,6 +733,7 @@ pub struct UserRecord {
     pub external_id: Option<String>,
     pub source: String,
     pub last_sso_at: Option<String>,
+    pub last_login_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -940,6 +941,18 @@ pub struct EventSearchParams<'a> {
     pub text_weight: f64,
     pub limit: i64,
     pub timeout_ms: u64,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct AdminOverview {
+    pub users: i64,
+    pub spaces: i64,
+    pub documents: i64,
+    pub chunks: i64,
+    pub requests_24h: i64,
+    pub errors_24h: i64,
+    pub cost_micros_24h: i64,
+    pub cache_hits_24h: i64,
 }
 
 #[async_trait]
@@ -1266,6 +1279,53 @@ pub trait Store: Send + Sync {
         user_id: &str,
         last_sso_at: &str,
     ) -> Result<(), StoreError>;
+    async fn touch_user_login(
+        &self,
+        tenant_id: &str,
+        user_id: &str,
+        at: &str,
+    ) -> Result<(), StoreError>;
+    async fn set_user_display_name(
+        &self,
+        tenant_id: &str,
+        user_id: &str,
+        display_name: &str,
+    ) -> Result<(), StoreError>;
+    async fn set_user_password(
+        &self,
+        tenant_id: &str,
+        user_id: &str,
+        password_hash: &str,
+    ) -> Result<(), StoreError>;
+    async fn get_audit_event(
+        &self,
+        tenant_id: &str,
+        event_id: &str,
+    ) -> Result<Option<AuditEventRecord>, StoreError>;
+    async fn billing_list_subscriptions(
+        &self,
+        tenant_id: &str,
+        status: Option<&str>,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<SubscriptionRecord>, StoreError>;
+    async fn billing_count_active_subscriptions(&self, plan_id: &str) -> Result<i64, StoreError>;
+    async fn billing_delete_plan(&self, plan_id: &str) -> Result<bool, StoreError>;
+    async fn update_provider_model_record(
+        &self,
+        tenant_id: &str,
+        model: &ProviderModelRecord,
+    ) -> Result<(), StoreError>;
+    async fn delete_provider_model(
+        &self,
+        tenant_id: &str,
+        provider_model_id: &str,
+    ) -> Result<bool, StoreError>;
+    async fn admin_overview(
+        &self,
+        tenant_id: &str,
+        since: &str,
+    ) -> Result<AdminOverview, StoreError>;
     async fn add_user(
         &self,
         tenant_id: &str,

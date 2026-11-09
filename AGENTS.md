@@ -71,9 +71,9 @@
 src/                         内核；入口 main.rs/lib.rs
 src/store/                   Store trait（mod.rs）+ sqlite.rs + postgres.rs
 src/ingest/                  mod.rs + chunker.rs + doc_id.rs + html.rs
-migrations/sqlite/           0001_init.sql、0002_fts.sql、0003_events.sql、0004_lang_seed.sql、0005_roles_spaces_quota_audit.sql、0006_model_gateway.sql、0007_summaries_conversations.sql、0008_message_context.sql、0009_billing.sql、0010_connectors.sql、0011_sso.sql
-migrations/postgres/         0001_init.sql、0002_search.sql、0003_events.sql、0004_lang_seed.sql、0005_roles_spaces_quota_audit.sql、0006_model_gateway.sql、0007_summaries_conversations.sql、0008_message_context.sql、0009_billing.sql、0010_connectors.sql、0011_sso.sql
-tests/                       16 个集成测试文件（见 §8）
+migrations/sqlite/           0001_init.sql、0002_fts.sql、0003_events.sql、0004_lang_seed.sql、0005_roles_spaces_quota_audit.sql、0006_model_gateway.sql、0007_summaries_conversations.sql、0008_message_context.sql、0009_billing.sql、0010_connectors.sql、0011_sso.sql、0012_user_last_login.sql
+migrations/postgres/         0001_init.sql、0002_search.sql、0003_events.sql、0004_lang_seed.sql、0005_roles_spaces_quota_audit.sql、0006_model_gateway.sql、0007_summaries_conversations.sql、0008_message_context.sql、0009_billing.sql、0010_connectors.sql、0011_sso.sql、0012_user_last_login.sql
+tests/                       17 个集成测试文件（见 §8）
 examples/docs/               20 篇示例语料
 examples/questions.jsonl     20 条评测问题
 document/                    内部文档（维护者/Agent）：architecture、tier-matrix、roadmap、
@@ -221,6 +221,7 @@ cargo test --test postgres_integration       # 已执行（WSL PG 18.6 实测通
 | `tests/pg_sql_guard.rs` | Postgres 字面量 SQL 与 `.bind()` 链静态守卫（140 条）+ 自检用例 |
 | `tests/p2a_billing.rs` | 钱包/双分录/幂等/余额不足、并发不超扣、套餐状态机+entitlement、Stripe 签名验签/重放、HTTP 手工充值+webhook+退款重放、订阅 HTTP、外部引擎不本地扣费（含 judge）、网关 402 |
 | `tests/p1a_openapi_mcp.rs` | OpenAPI 路径/schema 校验、MCP tools 列表与 kb_search/kb_list_spaces/scope 拒绝、MCP stdio 子进程 smoke、admin 列表/审计/usage 聚合、契约 search/answer/page JSON CRUD+If-Match 409、JSON 保存后立即可搜/更新旧内容消失/删除不可搜/恢复可搜、页面列表 cursor/过滤/越界 403、revision body、JSON 登录 CSRF/Origin/401/成功/me/logout、会话 undelete |
+| `tests/admin_management.rs` | 用户创建/409/重置密码/软禁用/last_login、plans CRUD+plan_in_use、subscriptions、provider-model PATCH/DELETE+provider test、overview 聚合、audit 详情/过滤/cursor |
 | `tests/summary_conversations.rs` | 上游 SSE 多 chunk 真流式、断开取消+usage cancelled、非流式回退 degraded、 fake LLM 摘要 JSON/usage source summary、有限重试后 status=failed+抽取式回退、job 幂等、query search/both、网关多轮改写、SSE 事件顺序、会话 cursor 分页/external_session 绑定、judge 网关 usage、conversation 历史/owner 403 |
 | `tests/event_entity.rs` | event-entity 通道、ACL/租户/有效期过滤、抽取失败降级、hybrid RRF |
 

@@ -40,6 +40,10 @@ const MIGRATIONS: &[(&str, &str)] = &[
         include_str!("../../migrations/sqlite/0007_summaries_conversations.sql"),
     ),
     (
+        "0012_user_last_login",
+        include_str!("../../migrations/sqlite/0012_user_last_login.sql"),
+    ),
+    (
         "0011_sso",
         include_str!("../../migrations/sqlite/0011_sso.sql"),
     ),
@@ -499,6 +503,7 @@ fn user_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<UserRecord, sqlx::Erro
             .try_get::<Option<String>, _>("source")?
             .unwrap_or_else(|| "local".to_string()),
         last_sso_at: row.try_get("last_sso_at")?,
+        last_login_at: row.try_get("last_login_at")?,
         role: UserRole::parse(&row.try_get::<String, _>("role")?).map_err(|err| {
             sqlx::Error::Decode(Box::new(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
@@ -1955,6 +1960,7 @@ impl Store for SqliteStore {
             external_id: None,
             source: "local".to_string(),
             last_sso_at: None,
+            last_login_at: None,
         };
         sqlx::query(
             "INSERT INTO users (tenant_id, user_id, username, password_hash, display_name,
@@ -4151,6 +4157,215 @@ impl Store for SqliteStore {
     ) -> Result<(), StoreError> {
         sqlx::query("UPDATE users SET last_sso_at=? WHERE tenant_id=? AND user_id=?")
             .bind(last_sso_at)
+            .bind(tenant_id)
+            .bind(user_id)
+            .execute(&self.pool)
+            .await
+            .map_err(StoreError::Database)?;
+        Ok(())
+    }
+    async fn touch_user_login(
+        &self,
+        tenant_id: &str,
+        user_id: &str,
+        at: &str,
+    ) -> Result<(), StoreError> {
+        sqlx::query("UPDATE users SET last_login_at=? WHERE tenant_id=? AND user_id=?")
+            .bind(at)
+            .bind(tenant_id)
+            .bind(user_id)
+            .execute(&self.pool)
+            .await
+            .map_err(StoreError::Database)?;
+        Ok(())
+    }
+    async fn set_user_password(
+        &self,
+        tenant_id: &str,
+        user_id: &str,
+        password_hash: &str,
+    ) -> Result<(), StoreError> {
+        sqlx::query("UPDATE users SET password_hash=? WHERE tenant_id=? AND user_id=?")
+            .bind(password_hash)
+            .bind(tenant_id)
+            .bind(user_id)
+            .execute(&self.pool)
+            .await
+            .map_err(StoreError::Database)?;
+        Ok(())
+    }
+    async fn get_audit_event(
+        &self,
+        tenant_id: &str,
+        event_id: &str,
+    ) -> Result<Option<AuditEventRecord>, StoreError> {
+        let row = sqlx::query("SELECT * FROM audit_events WHERE tenant_id=? AND event_id=?")
+            .bind(tenant_id)
+            .bind(event_id)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(StoreError::Database)?;
+        row.map(|row| -> Result<AuditEventRecord, sqlx::Error> {
+            Ok(AuditEventRecord {
+                event_id: row.try_get("event_id")?,
+                tenant_id: row.try_get("tenant_id")?,
+                space_id: row.try_get("space_id")?,
+                actor_id: row.try_get("actor_id")?,
+                actor_type: row.try_get("actor_type")?,
+                action: row.try_get("action")?,
+                target_type: row.try_get("target_type")?,
+                target_id: row.try_get("target_id")?,
+                result: row.try_get("result")?,
+                status_code: row.try_get("status_code")?,
+                request_id: row.try_get("request_id")?,
+                ip: row.try_get("ip")?,
+                user_agent: row.try_get("user_agent")?,
+                detail_json: row.try_get("detail_json")?,
+                created_at: row.try_get("created_at")?,
+            })
+        })
+        .transpose()
+        .map_err(StoreError::Database)
+    }
+    async fn billing_list_subscriptions(
+        &self,
+        tenant_id: &str,
+        status: Option<&str>,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<SubscriptionRecord>, StoreError> {
+        let rows = if let Some(status) = status {
+            sqlx::query("SELECT * FROM subscriptions WHERE tenant_id=? AND status=? ORDER BY updated_at DESC LIMIT ? OFFSET ?").bind(tenant_id).bind(status).bind(limit).bind(offset).fetch_all(&self.pool).await
+        } else {
+            sqlx::query("SELECT * FROM subscriptions WHERE tenant_id=? ORDER BY updated_at DESC LIMIT ? OFFSET ?").bind(tenant_id).bind(limit).bind(offset).fetch_all(&self.pool).await
+        }.map_err(StoreError::Database)?;
+        rows.iter()
+            .map(|row| -> Result<SubscriptionRecord, sqlx::Error> {
+                Ok(SubscriptionRecord {
+                    subscription_id: row.try_get("subscription_id")?,
+                    tenant_id: row.try_get("tenant_id")?,
+                    plan_id: row.try_get("plan_id")?,
+                    status: row.try_get("status")?,
+                    trial_ends_at: row.try_get("trial_ends_at")?,
+                    current_period_start: row.try_get("current_period_start")?,
+                    current_period_end: row.try_get("current_period_end")?,
+                    past_due_at: row.try_get("past_due_at")?,
+                    suspended_at: row.try_get("suspended_at")?,
+                    cancelled_at: row.try_get("cancelled_at")?,
+                    updated_at: row.try_get("updated_at")?,
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(StoreError::Database)
+    }
+    async fn billing_count_active_subscriptions(&self, plan_id: &str) -> Result<i64, StoreError> {
+        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM subscriptions WHERE plan_id=? AND status IN ('trial','active','past_due')").bind(plan_id).fetch_one(&self.pool).await.map_err(StoreError::Database)?;
+        Ok(count)
+    }
+    async fn billing_delete_plan(&self, plan_id: &str) -> Result<bool, StoreError> {
+        let result = sqlx::query("DELETE FROM plans WHERE plan_id=?")
+            .bind(plan_id)
+            .execute(&self.pool)
+            .await
+            .map_err(StoreError::Database)?;
+        Ok(result.rows_affected() > 0)
+    }
+    async fn update_provider_model_record(
+        &self,
+        _tenant_id: &str,
+        model: &ProviderModelRecord,
+    ) -> Result<(), StoreError> {
+        sqlx::query("INSERT INTO provider_models (provider_model_id, provider_id, upstream_model, context_window, pricing_json, capabilities_json, status, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT (provider_model_id) DO UPDATE SET provider_id=excluded.provider_id, upstream_model=excluded.upstream_model, context_window=excluded.context_window, pricing_json=excluded.pricing_json, capabilities_json=excluded.capabilities_json, status=excluded.status, updated_at=excluded.updated_at")
+            .bind(&model.provider_model_id).bind(&model.provider_id).bind(&model.upstream_model).bind(model.context_window).bind(&model.pricing_json).bind(&model.capabilities_json).bind(&model.status).bind(&model.created_at).bind(&model.updated_at)
+            .execute(&self.pool).await.map_err(StoreError::Database)?;
+        Ok(())
+    }
+    async fn delete_provider_model(
+        &self,
+        _tenant_id: &str,
+        provider_model_id: &str,
+    ) -> Result<bool, StoreError> {
+        let result = sqlx::query("DELETE FROM provider_models WHERE provider_model_id=?")
+            .bind(provider_model_id)
+            .execute(&self.pool)
+            .await
+            .map_err(StoreError::Database)?;
+        Ok(result.rows_affected() > 0)
+    }
+    async fn admin_overview(
+        &self,
+        tenant_id: &str,
+        since: &str,
+    ) -> Result<AdminOverview, StoreError> {
+        let users: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM users WHERE tenant_id=?")
+            .bind(tenant_id)
+            .fetch_one(&self.pool)
+            .await
+            .map_err(StoreError::Database)?;
+        let spaces: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM spaces WHERE tenant_id=? AND status='active'")
+                .bind(tenant_id)
+                .fetch_one(&self.pool)
+                .await
+                .map_err(StoreError::Database)?;
+        let documents: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM documents WHERE tenant_id=? AND valid_to IS NULL",
+        )
+        .bind(tenant_id)
+        .fetch_one(&self.pool)
+        .await
+        .map_err(StoreError::Database)?;
+        let chunks: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM chunks WHERE tenant_id=? AND valid_to IS NULL",
+        )
+        .bind(tenant_id)
+        .fetch_one(&self.pool)
+        .await
+        .map_err(StoreError::Database)?;
+        let requests: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM usage_events WHERE tenant_id=? AND at>=?")
+                .bind(tenant_id)
+                .bind(since)
+                .fetch_one(&self.pool)
+                .await
+                .map_err(StoreError::Database)?;
+        let errors: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM usage_events WHERE tenant_id=? AND at>=? AND status<>'success'",
+        )
+        .bind(tenant_id)
+        .bind(since)
+        .fetch_one(&self.pool)
+        .await
+        .map_err(StoreError::Database)?;
+        let cost: i64 = sqlx::query_scalar(
+            "SELECT COALESCE(SUM(cost_micros),0) FROM usage_events WHERE tenant_id=? AND at>=?",
+        )
+        .bind(tenant_id)
+        .bind(since)
+        .fetch_one(&self.pool)
+        .await
+        .map_err(StoreError::Database)?;
+        let hits: i64 = sqlx::query_scalar("SELECT COALESCE(SUM(CASE WHEN cache_hit THEN 1 ELSE 0 END),0) FROM usage_events WHERE tenant_id=? AND at>=?").bind(tenant_id).bind(since).fetch_one(&self.pool).await.map_err(StoreError::Database)?;
+        Ok(AdminOverview {
+            users,
+            spaces,
+            documents,
+            chunks,
+            requests_24h: requests,
+            errors_24h: errors,
+            cost_micros_24h: cost,
+            cache_hits_24h: hits,
+        })
+    }
+
+    async fn set_user_display_name(
+        &self,
+        tenant_id: &str,
+        user_id: &str,
+        display_name: &str,
+    ) -> Result<(), StoreError> {
+        sqlx::query("UPDATE users SET display_name=? WHERE tenant_id=? AND user_id=?")
+            .bind(display_name)
             .bind(tenant_id)
             .bind(user_id)
             .execute(&self.pool)

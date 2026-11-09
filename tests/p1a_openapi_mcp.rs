@@ -656,7 +656,7 @@ async fn pages_list_revision_body_json_auth_and_conversation_restore() {
         .await
         .unwrap();
     let app_auth = router(AppState::new(
-        auth_store,
+        auth_store.clone(),
         Arc::new(auth_config),
         Arc::new(ProviderSet::with_none()),
     ));
@@ -932,6 +932,16 @@ async fn pages_list_revision_body_json_auth_and_conversation_restore() {
         .await
         .unwrap();
     assert_eq!(login.status(), StatusCode::OK);
+    assert!(
+        auth_store
+            .get_user("t_local", "alice")
+            .await
+            .unwrap()
+            .unwrap()
+            .last_login_at
+            .is_some(),
+        "password login must set last_login_at"
+    );
     let session_cookie = set_cookie_value(&login, "lkb_session");
     let login_json: serde_json::Value = serde_json::from_slice(
         &axum::body::to_bytes(login.into_body(), 1_000_000)

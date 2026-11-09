@@ -214,14 +214,21 @@ pub fn router(state: AppState) -> Router {
             "/api/v1/admin/quotas/{quota_id}",
             axum::routing::delete(admin_quota_delete_v1),
         )
-        .route("/api/v1/admin/users", get(admin_users_v1))
+        .route(
+            "/api/v1/admin/users",
+            get(admin_users_v1).post(admin_user_create_v1),
+        )
         .route(
             "/api/v1/admin/users/{user_id}",
-            axum::routing::patch(admin_user_patch_v1),
+            axum::routing::patch(admin_user_patch_v1).delete(admin_user_delete_v1),
         )
         .route(
             "/api/v1/admin/users/{user_id}/disable",
             post(admin_user_disable_v1),
+        )
+        .route(
+            "/api/v1/admin/users/{user_id}/reset-password",
+            post(admin_user_reset_password_v1),
         )
         .route("/api/v1/admin/roles", get(admin_roles_v1))
         .route("/api/v1/admin/groups", get(admin_groups_v1))
@@ -251,6 +258,29 @@ pub fn router(state: AppState) -> Router {
             get(connectors_jobs_v1),
         )
         .route("/api/v1/external-refs", get(external_refs_v1))
+        .route("/api/v1/admin/overview", get(admin_overview_v1))
+        .route(
+            "/api/v1/admin/billing/plans",
+            get(admin_plans_v1).post(admin_plan_create_v1),
+        )
+        .route(
+            "/api/v1/admin/billing/plans/{plan_id}",
+            axum::routing::patch(admin_plan_patch_v1).delete(admin_plan_delete_v1),
+        )
+        .route(
+            "/api/v1/admin/billing/subscriptions",
+            get(admin_subscriptions_v1),
+        )
+        .route(
+            "/api/v1/admin/provider-models/{provider_model_id}",
+            axum::routing::patch(admin_provider_model_patch_v1)
+                .delete(admin_provider_model_delete_v1),
+        )
+        .route(
+            "/api/v1/admin/providers/{provider_id}/test",
+            post(admin_provider_test_v1),
+        )
+        .route("/api/v1/admin/audit/{event_id}", get(admin_audit_detail_v1))
         .route("/api/v1/admin/audit", get(list_audit_v1))
         .route(
             "/api/v1/admin/quota-overrides",
@@ -303,36 +333,6 @@ pub async fn serve(state: AppState, bind: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
-#[derive(Default)]
-pub struct LoginLimiter {
-    failures: Mutex<HashMap<String, Vec<Instant>>>,
-}
-
-impl LoginLimiter {
-    const WINDOW: Duration = Duration::from_secs(300);
-    const MAX_FAILURES: usize = 5;
-
-    pub fn allowed(&self, key: &str) -> bool {
-        let mut guard = self.failures.lock().expect("login limiter poisoned");
-        let now = Instant::now();
-        let entries = guard.entry(key.to_string()).or_default();
-        entries.retain(|instant| now.duration_since(*instant) < Self::WINDOW);
-        entries.len() < Self::MAX_FAILURES
-    }
-
-    pub fn record_failure(&self, key: &str) {
-        let mut guard = self.failures.lock().expect("login limiter poisoned");
-        let now = Instant::now();
-        let entries = guard.entry(key.to_string()).or_default();
-        entries.retain(|instant| now.duration_since(*instant) < Self::WINDOW);
-        entries.push(now);
-    }
-
-    pub fn clear(&self, key: &str) {
-        let mut guard = self.failures.lock().expect("login limiter poisoned");
-        guard.remove(key);
-    }
-}
 /// Canonical web root for `server.web_dir` / `LKB_WEB_DIR`, if it is usable.
 /// A missing directory only disables static hosting (the API still starts), so
 /// a stale path cannot take the whole server down.
@@ -573,6 +573,36 @@ fn cache_control(relative: &FsPath) -> &'static str {
     }
 }
 
+#[derive(Default)]
+pub struct LoginLimiter {
+    failures: Mutex<HashMap<String, Vec<Instant>>>,
+}
+
+impl LoginLimiter {
+    const WINDOW: Duration = Duration::from_secs(300);
+    const MAX_FAILURES: usize = 5;
+
+    pub fn allowed(&self, key: &str) -> bool {
+        let mut guard = self.failures.lock().expect("login limiter poisoned");
+        let now = Instant::now();
+        let entries = guard.entry(key.to_string()).or_default();
+        entries.retain(|instant| now.duration_since(*instant) < Self::WINDOW);
+        entries.len() < Self::MAX_FAILURES
+    }
+
+    pub fn record_failure(&self, key: &str) {
+        let mut guard = self.failures.lock().expect("login limiter poisoned");
+        let now = Instant::now();
+        let entries = guard.entry(key.to_string()).or_default();
+        entries.retain(|instant| now.duration_since(*instant) < Self::WINDOW);
+        entries.push(now);
+    }
+
+    pub fn clear(&self, key: &str) {
+        let mut guard = self.failures.lock().expect("login limiter poisoned");
+        guard.remove(key);
+    }
+}
 
 fn cookie_map(headers: &HeaderMap) -> HashMap<String, String> {
     let mut cookies = HashMap::new();
@@ -1382,11 +1412,19 @@ async fn login_submit(
         .create_session(&crate::store::SessionRecord {
             session_hash: hash,
             tenant_id: state.config.storage.tenant_id.clone(),
-            user_id: user.user_id,
+            user_id: user.user_id.clone(),
             created_at: now.to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
             expires_at: expires.to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
         })
         .await?;
+    let _ = state
+        .store
+        .touch_user_login(
+            &state.config.storage.tenant_id,
+            &user.user_id,
+            &now.to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+        )
+        .await;
 
     let secure = state.config.cookie_secure_for_host(host_header(&headers));
     let cookie = build_cookie(
@@ -2268,6 +2306,8 @@ struct GroupMemberPatchRequest {
 
 #[derive(Debug, Deserialize)]
 struct AuditQuery {
+    #[serde(default)]
+    cursor: Option<i64>,
     actor: Option<String>,
     action: Option<String>,
     space: Option<String>,
@@ -4707,6 +4747,14 @@ async fn auth_login_v1(
             expires_at: expires.to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
         })
         .await?;
+    let _ = state
+        .store
+        .touch_user_login(
+            &state.config.storage.tenant_id,
+            &user.user_id,
+            &now.to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+        )
+        .await;
     let mut principal = Principal {
         principal_id: user.user_id.clone(),
         display_name: user.display_name.clone(),
@@ -6056,6 +6104,7 @@ async fn sso_middleware(
                 external_id: Some(username.clone()),
                 source: "sso".to_string(),
                 last_sso_at: Some(now.clone()),
+                last_login_at: Some(now.clone()),
             };
             if let Err(err) = state.store.create_sso_user(&record).await {
                 tracing::warn!(error = %err, "sso provision failed");
@@ -6196,6 +6245,572 @@ async fn auth_sso_status_v1(State(state): State<AppState>) -> Json<Value> {
     }))
 }
 
+fn admin_user_json(user: &crate::store::UserRecord) -> Value {
+    json!({
+        "user_id": user.user_id, "username": user.username, "display_name": user.display_name,
+        "role": user.role.as_str(), "disabled": user.disabled, "created_at": user.created_at,
+        "email": user.email, "source": user.source, "last_login_at": user.last_login_at,
+        "last_sso_at": user.last_sso_at,
+    })
+}
+
+#[derive(Debug, Deserialize)]
+struct AdminUserCreateBody {
+    username: String,
+    password: String,
+    #[serde(default)]
+    display_name: Option<String>,
+    #[serde(default)]
+    role: Option<String>,
+}
+
+async fn admin_user_create_v1(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<AdminUserCreateBody>,
+) -> Result<Json<Value>, AppError> {
+    let (principal, _guard) = admin_auth(&state, &headers, "admin.users.create").await?;
+    let username = body.username.trim();
+    if username.is_empty() || username.contains('/') || username.contains('\\') {
+        return Err(AppError::bad_request(
+            "username must be a non-empty single token",
+        ));
+    }
+    if body.password.chars().count() < 8 {
+        return Err(AppError::bad_request(
+            "password must be at least 8 characters",
+        ));
+    }
+    let role = body
+        .role
+        .as_deref()
+        .map(crate::governance::UserRole::parse)
+        .transpose()
+        .map_err(AppError::bad_request)?
+        .unwrap_or(crate::governance::UserRole::User);
+    if state
+        .store
+        .get_user(&principal.tenant_id, username)
+        .await?
+        .is_some()
+    {
+        return Err(AppError::new(
+            StatusCode::CONFLICT,
+            "conflict",
+            "username already exists",
+        ));
+    }
+    let hash = crate::cli::hash_password(&body.password);
+    if hash.is_empty() {
+        return Err(AppError::internal("cannot hash password"));
+    }
+    let user = match state
+        .store
+        .add_user_with_role(&principal.tenant_id, username, &hash, role)
+        .await
+    {
+        Ok(user) => user,
+        Err(err) => {
+            let text = err.to_string().to_ascii_lowercase();
+            if text.contains("unique") || text.contains("duplicate") {
+                return Err(AppError::new(
+                    StatusCode::CONFLICT,
+                    "conflict",
+                    "username already exists",
+                ));
+            }
+            return Err(err.into());
+        }
+    };
+    if let Some(display_name) = body.display_name.filter(|value| !value.trim().is_empty()) {
+        state
+            .store
+            .set_user_display_name(&principal.tenant_id, &user.user_id, display_name.trim())
+            .await?;
+    }
+    let user = state
+        .store
+        .get_user_by_id(&principal.tenant_id, &user.user_id)
+        .await?
+        .unwrap_or(user);
+    audit_admin_write(
+        &state,
+        &principal,
+        "admin.user.create",
+        "user",
+        &user.user_id,
+    )
+    .await;
+    Ok(Json(json!({"user": admin_user_json(&user)})))
+}
+
+#[derive(Debug, Deserialize)]
+struct AdminPasswordResetBody {
+    password: String,
+}
+
+async fn admin_user_reset_password_v1(
+    State(state): State<AppState>,
+    AxumPath(user_id): AxumPath<String>,
+    headers: HeaderMap,
+    Json(body): Json<AdminPasswordResetBody>,
+) -> Result<Json<Value>, AppError> {
+    let (principal, _guard) = admin_auth(&state, &headers, "admin.users.reset_password").await?;
+    if body.password.chars().count() < 8 {
+        return Err(AppError::bad_request(
+            "password must be at least 8 characters",
+        ));
+    }
+    let user = state
+        .store
+        .get_user_by_id(&principal.tenant_id, &user_id)
+        .await?
+        .ok_or_else(|| AppError::not_found("user not found"))?;
+    let hash = crate::cli::hash_password(&body.password);
+    if hash.is_empty() {
+        return Err(AppError::internal("cannot hash password"));
+    }
+    state
+        .store
+        .set_user_password(&principal.tenant_id, &user.user_id, &hash)
+        .await?;
+    audit_admin_write(
+        &state,
+        &principal,
+        "admin.user.password_reset",
+        "user",
+        &user_id,
+    )
+    .await;
+    Ok(Json(json!({"user_id": user_id, "password_reset": true})))
+}
+
+async fn admin_user_delete_v1(
+    State(state): State<AppState>,
+    AxumPath(user_id): AxumPath<String>,
+    headers: HeaderMap,
+) -> Result<Json<Value>, AppError> {
+    let (principal, _guard) = admin_auth(&state, &headers, "admin.users.disable").await?;
+    let user = state
+        .store
+        .get_user_by_id(&principal.tenant_id, &user_id)
+        .await?
+        .ok_or_else(|| AppError::not_found("user not found"))?;
+    state
+        .store
+        .set_user_disabled(&principal.tenant_id, &user.user_id, true)
+        .await?;
+    audit_admin_write(&state, &principal, "admin.user.disable", "user", &user_id).await;
+    Ok(Json(json!({"user_id": user_id, "disabled": true})))
+}
+
+#[derive(Debug, Deserialize)]
+struct AdminPlanBody {
+    #[serde(default)]
+    plan_id: Option<String>,
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
+    price_micros: Option<i64>,
+    #[serde(default)]
+    included_tokens: Option<i64>,
+    #[serde(default)]
+    currency: Option<String>,
+    #[serde(default)]
+    status: Option<String>,
+    #[serde(default)]
+    features_json: Option<String>,
+}
+
+fn plan_json(plan: &crate::store::PlanRecord) -> Value {
+    json!({
+        "plan_id": plan.plan_id, "name": plan.name, "price_micros": plan.price_micros,
+        "included_tokens": plan.included_tokens, "currency": plan.currency,
+        "period": plan.period, "status": plan.status,
+        "features": serde_json::from_str::<Value>(&plan.features_json).unwrap_or(Value::Null),
+        "created_at": plan.created_at, "updated_at": plan.updated_at,
+    })
+}
+
+async fn admin_plans_v1(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<Value>, AppError> {
+    let (_principal, _guard) = admin_auth(&state, &headers, "billing.plans.list").await?;
+    require_feature(&state, Feature::Billing)?;
+    let plans = state.store.billing_list_plans().await?;
+    Ok(Json(
+        json!({"plans": plans.iter().map(plan_json).collect::<Vec<_>>()}),
+    ))
+}
+
+async fn admin_plan_create_v1(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<AdminPlanBody>,
+) -> Result<Json<Value>, AppError> {
+    let (principal, _guard) = admin_auth(&state, &headers, "billing.plan.create").await?;
+    require_feature(&state, Feature::Billing)?;
+    let plan_id = body
+        .plan_id
+        .ok_or_else(|| AppError::bad_request("plan_id is required"))?;
+    let name = body.name.unwrap_or_else(|| plan_id.clone());
+    let now = now_rfc3339();
+    let plan = crate::store::PlanRecord {
+        plan_id: plan_id.clone(),
+        name,
+        price_micros: body.price_micros.unwrap_or(0),
+        included_tokens: body.included_tokens.unwrap_or(0),
+        currency: body
+            .currency
+            .unwrap_or_else(|| state.config.billing.currency.clone()),
+        period: "monthly".to_string(),
+        status: body.status.unwrap_or_else(|| "active".to_string()),
+        features_json: body.features_json.unwrap_or_else(|| "{}".to_string()),
+        created_at: now.clone(),
+        updated_at: now,
+    };
+    state.store.billing_upsert_plan(&plan).await?;
+    audit_admin_write(
+        &state,
+        &principal,
+        "billing.plan.create",
+        "plan",
+        &plan.plan_id,
+    )
+    .await;
+    Ok(Json(json!({"plan": plan_json(&plan)})))
+}
+
+async fn admin_plan_patch_v1(
+    State(state): State<AppState>,
+    AxumPath(plan_id): AxumPath<String>,
+    headers: HeaderMap,
+    Json(body): Json<AdminPlanBody>,
+) -> Result<Json<Value>, AppError> {
+    let (principal, _guard) = admin_auth(&state, &headers, "billing.plan.update").await?;
+    require_feature(&state, Feature::Billing)?;
+    let mut plan = state
+        .store
+        .billing_get_plan(&plan_id)
+        .await?
+        .ok_or_else(|| AppError::not_found("plan not found"))?;
+    if let Some(name) = body.name {
+        plan.name = name;
+    }
+    if let Some(price) = body.price_micros {
+        plan.price_micros = price;
+    }
+    if let Some(tokens) = body.included_tokens {
+        plan.included_tokens = tokens;
+    }
+    if let Some(currency) = body.currency {
+        plan.currency = currency;
+    }
+    if let Some(status) = body.status {
+        plan.status = status;
+    }
+    if let Some(features) = body.features_json {
+        plan.features_json = features;
+    }
+    plan.updated_at = now_rfc3339();
+    state.store.billing_upsert_plan(&plan).await?;
+    audit_admin_write(
+        &state,
+        &principal,
+        "billing.plan.update",
+        "plan",
+        &plan.plan_id,
+    )
+    .await;
+    Ok(Json(json!({"plan": plan_json(&plan)})))
+}
+
+async fn admin_plan_delete_v1(
+    State(state): State<AppState>,
+    AxumPath(plan_id): AxumPath<String>,
+    headers: HeaderMap,
+) -> Result<Json<Value>, AppError> {
+    let (principal, _guard) = admin_auth(&state, &headers, "billing.plan.delete").await?;
+    require_feature(&state, Feature::Billing)?;
+    let active = state
+        .store
+        .billing_count_active_subscriptions(&plan_id)
+        .await?;
+    if active > 0 {
+        return Err(AppError::new(
+            StatusCode::CONFLICT,
+            "plan_in_use",
+            "plan has active subscriptions",
+        ));
+    }
+    let removed = state.store.billing_delete_plan(&plan_id).await?;
+    if removed {
+        audit_admin_write(&state, &principal, "billing.plan.delete", "plan", &plan_id).await;
+    }
+    Ok(Json(json!({"plan_id": plan_id, "removed": removed})))
+}
+
+async fn admin_subscriptions_v1(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(query): Query<std::collections::HashMap<String, String>>,
+) -> Result<Json<Value>, AppError> {
+    let (principal, _guard) = admin_auth(&state, &headers, "billing.subscriptions.list").await?;
+    require_feature(&state, Feature::Billing)?;
+    let limit = query
+        .get("limit")
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(100)
+        .clamp(1, 500);
+    let offset = query
+        .get("offset")
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(0)
+        .max(0);
+    let subscriptions = state
+        .store
+        .billing_list_subscriptions(
+            &principal.tenant_id,
+            query.get("status").map(String::as_str),
+            limit,
+            offset,
+        )
+        .await?;
+    Ok(Json(
+        json!({"subscriptions": subscriptions, "limit": limit, "offset": offset}),
+    ))
+}
+
+#[derive(Debug, Deserialize)]
+struct AdminProviderModelPatch {
+    #[serde(default)]
+    provider_id: Option<String>,
+    #[serde(default)]
+    upstream_model: Option<String>,
+    #[serde(default)]
+    context_window: Option<i64>,
+    #[serde(default)]
+    pricing_json: Option<String>,
+    #[serde(default)]
+    capabilities_json: Option<String>,
+    #[serde(default)]
+    status: Option<String>,
+}
+
+async fn admin_provider_model_patch_v1(
+    State(state): State<AppState>,
+    AxumPath(provider_model_id): AxumPath<String>,
+    headers: HeaderMap,
+    Json(body): Json<AdminProviderModelPatch>,
+) -> Result<Json<Value>, AppError> {
+    let (principal, _guard) = admin_auth(&state, &headers, "models.model.update").await?;
+    let mut model = state
+        .store
+        .get_provider_model(&principal.tenant_id, &provider_model_id)
+        .await?
+        .ok_or_else(|| AppError::not_found("provider model not found"))?;
+    if let Some(provider_id) = body.provider_id {
+        model.provider_id = provider_id;
+    }
+    if let Some(upstream) = body.upstream_model {
+        model.upstream_model = upstream;
+    }
+    if let Some(context) = body.context_window {
+        model.context_window = context;
+    }
+    if let Some(pricing) = body.pricing_json {
+        model.pricing_json = pricing;
+    }
+    if let Some(capabilities) = body.capabilities_json {
+        model.capabilities_json = capabilities;
+    }
+    if let Some(status) = body.status {
+        model.status = status;
+    }
+    model.updated_at = now_rfc3339();
+    state
+        .store
+        .update_provider_model_record(&principal.tenant_id, &model)
+        .await?;
+    audit_admin_write(
+        &state,
+        &principal,
+        "model.provider_model.update",
+        "provider_model",
+        &model.provider_model_id,
+    )
+    .await;
+    Ok(Json(json!({"model": provider_model_json(&model)})))
+}
+
+async fn admin_provider_model_delete_v1(
+    State(state): State<AppState>,
+    AxumPath(provider_model_id): AxumPath<String>,
+    headers: HeaderMap,
+) -> Result<Json<Value>, AppError> {
+    let (principal, _guard) = admin_auth(&state, &headers, "models.model.delete").await?;
+    let removed = state
+        .store
+        .delete_provider_model(&principal.tenant_id, &provider_model_id)
+        .await?;
+    if removed {
+        audit_admin_write(
+            &state,
+            &principal,
+            "model.provider_model.delete",
+            "provider_model",
+            &provider_model_id,
+        )
+        .await;
+    }
+    Ok(Json(
+        json!({"provider_model_id": provider_model_id, "removed": removed}),
+    ))
+}
+
+async fn admin_provider_test_v1(
+    State(state): State<AppState>,
+    AxumPath(provider_id): AxumPath<String>,
+    headers: HeaderMap,
+) -> Result<Json<Value>, AppError> {
+    let (_principal, _guard) = admin_auth(&state, &headers, "models.provider.test").await?;
+    let provider = state
+        .store
+        .list_providers(&state.config.storage.tenant_id)
+        .await?
+        .into_iter()
+        .find(|provider| provider.provider_id == provider_id)
+        .ok_or_else(|| AppError::not_found("provider not found"))?;
+    let models = state
+        .store
+        .list_provider_models(&state.config.storage.tenant_id)
+        .await?;
+    let Some(model) = models
+        .into_iter()
+        .find(|model| model.provider_id == provider_id && model.status == "active")
+    else {
+        return Ok(Json(
+            json!({"provider_id": provider_id, "ok": false, "code": "provider_not_configured", "message": "provider has no active model"}),
+        ));
+    };
+    if provider.kind != "openai_compatible" {
+        return Ok(Json(
+            json!({"provider_id": provider_id, "ok": false, "code": "provider_not_configured", "message": "provider kind is not directly testable"}),
+        ));
+    }
+    let started = std::time::Instant::now();
+    let url = format!(
+        "{}/chat/completions",
+        provider.base_url.trim_end_matches('/')
+    );
+    let mut request = reqwest::Client::new()
+        .post(url)
+        .timeout(std::time::Duration::from_secs(5))
+        .json(&json!({
+            "model": model.upstream_model,
+            "messages": [{"role": "user", "content": "ping"}],
+            "max_tokens": 1,
+        }));
+    if let Some(env_name) = &provider.api_key_env {
+        if let Ok(key) = std::env::var(env_name) {
+            if !key.trim().is_empty() {
+                request = request.bearer_auth(key);
+            }
+        }
+    }
+    let latency_ms = started.elapsed().as_millis() as i64;
+    match request.send().await {
+        Ok(response) => {
+            let status = response.status();
+            Ok(Json(json!({
+                "provider_id": provider_id,
+                "ok": status.is_success(),
+                "status_code": status.as_u16(),
+                "latency_ms": latency_ms,
+                "code": if status.is_success() { Value::Null } else { json!("provider_http_error") },
+                "message": if status.is_success() { Value::Null } else { json!("provider returned a non-success status") },
+            })))
+        }
+        Err(_) => Ok(Json(json!({
+            "provider_id": provider_id,
+            "ok": false,
+            "code": "provider_unreachable",
+            "message": "provider request failed",
+            "latency_ms": latency_ms,
+        }))),
+    }
+}
+
+fn audit_event_json(event: &crate::store::AuditEventRecord) -> Value {
+    json!({
+        "event_id": event.event_id, "tenant_id": event.tenant_id, "space_id": event.space_id,
+        "actor_id": event.actor_id, "actor_type": event.actor_type, "action": event.action,
+        "target_type": event.target_type, "target_id": event.target_id, "result": event.result,
+        "status_code": event.status_code, "request_id": event.request_id, "ip": event.ip,
+        "user_agent": event.user_agent,
+        "detail": serde_json::from_str::<Value>(&event.detail_json).unwrap_or(Value::Null),
+        "created_at": event.created_at,
+    })
+}
+
+async fn admin_audit_detail_v1(
+    State(state): State<AppState>,
+    AxumPath(event_id): AxumPath<String>,
+    headers: HeaderMap,
+) -> Result<Json<Value>, AppError> {
+    require_feature(&state, Feature::Audit)?;
+    let (principal, _, _limits) =
+        v1_auth(&state, &headers, TokenScope::Admin, "audit.read", None).await?;
+    let event = state
+        .store
+        .get_audit_event(&principal.tenant_id, &event_id)
+        .await?
+        .ok_or_else(|| AppError::not_found("audit event not found"))?;
+    Ok(Json(json!({"event": audit_event_json(&event)})))
+}
+
+async fn admin_overview_v1(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<Value>, AppError> {
+    let (principal, _guard) = admin_auth(&state, &headers, "admin.overview").await?;
+    let since = (chrono::Utc::now() - chrono::Duration::hours(24))
+        .to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
+    let overview = state
+        .store
+        .admin_overview(&principal.tenant_id, &since)
+        .await?;
+    let recent = state
+        .store
+        .list_audit(&AuditFilter {
+            tenant_id: principal.tenant_id.clone(),
+            limit: 10,
+            ..Default::default()
+        })
+        .await?;
+    let cache_hit_rate = if overview.requests_24h > 0 {
+        overview.cache_hits_24h as f64 / overview.requests_24h as f64
+    } else {
+        0.0
+    };
+    Ok(Json(json!({
+        "counts": {
+            "users": overview.users,
+            "spaces": overview.spaces,
+            "documents": overview.documents,
+            "chunks": overview.chunks,
+        },
+        "last_24h": {
+            "requests": overview.requests_24h,
+            "errors": overview.errors_24h,
+            "cost_micros": overview.cost_micros_24h,
+            "cache_hit_rate": cache_hit_rate,
+        },
+        "recent_audit": recent.iter().map(audit_event_json).collect::<Vec<_>>(),
+    })))
+}
+
 async fn openapi_json() -> Json<Value> {
     Json(crate::openapi::document())
 }
@@ -6224,6 +6839,8 @@ async fn admin_users_v1(
         .map(|user| json!({
             "user_id": user.user_id, "username": user.username, "display_name": user.display_name,
             "role": user.role.as_str(), "disabled": user.disabled, "created_at": user.created_at,
+            "email": user.email, "source": user.source, "last_login_at": user.last_login_at,
+            "last_sso_at": user.last_sso_at,
         }))
         .collect();
     Ok(Json(
@@ -6390,6 +7007,8 @@ async fn list_audit_v1(
     require_feature(&state, Feature::Audit)?;
     let (principal, _, _limits) =
         v1_auth(&state, &headers, TokenScope::Admin, "audit.read", None).await?;
+    let offset = query.cursor.unwrap_or(0).max(0) as usize;
+    let limit = query.limit.unwrap_or(100).clamp(1, 500);
     let filter = AuditFilter {
         tenant_id: principal.tenant_id.clone(),
         actor_id: query.actor,
@@ -6397,10 +7016,22 @@ async fn list_audit_v1(
         space_id: query.space,
         from: query.from,
         to: query.to,
-        limit: query.limit.unwrap_or(100).clamp(1, 500),
+        limit: (limit as usize + offset).min(1000) as i64,
     };
-    let events = state.store.list_audit(&filter).await?;
+    let all_events = state.store.list_audit(&filter).await?;
+    let has_more = all_events.len() > offset + limit as usize;
+    let events: Vec<_> = all_events
+        .into_iter()
+        .skip(offset)
+        .take(limit as usize)
+        .collect();
+    let next_cursor = if has_more {
+        Some(offset + limit as usize)
+    } else {
+        None
+    };
     Ok(Json(json!({
+        "next_cursor": next_cursor,
         "events": events
             .into_iter()
             .map(|event| json!({
@@ -7962,7 +8593,6 @@ mod tests {
         assert_eq!(stored.len(), 64);
         assert_eq!(stored, sha256_hex_str(raw));
     }
-}
 
     use crate::config::Backend;
     use crate::governance::{SOLO_SPACE, SOLO_TENANT};
@@ -8135,3 +8765,4 @@ mod tests {
             );
         }
     }
+}
