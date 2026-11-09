@@ -1,0 +1,58 @@
+# Solo (personal) example config for the `lkb` single binary.
+#
+# Everything here is optional: with no lkb.toml at all, `lkb serve` runs with
+# these defaults — SQLite in ./data/lkb.sqlite, bound to loopback, no auth.
+# Copy next to the binary (or pass `--config <path>`) to make the settings
+# explicit, or to enable an optional model provider.
+#
+# The same binary switches to PostgreSQL without a rebuild: set
+# `profile = "team"` (or "enterprise") and
+#   [storage] backend = "postgres" / url_env = "LKB_DATABASE_URL".
+# There is no separate SQLite/PostgreSQL download.
+
+profile = "solo"
+
+[server]
+bind = "127.0.0.1:7331"
+
+[auth]
+# `none` is allowed only on loopback; anything else is rejected at startup.
+mode = "none"
+cookie_name = "lkb_session"
+cookie_secure = false
+session_ttl_hours = 168
+csrf = true
+
+[storage]
+backend = "sqlite"
+# Overridden by LKB_SQLITE_PATH when set.
+sqlite_path = "data/lkb.sqlite"
+url_env = "LKB_DATABASE_URL"
+
+[deployment]
+mode = "solo"
+
+[seed]
+enabled = true
+auto = true          # seeds the 24 bilingual product docs into space=product on first serve
+space = "product"
+
+[retrieval]
+mode = "auto"        # bm25 | bm25_judge | event | event_entity | hybrid | auto
+
+[i18n]
+default_locale = "zh-CN"
+supported_locales = ["zh-CN", "en"]
+
+[summary]
+enabled = true
+auto = true
+model_alias = "default"
+
+# Optional: enable a generative/embedding provider. Without one, `ask` still
+# answers extractively and reports degraded[] instead of calling out silently.
+# [models.llm]
+# provider = "openai"
+# base_url = "https://api.example.com/v1"
+# model = "gpt-5-mini"
+# api_key_env = "LKB_LLM_API_KEY"

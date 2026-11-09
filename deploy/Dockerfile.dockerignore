@@ -1,0 +1,14 @@
+# Context hygiene for `docker build -f deploy/Dockerfile .`.
+# BuildKit reads the ignore file named after the Dockerfile first
+# (`<dockerfile>.dockerignore`) and falls back to the root `.dockerignore`.
+# The Dockerfile copies explicit paths only, so this just keeps the uploaded
+# context small (target/ alone is ~13 GB on a warm developer machine).
+.git
+target
+**/target
+web/node_modules
+web/dist
+data
+.lkb
+blobs
+experiments

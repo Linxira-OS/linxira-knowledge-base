@@ -40,3 +40,8 @@
 
 - 仓库内置 `SECURITY.md`：漏洞请通过 GitHub Security Advisories 私密上报。
 - 历史与当前树均无真实凭据入库（PG 凭据只存在于本地 gitignored `.lkb/pg.env`；`document/pg.env.example` 为占位符）。
+
+### 发布产物（Release）
+
+- 个人用户版（solo）：`lkb-solo-v0.2.0-<target>.tar.gz` / Windows `.zip`（Linux x86_64、Windows x64、macOS x86_64/arm64，同一二进制）；企业部署版（enterprise）：`ghcr.io/linxira-os/linxira-knowledge-base:0.2.0` 与 `linxira-knowledge-base-enterprise-v0.2.0.tar.gz`；另有可选 `lkb-web-v0.2.0.tar.gz`、`SHA256SUMS` 与 SPDX SBOM。
+- 单一二进制同时支持 SQLite 与 PostgreSQL（配置切换），不发布单独的 SQLite / PostgreSQL 包；桌面安装包尚未提供（P1）。版本规则、tag 流程、校验与回滚见 [document/release-process.md](document/release-process.md)。

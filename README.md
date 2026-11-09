@@ -302,6 +302,17 @@ target/release/lkb serve
 - team / enterprise 的 CLI 查询需要 `--token` 或 `LKB_API_TOKEN`；token 只在创建时显示一次，数据库中只存 sha256。
 - PostgreSQL 集成测试读取 `LKB_TEST_PG_URL`（本机取值见 `.lkb/pg.env`，已 gitignore）；本机已通过 WSL PostgreSQL 18.6 实测（113 tests）；未设置时仍打印 SKIP 原因并跳过，不会伪装通过。
 
+## 发布
+
+发布由 tag 驱动：推送与三处版本号一致的 `v<version>` tag 后，[Release 工作流](.github/workflows/release.yml) 会构建并发布两套形态——**个人用户版（solo）**原生归档（Linux x86_64 / Windows x64 / macOS x86_64+arm64，均为同一个二进制）与 **企业部署版（enterprise）**镜像 `ghcr.io/linxira-os/linxira-knowledge-base` 及 compose/nginx bundle，并附 `SHA256SUMS`、SPDX SBOM 与构建来源证明（attestation）。
+
+- Release 页面（首个正式 release 发布后在此查看）：https://github.com/Linxira-OS/linxira-knowledge-base/releases
+- 版本规则、资产清单、dry-run、校验与回滚：[document/release-process.md](document/release-process.md)
+- 部署资产（Dockerfile / compose / 示例配置）：[deploy/README.md](deploy/README.md)
+- 问题反馈：https://github.com/Linxira-OS/linxira-knowledge-base/issues ；安全漏洞请走私密通道：https://github.com/Linxira-OS/linxira-knowledge-base/security/advisories/new
+
+同一二进制同时支持 SQLite 与 PostgreSQL（配置切换），因此没有单独的 SQLite / PostgreSQL 包；桌面安装包（Tauri）尚未提供（P1）。
+
 ## 贡献约定
 
 1. **文档先于代码。** 任何实现变更，先落到 architecture.md、tier-matrix.md 或 ADR，再改代码；文档与实现不一致视为缺陷。

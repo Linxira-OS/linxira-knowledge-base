@@ -13,6 +13,10 @@ blobs/
 .env
 .env.local
 
+# deploy/ 的运维配置（从 .example 复制后可能含租户/连接信息）
+deploy/lkb.enterprise.toml
+deploy/solo/lkb.toml
+
 # experiments/ui-shells: 原型依赖与构建/运行产物不入库
 node_modules/
 experiments/**/dist/

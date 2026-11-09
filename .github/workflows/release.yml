@@ -1,0 +1,540 @@
+name: Release
+
+# Build and publish the two release shapes of the single `lkb` binary:
+#
+#   * personal (solo)  -> native archives per target (+ the web/dist SPA archive)
+#   * enterprise       -> GHCR container image + compose/nginx bundle
+#
+# The same binary serves every profile (solo SQLite through enterprise
+# PostgreSQL); editions are packaging/deployment shapes, not separate builds.
+#
+# Canonical path: push a v<version> tag that matches Cargo.toml /
+# web/package.json and CHANGELOG.md. `workflow_dispatch` exists for dry runs and
+# re-runs; non-dry dispatch requires the tag to exist. See
+# document/release-process.md.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag, e.g. v0.2.0 (must match Cargo.toml and web/package.json)"
+        required: true
+        type: string
+      dry_run:
+        description: "Dry run: build, package and upload workflow artifacts; do not create the GitHub release and do not push images"
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+  packages: write
+  id-token: write
+  attestations: write
+
+concurrency:
+  group: release-${{ github.event_name == 'push' && github.ref_name || inputs.tag }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # prepare: resolve the release tag, validate versions against the tagged tree
+  # (Cargo.toml / web/package.json / package-lock), extract CHANGELOG notes and
+  # emit the build matrix used by the rust/package jobs.
+  # ---------------------------------------------------------------------------
+  prepare:
+    name: prepare
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+      version: ${{ steps.meta.outputs.version }}
+      major_minor: ${{ steps.meta.outputs.major_minor }}
+      dry_run: ${{ steps.meta.outputs.dry_run }}
+      ref: ${{ steps.meta.outputs.ref }}
+      commit: ${{ steps.meta.outputs.commit }}
+      matrix: ${{ steps.meta.outputs.matrix }}
+    steps:
+      - name: Checkout workflow ref
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Resolve tag, versions, notes and matrix
+        id: meta
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+          INPUT_DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$1"; exit 1; }
+
+          if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
+            tag="${GITHUB_REF_NAME}"
+            dry_run="false"
+          else
+            tag="${INPUT_TAG}"
+            [ -n "$tag" ] || fail "workflow_dispatch requires the 'tag' input"
+            dry_run="${INPUT_DRY_RUN:-true}"
+          fi
+          case "$tag" in
+            v[0-9]*.[0-9]*.[0-9]*) : ;;
+            *) fail "tag '$tag' must look like v<major>.<minor>.<patch>" ;;
+          esac
+          version="${tag#v}"
+          major_minor="${version%.*}"
+
+          # Build source: the tag when it exists, otherwise (dry runs only) the
+          # commit the workflow ran on. Never build a release from an untagged
+          # tree without saying so.
+          git fetch --force --tags origin
+          if git rev-parse -q --verify "refs/tags/${tag}^{commit}" >/dev/null; then
+            ref="$tag"
+            commit="$(git rev-parse "refs/tags/${tag}^{commit}")"
+          else
+            [ "$dry_run" = "true" ] || fail "tag ${tag} does not exist; push the tag first or run with dry_run=true"
+            ref="${GITHUB_SHA}"
+            commit="${GITHUB_SHA}"
+            echo "::warning::tag ${tag} does not exist yet; this dry run builds ${commit}"
+          fi
+          git -c advice.detachedHead=false checkout --force "$commit"
+
+          # Version consistency: tag == Cargo.toml == web/package.json == lockfile.
+          cargo_version="$(sed -n 's/^version *= *"\([^"]*\)".*/\1/p' Cargo.toml | head -n 1)"
+          web_version="$(python3 -c "import json;print(json.load(open('web/package.json'))['version'])")"
+          lock_versions="$(python3 -c "import json;d=json.load(open('web/package-lock.json'));print(d['version']);print(d['packages']['']['version'])")"
+          [ "$cargo_version" = "$version" ] || fail "Cargo.toml version '${cargo_version}' != tag '${tag}'"
+          [ "$web_version" = "$version" ] || fail "web/package.json version '${web_version}' != tag '${tag}'"
+          while IFS= read -r lock_version; do
+            [ -z "$lock_version" ] || [ "$lock_version" = "$version" ] || fail "web/package-lock.json version '${lock_version}' != tag '${tag}'"
+          done <<< "$lock_versions"
+
+          # A release without its CHANGELOG section is not publishable.
+          bash scripts/release-notes.sh "$tag" --out release-notes.md
+
+          # Runtime labels below are the current GitHub-hosted images:
+          #   ubuntu-22.04    -> Linux x86_64 on glibc 2.35 (older-glibc compatible)
+          #   windows-latest  -> Windows Server 2025, MSVC toolchain
+          #   macos-15-intel  -> macOS x86_64 (macos-13/macos-14 are retired; this is
+          #                      the official Intel label until August 2027)
+          #   macos-15        -> macOS arm64
+          matrix='{"include":[
+            {"target":"x86_64-unknown-linux-gnu","os":"ubuntu-22.04","bin":"lkb","archive":"tar.gz"},
+            {"target":"x86_64-pc-windows-msvc","os":"windows-latest","bin":"lkb.exe","archive":"zip"},
+            {"target":"x86_64-apple-darwin","os":"macos-15-intel","bin":"lkb","archive":"tar.gz"},
+            {"target":"aarch64-apple-darwin","os":"macos-15","bin":"lkb","archive":"tar.gz"}
+          ]}'
+
+          {
+            echo "tag=${tag}"
+            echo "version=${version}"
+            echo "major_minor=${major_minor}"
+            echo "dry_run=${dry_run}"
+            echo "ref=${ref}"
+            echo "commit=${commit}"
+            echo "matrix<<EOF"
+            echo "$matrix"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+          echo "release ${tag} (version ${version}, dry_run=${dry_run}) from ${ref} @ ${commit}"
+
+      - name: Upload release notes
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-meta
+          path: release-notes.md
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # quality: the release gate. Re-runs the Rust test suite on the exact tagged
+  # tree (CI already gates pushes, but a release must not depend on CI state)
+  # and validates the deployment assets.
+  # ---------------------------------------------------------------------------
+  quality:
+    name: quality gates
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.ref }}
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release-tests
+      - name: cargo test --locked
+        run: cargo test --locked
+      - name: Validate deploy/compose.yaml
+        run: |
+          set -euo pipefail
+          cp deploy/lkb.enterprise.toml.example deploy/lkb.enterprise.toml
+          LKB_DB_PASSWORD=ci-placeholder docker compose -f deploy/compose.yaml config >/dev/null
+          echo "compose config OK"
+      - name: Validate deploy/nginx.conf
+        run: |
+          set -euo pipefail
+          docker run --rm --add-host lkb:127.0.0.1 \
+            -v "$PWD/deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro" \
+            nginx:stable-alpine nginx -t
+
+  # ---------------------------------------------------------------------------
+  # rust: native release binaries, one job per target.
+  # ---------------------------------------------------------------------------
+  rust:
+    name: rust (${{ matrix.target }})
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.ref }}
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release-${{ matrix.target }}
+      - name: Build
+        run: cargo build --release --locked --target ${{ matrix.target }}
+      - name: Smoke test (--version)
+        run: |
+          set -euo pipefail
+          version="${{ needs.prepare.outputs.version }}"
+          out="$("target/${{ matrix.target }}/release/${{ matrix.bin }}" --version)"
+          echo "$out"
+          case "$out" in
+            *"$version"*) ;;
+            *) echo "::error::built binary reports '$out', expected version $version"; exit 1 ;;
+          esac
+      - uses: actions/upload-artifact@v7
+        with:
+          name: lkb-${{ matrix.target }}
+          path: target/${{ matrix.target }}/release/${{ matrix.bin }}
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # web: build the React SPA once; used by the web archive, the enterprise
+  # bundle and the container image.
+  # ---------------------------------------------------------------------------
+  web:
+    name: web (dist)
+    needs: prepare
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.ref }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install
+        run: npm ci
+      - name: Build
+        run: npm run build
+      - uses: actions/upload-artifact@v7
+        with:
+          name: web-dist
+          path: web/dist
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # package: assemble one solo archive per target (tar.gz everywhere, zip on
+  # Windows) and check its manifest before it can reach a release.
+  # ---------------------------------------------------------------------------
+  package:
+    name: package (${{ matrix.target }})
+    needs: [prepare, rust]
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.ref }}
+          fetch-depth: 0
+      - uses: actions/download-artifact@v8
+        with:
+          name: lkb-${{ matrix.target }}
+          path: artifacts
+      - name: Assemble solo archive
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          TARGET: ${{ matrix.target }}
+          BIN: ${{ matrix.bin }}
+          ARCHIVE: ${{ matrix.archive }}
+        run: |
+          set -euo pipefail
+          if [ -f "artifacts/${BIN}" ]; then
+            bin_src="artifacts/${BIN}"
+          else
+            bin_src="$(find artifacts -type f -name "${BIN}" -print -quit)"
+          fi
+          [ -n "$bin_src" ] && [ -f "$bin_src" ] || { echo "::error::binary ${BIN} not found in artifacts/"; exit 1; }
+
+          name="lkb-solo-v${VERSION}-${TARGET}"
+          rm -rf "staging/${name}"
+          mkdir -p "staging/${name}/deploy/solo" dist-assets
+          install -m 0755 "$bin_src" "staging/${name}/${BIN}"
+          cp LICENSE README.md CHANGELOG.md "staging/${name}/"
+          cp deploy/solo/lkb.toml.example deploy/solo/README.md "staging/${name}/deploy/solo/"
+
+          if [ "$ARCHIVE" = "zip" ]; then
+            (cd staging && zip -qr "../dist-assets/${name}.zip" "${name}")
+            archive="dist-assets/${name}.zip"
+          else
+            tar --owner=0 --group=0 -czf "dist-assets/${name}.tar.gz" -C staging "${name}"
+            archive="dist-assets/${name}.tar.gz"
+          fi
+          bash scripts/check-archive.sh "$archive" solo
+      - uses: actions/upload-artifact@v7
+        with:
+          name: asset-solo-${{ matrix.target }}
+          path: dist-assets/*
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # assets: web SPA archive, enterprise bundle (compose + nginx + config +
+  # web/dist) and the SPDX SBOM.
+  # ---------------------------------------------------------------------------
+  assets:
+    name: assets (web, enterprise bundle, sbom)
+    needs: [prepare, web]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.ref }}
+          fetch-depth: 0
+      - uses: actions/download-artifact@v8
+        with:
+          name: web-dist
+          path: web-dist
+      - name: Locate dist
+        id: dist
+        run: |
+          set -euo pipefail
+          if [ -f web-dist/dist/index.html ]; then
+            echo "path=web-dist/dist" >> "$GITHUB_OUTPUT"
+          elif [ -f web-dist/index.html ]; then
+            echo "path=web-dist" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::web/dist not found in the web-dist artifact"; exit 1
+          fi
+      - name: Build web SPA archive
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          root="lkb-web-v${VERSION}"
+          rm -rf "staging/${root}"
+          mkdir -p "staging/${root}" dist-assets
+          cp -R "${{ steps.dist.outputs.path }}/." "staging/${root}/"
+          tar --owner=0 --group=0 -czf "dist-assets/${root}.tar.gz" -C staging "${root}"
+          bash scripts/check-archive.sh "dist-assets/${root}.tar.gz" web
+      - name: Build enterprise bundle
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          root="linxira-knowledge-base-enterprise-v${VERSION}"
+          rm -rf "staging/${root}"
+          mkdir -p "staging/${root}/deploy" "staging/${root}/web"
+          cp deploy/README.md deploy/compose.yaml deploy/nginx.conf \
+             deploy/lkb.enterprise.toml.example deploy/.env.example "staging/${root}/deploy/"
+          cp -R "${{ steps.dist.outputs.path }}" "staging/${root}/web/dist"
+          cp LICENSE CHANGELOG.md "staging/${root}/"
+          tar --owner=0 --group=0 -czf "dist-assets/${root}.tar.gz" -C staging "${root}"
+          bash scripts/check-archive.sh "dist-assets/${root}.tar.gz" enterprise
+      - name: Generate dependency SBOM (SPDX 2.3 JSON)
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+          COMMIT: ${{ needs.prepare.outputs.commit }}
+        run: |
+          set -euo pipefail
+          python3 scripts/gen-sbom.py \
+            --version "$VERSION" --tag "$TAG" --commit "$COMMIT" \
+            --created "$(git show -s --format=%cI "$COMMIT")" \
+            --out "dist-assets/linxira-knowledge-base-v${VERSION}.spdx.json"
+          python3 -c "import json,sys;d=json.load(open(sys.argv[1]));assert d['spdxVersion']=='SPDX-2.3';print('sbom packages:',len(d['packages']))" \
+            "dist-assets/linxira-knowledge-base-v${VERSION}.spdx.json"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: asset-extras
+          path: dist-assets/*
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # docker: enterprise image. Pushed only for a real release; a dry run still
+  # builds it, loads it locally and smokes the container.
+  # ---------------------------------------------------------------------------
+  docker:
+    name: docker (ghcr.io/linxira-os/linxira-knowledge-base)
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.ref }}
+          fetch-depth: 0
+      - uses: docker/setup-buildx-action@v4
+      - name: Log in to GHCR
+        if: needs.prepare.outputs.dry_run != 'true'
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Compute image tags
+        id: tags
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          MAJOR_MINOR: ${{ needs.prepare.outputs.major_minor }}
+          DRY_RUN: ${{ needs.prepare.outputs.dry_run }}
+        run: |
+          set -euo pipefail
+          image="ghcr.io/linxira-os/linxira-knowledge-base"
+          # newline-separated list via a here-doc output (spaces would be a single tag)
+          tags="${image}:${VERSION}"
+          tags="${tags}"$'\n'"${image}:${MAJOR_MINOR}"
+          if [ "$DRY_RUN" != "true" ]; then
+            tags="${tags}"$'\n'"${image}:latest"
+          fi
+          {
+            echo "tags<<EOF"
+            echo "$tags"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+          printf 'tags:\n%s\n' "$tags"
+      - name: Build image (push unless dry run)
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: deploy/Dockerfile
+          platforms: linux/amd64
+          tags: ${{ steps.tags.outputs.tags }}
+          labels: |
+            org.opencontainers.image.version=${{ needs.prepare.outputs.version }}
+            org.opencontainers.image.revision=${{ needs.prepare.outputs.commit }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          push: ${{ needs.prepare.outputs.dry_run != 'true' }}
+          load: ${{ needs.prepare.outputs.dry_run == 'true' }}
+          provenance: ${{ needs.prepare.outputs.dry_run != 'true' }}
+          sbom: ${{ needs.prepare.outputs.dry_run != 'true' }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Smoke test image (dry run)
+        if: needs.prepare.outputs.dry_run == 'true'
+        env:
+          IMAGE: ghcr.io/linxira-os/linxira-knowledge-base:${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          docker run --rm "$IMAGE" --version
+          # Defaults are solo/SQLite bound to loopback; host networking lets curl
+          # reach it without changing the image.
+          docker run -d --name lkb-smoke --network host -e LKB_SQLITE_PATH=/data/lkb.sqlite "$IMAGE"
+          ok=""
+          for _ in $(seq 1 45); do
+            if curl -fsS http://127.0.0.1:7331/health > health.json 2>/dev/null; then ok=1; break; fi
+            sleep 1
+          done
+          docker logs lkb-smoke | tail -n 20 || true
+          docker rm -f lkb-smoke >/dev/null || true
+          [ -n "$ok" ] || { echo "::error::lkb container did not answer /health"; exit 1; }
+          cat health.json
+          grep -q '"status"' health.json
+
+  # ---------------------------------------------------------------------------
+  # release: gather every asset, checksum, attest and publish. The asset steps
+  # always run (so a dry run validates them); the GitHub release itself and the
+  # upload only happen for a real release.
+  # ---------------------------------------------------------------------------
+  release:
+    name: release
+    needs: [prepare, quality, package, assets, docker]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download release assets
+        uses: actions/download-artifact@v8
+        with:
+          pattern: asset-*
+          merge-multiple: true
+          path: release-assets
+      - name: Download release notes
+        uses: actions/download-artifact@v8
+        with:
+          name: release-meta
+          path: release-meta
+      - name: Compute SHA256SUMS
+        run: |
+          set -euo pipefail
+          cd release-assets
+          ls -l
+          sha256sum -- * > SHA256SUMS
+          cat SHA256SUMS
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: release-assets/*
+      - name: Upload checksums
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-checksums
+          path: release-assets/SHA256SUMS
+          if-no-files-found: error
+      - name: Create or update GitHub release
+        if: needs.prepare.outputs.dry_run != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          set -euo pipefail
+          notes="release-meta/release-notes.md"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "release $TAG exists; uploading assets (clobber) and refreshing notes"
+            gh release upload "$TAG" release-assets/* --clobber
+            gh release edit "$TAG" --title "$TAG" --notes-file "$notes"
+          else
+            gh release create "$TAG" --title "$TAG" --notes-file "$notes" --verify-tag release-assets/*
+          fi
+          gh release view "$TAG" --json url,isDraft,isPrerelease --jq '"release: \(.url) draft=\(.isDraft) prerelease=\(.isPrerelease)"'
+      - name: Summary
+        env:
+          TAG: ${{ needs.prepare.outputs.tag }}
+          DRY_RUN: ${{ needs.prepare.outputs.dry_run }}
+        run: |
+          set -euo pipefail
+          {
+            echo "## Release ${TAG}$([ "$DRY_RUN" = "true" ] && echo ' (dry run)' || true)"
+            echo
+            echo '| asset | bytes | sha256 |'
+            echo '| --- | ---: | --- |'
+            (cd release-assets && sha256sum -- * | while read -r sum file; do
+              printf '| `%s` | %s | `%s` |\n' "$file" "$(stat -c%s "$file")" "$sum"
+            done)
+            echo
+            if [ "$DRY_RUN" = "true" ]; then
+              echo 'Dry run: no GitHub release was created and no image was pushed. Fix findings and re-run, then push the tag for the real release.'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,106 @@
+# Enterprise deployment example for `lkb` (PostgreSQL).
+#
+# The same binary runs every profile: switching to solo/SQLite is a config
+# change (`profile = "solo"`, `[storage] backend = "sqlite"`), not a different
+# build or a different download. See deploy/solo/lkb.toml.example.
+#
+# Used by deploy/compose.yaml as /etc/lkb/lkb.toml. Copy before use:
+#   cp deploy/lkb.enterprise.toml.example deploy/lkb.enterprise.toml
+# The copied file is gitignored; keep tenant ids and URLs out of the repo.
+
+profile = "enterprise"
+
+[server]
+# Reachable inside the compose network; do not publish this port to the host —
+# nginx is the front door.
+bind = "0.0.0.0:7331"
+
+[auth]
+mode = "session"
+cookie_name = "lkb_session"
+# MUST be true once the deployment is served over HTTPS. The bundled compose
+# stack exposes plain HTTP on localhost for the first run, which is the only
+# reason this is false in this example.
+cookie_secure = false
+session_ttl_hours = 168
+csrf = true
+
+[storage]
+backend = "postgres"
+# Name of the environment variable carrying the DSN; compose sets it.
+url_env = "LKB_DATABASE_URL"
+tenant_id = "t_default"
+default_space = "s_default"
+
+[deployment]
+mode = "enterprise_internal"   # enterprise_internal | enterprise_external
+commercial = false
+
+# [features] defaults are derived from deployment.mode and validated at
+# startup; override only deliberately. enterprise_internal defaults:
+# audit/sso/multi_tenant/public_api/mcp/rate_limit on; signup/billing/
+# connectors/public_share off. `sso` only gates the trusted_header mode below —
+# OIDC/SAML/SCIM are not implemented (see CHANGELOG).
+[features]
+# signup = false
+# billing = false
+# connectors = false
+# sso = true
+# multi_tenant = true
+# public_api = true
+# mcp = true
+# audit = true
+# rate_limit = true
+# public_share = false
+
+# Trusted reverse-proxy SSO (optional). Enable ONLY together with a proxy that
+# overwrites (never forwards) these headers, and list the proxy addresses.
+# Details: docs/zh/08-deployment.md §7 or docs/en/08-deployment.md §7.
+# [sso]
+# mode = "trusted_header"
+# user_header = "x-auth-request-user"
+# email_header = "x-auth-request-email"
+# groups_header = "x-auth-request-groups"
+# trusted_proxies = ["172.16.0.0/12"]
+# auto_provision = true
+# default_role = "user"
+
+[i18n]
+default_locale = "zh-CN"
+supported_locales = ["zh-CN", "en"]
+
+[limits]
+# Limits are per process (in-memory): with multiple replicas each one enforces
+# its own budget. Keep one instance per database for migrations anyway.
+qps_instance = 500
+qps_ip = 30
+qps_user = 100
+qps_token = 60
+qps_tenant = 300
+qps_space = 120
+max_concurrency_instance = 128
+max_queue = 128
+daily_requests_token = 200000
+max_query_chars = 8192
+max_top_k = 100
+
+[seed]
+enabled = true
+auto = true
+space = "product"
+
+[retrieval]
+mode = "auto"
+
+[summary]
+enabled = true
+auto = true
+model_alias = "default"
+
+# Optional OpenAI-compatible provider behind the model gateway. Keys are read
+# from environment variables only and never written to config or logs.
+# [models.llm]
+# provider = "openai"
+# base_url = "https://api.example.com/v1"
+# model = "gpt-5-mini"
+# api_key_env = "LKB_LLM_API_KEY"
