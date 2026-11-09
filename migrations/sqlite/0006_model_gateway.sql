@@ -1,3 +1,4 @@
+-- SPDX-License-Identifier: AGPL-3.0-only
 -- P0c: model gateway control plane, usage events and token quota.
 CREATE TABLE IF NOT EXISTS providers (
     provider_id TEXT PRIMARY KEY,

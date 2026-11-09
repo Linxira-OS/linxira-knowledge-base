@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Token/request/cost quota reservation for model gateway calls.
 
 use crate::error::AppError;

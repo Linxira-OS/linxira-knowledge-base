@@ -1,3 +1,4 @@
+-- SPDX-License-Identifier: AGPL-3.0-only
 -- PostgreSQL keyword index. This is tsvector + GIN + websearch_to_tsquery +
 -- ts_rank_cd, not BM25. The 'simple' configuration has no Chinese word
 -- segmentation; the store reports keyword_exact_fallback when it must use the

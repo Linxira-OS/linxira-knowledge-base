@@ -1,4 +1,8 @@
 # syntax=docker/dockerfile:1
+# SPDX-License-Identifier: MIT OR Apache-2.0
+#
+# The Dockerfile itself is permissive, but the produced image bundles the
+# AGPL-3.0-only core, so the image label below declares AGPL-3.0-only.
 
 # Enterprise deployment image for the Linxira Knowledge Base (`lkb`).
 #
@@ -49,7 +53,7 @@ LABEL org.opencontainers.image.title="Linxira Knowledge Base (lkb)" \
       org.opencontainers.image.description="One kernel, three profiles: solo SQLite through enterprise PostgreSQL" \
       org.opencontainers.image.source="https://github.com/Linxira-OS/linxira-knowledge-base" \
       org.opencontainers.image.url="https://github.com/Linxira-OS/linxira-knowledge-base" \
-      org.opencontainers.image.licenses="MIT"
+      org.opencontainers.image.licenses="AGPL-3.0-only"
 
 ENV HOME=/home/lkb \
     LKB_SQLITE_PATH=/data/lkb.sqlite \

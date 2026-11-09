@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: MIT OR Apache-2.0
 # Extract the release notes for a tag from CHANGELOG.md, plus a footer with the
 # repository / issue tracker / security advisory links and the asset map.
 #
@@ -79,7 +80,7 @@ footer="$(cat <<EOF
 
 ## 发布资产 · Release assets
 
-- 个人用户版（solo CLI）：\`lkb-solo-v${version}-x86_64-unknown-linux-gnu.tar.gz\`、\`lkb-solo-v${version}-x86_64-pc-windows-msvc.zip\`，内含 LICENSE、README、CHANGELOG 与 \`deploy/solo/\` 示例配置。
+- 个人用户版（solo CLI）：\`lkb-solo-v${version}-x86_64-unknown-linux-gnu.tar.gz\`、\`lkb-solo-v${version}-x86_64-pc-windows-msvc.zip\`，内含 LICENSE、LICENSE-MIT、LICENSE-APACHE、LICENSING.md、README、CHANGELOG 与 \`deploy/solo/\` 示例配置。
 - 桌面版（Windows / Linux）：\`lkb-solo-v${version}-windows-x64-setup.exe\`（NSIS 安装包）、\`lkb-solo-v${version}-windows-x64-portable.zip\`、\`lkb-solo-v${version}-linux-amd64.deb\`、\`lkb-solo-v${version}-linux-amd64.AppImage\`、\`lkb-solo-v${version}-linux-amd64.tar.gz\`（便携包）。**macOS 不发布**。
 - 企业部署版（enterprise）：\`${image}\`（另推 \`${version%.*}\` 与 \`latest\`）与 \`linxira-knowledge-base-enterprise-v${version}.tar.gz\`（compose + nginx + 示例配置 + web/dist）。
 - Web SPA：\`lkb-web-v${version}.tar.gz\`；\`SHA256SUMS\`；SPDX SBOM：\`linxira-knowledge-base-v${version}.spdx.json\`。

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! Minimal in-process metrics with a Prometheus text endpoint.
 //!
 //! Labels deliberately stay low-cardinality: no query, tenant or space labels.

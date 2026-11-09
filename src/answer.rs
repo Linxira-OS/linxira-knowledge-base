@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 use crate::contract::{
     sort_degraded, Answer, AnswerMode, Citation, Confidence, Conflict, ConflictReason,
     ConflictResolution, Degraded,

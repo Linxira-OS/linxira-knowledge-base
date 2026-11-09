@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! First-run configuration for the desktop shell: paths, `lkb.toml`, the
 //! PostgreSQL connection metadata and its secret.
 //!

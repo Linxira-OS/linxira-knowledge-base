@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 use crate::error::StoreError;
 use crate::util::normalize_rfc3339;
 use chrono::Utc;

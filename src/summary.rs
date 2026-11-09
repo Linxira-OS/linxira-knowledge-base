@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! Static document summaries and the async summary job worker.
 
 use crate::config::Config;

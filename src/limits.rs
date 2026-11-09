@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! In-process rate limiting and backpressure.
 //!
 //! P0 keeps counters in memory (single process). Team/enterprise multi-instance

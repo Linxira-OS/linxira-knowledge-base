@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Storage quota checks, reservations and usage refresh.
 //!
 //! Storage accounting is per space. Tenant/group/user checks aggregate the

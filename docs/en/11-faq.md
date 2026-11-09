@@ -32,8 +32,7 @@ Only three exit codes exist: 0 success, 1 any command error (`anyhow`/`bail!`), 
 
 | Error meaning | Resolution |
 | --- | --- |
-| `profile solo requires storage.backend = "sqlite"` | solo cannot use PostgreSQL |
-| `profile team/enterprise requires storage.backend = "postgres"` | team/enterprise cannot use SQLite |
+| `profile team/enterprise requires storage.backend = "postgres"` | team/enterprise cannot use SQLite; `solo` accepts `sqlite` or `postgres` |
 | `deployment.mode ... is incompatible with profile ...` | Align mode and profile |
 | `deployment.commercial = true requires features.billing = true` / `solo deployment cannot enable billing` | Fix the billing switch |
 | `enterprise_external requires signup, billing, multi_tenant and public_api` | Enable all four |

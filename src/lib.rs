@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Layered Knowledge Base (LKB).
 //!
 //! One kernel, three profiles. Profile selection lives in configuration and

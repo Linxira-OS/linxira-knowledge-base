@@ -3,6 +3,9 @@
 > 状态：决策记录（生效中）
 > 适用范围：代码托管位置、品牌资产归属、发布前合规清单、许可证边界。
 > 核查时间：2026-11-08。事实口径见 §0；未完成项在 §4 显式标注"未完成"，不当作已具备。
+> **许可证更新（2026-11-09，v0.2.2）**：仓库已改为分层授权——核心 `AGPL-3.0-only`，
+> 产品面 `MIT OR Apache-2.0`，核心可选商业许可，见 `LICENSING.md`。本文
+> §0/§4 中的 `MIT` 记录是 2026-11-08 的历史快照，不描述当前许可证。
 
 ## 0. 核查到的事实
 
@@ -11,12 +14,12 @@
 | `git remote -v` | 空，没有任何 remote |
 | `git log` | 无提交（`your current branch 'master' does not have any commits yet`） |
 | 分支 | 本地 `master`，无 upstream、无其他分支 |
-| `Cargo.toml` | `name = "lkb"`、`version = "0.2.0"`、`edition = "2021"`、`license = "MIT"` |
+| `Cargo.toml` | `name = "lkb"`、`version = "0.2.0"`、`edition = "2021"`、`license` 字段为 MIT（当时） |
 | 根目录合规文件 | 本轮之前无 `LICENSE`、`SECURITY.md`、`CONTRIBUTING.md`、`CODEOWNERS`，无 `.github/`；本轮已补 `LICENSE` |
 | `brand/` | 当前不存在（品牌资产由独立工作流产出，本文只定义其归属） |
 | 许可证红线 | `document/oss-landscape.md` §1 第 5 条与 §11 已定：AGPL / BSL / 改版 Apache / 品牌条款项目不得嵌入分发，连接器只走进程外 HTTP/文件 |
 
-`Cargo.toml` 的 `license = "MIT"` 只是元数据，**不构成许可证文本**；`LICENSE` 文件才是对外授权凭据。两者现在一致。
+`Cargo.toml` 的 `license` 只是元数据，**不构成许可证文本**；`LICENSE` 文件才是对外授权凭据。当时两者一致（MIT）；v0.2.2 起根包为 `AGPL-3.0-only`。
 
 ## 1. 结论先行
 
@@ -129,7 +132,7 @@ GitHub 的仓库转移会保留：**issues、PR（含评论）、stars、watcher
 | 项 | 状态 | 最小要求 |
 | --- | --- | --- |
 | `LICENSE`（MIT） | **已完成（本轮）** | 根目录标准 MIT 文本；版权行 `Copyright (c) 2026 The lkb Authors`；公开发布前确认主体 |
-| `Cargo.toml` `license = "MIT"` | **已完成（已存在）** | 与 `LICENSE` 一致；如需 SPDX 表达式保持 `MIT` |
+| `Cargo.toml` 的 `license` 字段 | **已完成（已存在）** | 当时与 `LICENSE` 一致（MIT）；v0.2.2 起根包改为 `AGPL-3.0-only` |
 | `SECURITY.md` | **未完成** | 受支持版本、私密上报渠道（GitHub private reporting 或安全邮箱）、响应时限、披露策略、范围（含 solo 本地部署的信任边界） |
 | `CONTRIBUTING.md` | **未完成** | 构建前置确认（见 `document/build-policy.md`）、分支/PR 约定、DCO 签名要求、文档先行规则、ADR 流程 |
 | `CODEOWNERS` | **未完成** | `*` 与 `document/`、`migrations/`、`brand/` 的 owner；与分支保护的"必需 CODEOWNERS review"配套 |
@@ -147,7 +150,7 @@ GitHub 的仓库转移会保留：**issues、PR（含评论）、stars、watcher
 
 ## 5. 许可证策略
 
-1. **核心代码：MIT。** 单一宽松许可，允许企业内嵌与商业再分发，降低采用门槛；`LICENSE` 与 `Cargo.toml` 必须始终一致。
+1. **核心代码：AGPL-3.0-only（v0.2.2 起）。** 检索 / 回答 / 治理 / ACL / 存储 / 摄入 / 模型网关 / 配额为核心，产品面（CLI、配置、Web、桌面、部署、脚本、文档、测试）为 `MIT OR Apache-2.0`；闭源嵌入、OEM、白标、闭源 SaaS 需商业许可。`LICENSE` 与根 `Cargo.toml` 的 `license = "AGPL-3.0-only"` 必须始终一致，边界见 `LICENSING.md`。
 2. **连接器（Confluence / MediaWiki / Outline / Notion 等）只做进程外集成。** 依据 `document/oss-landscape.md`：
    - 通过 HTTP API / 导出文件交互，**不链接、不 vendoring、不复制第三方源码**；
    - 不把第三方代码编进 `lkb` 单二进制；
@@ -159,7 +162,7 @@ GitHub 的仓库转移会保留：**issues、PR（含评论）、stars、watcher
    - 该边界属于法务确认项，不因"只是调 API"自动成立。
 4. **Dify（改版 Apache，禁多租户、禁去 logo）、Open WebUI（品牌条款）、Wiki.js / Docmost / Khoj / AppFlowy（AGPL）、Outline（BSL）** 均不得作为运行时依赖或嵌入组件；只借鉴设计。
 5. **禁止把第三方代码"顺手"复制进 `src/`。** 任何外部代码进入本仓，必须在 PR 中标注来源、许可证，并更新 `NOTICE`（若有）。
-6. 发布物（二进制、容器镜像、种子文档）与源码采用同一 MIT 许可；`docs/` 产品文档随产品分发，许可随仓库。
+6. 发布物（二进制、容器镜像）因链接核心，整体按 AGPL-3.0-only 分发并随附 Corresponding Source 义务；`MIT OR Apache-2.0` 层可单独提取。种子文档与 `docs/` 随仓库分层许可。
 
 ## 6. 风险
 

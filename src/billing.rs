@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! Self-hosted wallet/ledger/plan core plus the external billing-engine
 //! boundary. External engines (Lago/OpenMeter/Stripe Billing) never write the
 //! local financial tables; they only emit usage and read entitlement snapshots.

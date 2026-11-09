@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! OS-conventional directories for CLI/server state.
 //!
 //! One unified `lkb` layout (see `document/product-spec.md` §2 and ADR 0014);

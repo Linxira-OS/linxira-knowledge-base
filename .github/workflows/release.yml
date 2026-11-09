@@ -23,7 +23,7 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: "Release tag, e.g. v0.2.1 (must match Cargo.toml and web/package.json)"
+        description: "Release tag, e.g. v0.2.2 (must match Cargo.toml and web/package.json)"
         required: true
         type: string
       dry_run:
@@ -303,7 +303,7 @@ jobs:
           rm -rf "staging/${name}"
           mkdir -p "staging/${name}/deploy/solo" dist-assets
           install -m 0755 "$bin_src" "staging/${name}/${BIN}"
-          cp LICENSE README.md CHANGELOG.md "staging/${name}/"
+          cp LICENSE LICENSE-MIT LICENSE-APACHE LICENSING.md README.md CHANGELOG.md "staging/${name}/"
           cp deploy/solo/lkb.toml.example deploy/solo/README.md "staging/${name}/deploy/solo/"
 
           if [ "$ARCHIVE" = "zip" ]; then
@@ -370,7 +370,7 @@ jobs:
           cp deploy/README.md deploy/compose.yaml deploy/nginx.conf \
              deploy/lkb.enterprise.toml.example deploy/.env.example "staging/${root}/deploy/"
           cp -R "${{ steps.dist.outputs.path }}" "staging/${root}/web/dist"
-          cp LICENSE CHANGELOG.md "staging/${root}/"
+          cp LICENSE LICENSE-MIT LICENSE-APACHE LICENSING.md CHANGELOG.md "staging/${root}/"
           tar --owner=0 --group=0 -czf "dist-assets/${root}.tar.gz" -C staging "${root}"
           bash scripts/check-archive.sh "dist-assets/${root}.tar.gz" enterprise
       - name: Generate dependency SBOM (SPDX 2.3 JSON)
@@ -468,7 +468,7 @@ jobs:
           Copy-Item "desktop/src-tauri/binaries/lkb-x86_64-pc-windows-msvc.exe" "$stage/lkb.exe"
           Copy-Item -Recurse -Force "desktop/src-tauri/resources/web" "$stage/resources/web"
           if (Test-Path "$release/WebView2Loader.dll") { Copy-Item "$release/WebView2Loader.dll" $stage }
-          Copy-Item LICENSE, README.md -Destination $stage
+          Copy-Item LICENSE, LICENSE-MIT, LICENSE-APACHE, LICENSING.md, README.md -Destination $stage
           New-Item -ItemType Directory -Force -Path dist-assets | Out-Null
           Compress-Archive -Path $stage -DestinationPath "dist-assets/lkb-solo-v$version-windows-x64-portable.zip" -Force
       - name: Collect desktop assets

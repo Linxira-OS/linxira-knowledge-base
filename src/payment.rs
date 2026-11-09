@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! Payment provider boundary.
 //!
 //! This module deliberately contains no gateway implementation. Stripe,

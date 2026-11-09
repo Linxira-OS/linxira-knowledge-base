@@ -114,7 +114,7 @@
 | `bm25_judge` | 可选；BM25 后接 judge | 可选 | judge 不可用 → `decision_unavailable`，回 BM25 |
 | `event_entity` | 仅配置抽取后可用 | 仅抽取启用时可用 | 未启用 → `event_entity_not_enabled`；失败 → `event_extraction_unavailable`；均回 BM25 |
 | `hybrid` | 可选；BM25 + dense 和/或 event | PG 默认；按已启用通道融合 | 缺失通道按能力裁剪并声明；event 只提供候选 |
-| `auto` | 解析为 `bm25`；配置抽取后才考虑 event | 解析为 `hybrid` | 按 backend 与能力选择，不静默伪装 |
+| `auto` | embedding 有可见向量或配置抽取且已有 events 时解析为 `hybrid`，否则 `bm25` | 解析为 `hybrid` | 按 backend 与能力选择，不静默伪装 |
 
 部署默认：solo 为 `bm25`；team / enterprise 为 `auto`（解析为 `hybrid`）。显式请求优先于默认值；任何降级都进入 `degraded[]`。模式语义、抽取与双后端调优见 [ADR 0007](adr/0007-event-entity-retrieval.md)。
 

@@ -1,7 +1,8 @@
 {
   "name": "lkb-web",
   "private": true,
-  "version": "0.2.1",
+  "version": "0.2.2",
+  "license": "MIT OR Apache-2.0",
   "description": "Layered Knowledge Base · web front end (Wiki, unified search/QA, admin)",
   "type": "module",
   "scripts": {

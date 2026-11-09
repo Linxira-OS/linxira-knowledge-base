@@ -12,7 +12,7 @@
 2. **不自建协同编辑器。** 页面编辑用 Markdown + 服务端渲染；并发用 revision 版本号做乐观锁（`If-Match`），冲突返回 409，不做 CRDT。
 3. **外部系统只做连接器。** 优先 Confluence、MediaWiki、Outline、Notion 四类；它们有稳定导出格式或 API，且企业装机量大。连接器走进程外 HTTP/文件，不链接第三方代码。
 4. **RAG 平台不集成。** RAGFlow/Dify/Onyx/AnythingLLM 都依赖 Python/Node 运行时（前三者还是多服务栈），与“Rust 单二进制、solo 零外部依赖”直接冲突；只借鉴解析、连接器、ACL 同步与批处理实现。
-5. **许可证是硬约束。** AGPL（Wiki.js/Docmost/Khoj/AppFlowy）、BSL（Outline）、改版 Apache（Dify，禁止多租户服务）、带品牌条款（Open WebUI）都不适合嵌入分发；连接器通过 API 隔离通常可降低衍生作品风险，但仍需法务确认。
+5. **许可证是硬约束（针对第三方依赖）。** AGPL（Wiki.js/Docmost/Khoj/AppFlowy）、BSL（Outline）、改版 Apache（Dify，禁止多租户服务）、带品牌条款（Open WebUI）都不适合嵌入分发；连接器通过 API 隔离通常可降低衍生作品风险，但仍需法务确认。本仓库自有核心自 v0.2.2 起为 AGPL-3.0-only，见 `LICENSING.md`，不适用本条。
 
 ---
 

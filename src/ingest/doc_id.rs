@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 use crate::util::sha256_hex;
 use sha2::{Digest, Sha256};
 

@@ -1,10 +1,12 @@
 [package]
 name = "lkb-desktop"
-version = "0.2.1"
+version = "0.2.2"
 description = "Linxira Knowledge Base desktop shell (Windows/Linux)"
 edition = "2021"
 rust-version = "1.82"
-license = "MIT"
+# The shell is part of the permissive product surface; the bundled sidecar
+# binary remains AGPL-3.0-only. See LICENSING.md.
+license = "MIT OR Apache-2.0"
 publish = false
 
 # Standalone crate: it must never join the repository root package build.

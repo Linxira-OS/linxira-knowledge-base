@@ -32,8 +32,7 @@ SQLite 是 bundled 构建，仍然需要 C 工具链；只装 Rust 不够。
 
 | 报错含义 | 处理 |
 | --- | --- |
-| `profile solo requires storage.backend = "sqlite"` | solo 不能配 PostgreSQL |
-| `profile team/enterprise requires storage.backend = "postgres"` | team/enterprise 不能配 SQLite |
+| `profile team/enterprise requires storage.backend = "postgres"` | team/enterprise 不能配 SQLite；`solo` 允许 `sqlite` 或 `postgres` |
 | `deployment.mode ... is incompatible with profile ...` | 对齐 mode 与 profile |
 | `deployment.commercial = true requires features.billing = true` / `solo deployment cannot enable billing` | 调整 billing 开关 |
 | `enterprise_external requires signup, billing, multi_tenant and public_api` | 四项全部打开 |

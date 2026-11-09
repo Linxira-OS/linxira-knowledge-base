@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! Structured logging setup.
 //!
 //! Without pulling the optional `tracing-subscriber/json` feature this module

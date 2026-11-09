@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 use crate::answer::{build_answer, build_answer_with_ledger, AnswerOptions};
 use crate::config::{AuthMode, Config, Feature};
 use crate::contract::{Answer, Degraded};

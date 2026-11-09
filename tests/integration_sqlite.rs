@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 use lkb::answer::{build_answer, AnswerOptions};
 use lkb::config::{Backend, Config, ProfileName};
 use lkb::contract::AnswerMode;

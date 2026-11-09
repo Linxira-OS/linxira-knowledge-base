@@ -57,16 +57,16 @@
 
 | 项 | 必须 |
 | --- | --- |
-| 版本格式 | `0.2.z`；`0.2.0` 是首个公开版，下一版是 `0.2.1` |
-| tag | `v0.2.z`（如 `v0.2.1`） |
-| 一致性 | `Cargo.toml`、`web/package.json`、`web/package-lock.json`、tag 必须一致；`Cargo.lock` 随 Cargo 更新 |
+| 版本格式 | `0.2.z`；`0.2.0` 是首个公开版，当前 `main` 为 `0.2.2` |
+| tag | `v0.2.z`（如 `v0.2.2`） |
+| 一致性 | `Cargo.toml`、`Cargo.lock`、`web/package.json`、`web/package-lock.json`、`desktop/src-tauri/Cargo.toml`、`desktop/src-tauri/Cargo.lock`、`desktop/src-tauri/tauri.conf.json`、tag 必须一致 |
 | release notes | 每个 patch 一段；不得复用上一段 |
 | 升级边界 | `0.3.0` / `1.0` 需要新 ADR + 迁移说明，不得直接打 tag |
 | 禁止 | 在 0.2 阶段升 minor/major、并行维护多个 minor、用日期/构建号替代 semver |
 
 ## 3.2 版本与发布检查
 
-- 发布前检查：`Cargo.toml` = `web/package.json` = `web/package-lock.json` = tag（去掉 `v`）。
+- 发布前检查：`Cargo.toml` = `Cargo.lock` = `web/package.json` = `web/package-lock.json` = `desktop/src-tauri/Cargo.toml` = `desktop/src-tauri/Cargo.lock` = `desktop/src-tauri/tauri.conf.json` = tag（去掉 `v`）。
 - 发布资产命名使用 `v<version>`；不得出现 `v0.2`、`v0.2.0.1`、`latest` 作为唯一版本标识。
 - `lkb --version` 与 release 页面一致；桌面/CLI/Docker 使用同一二进制。
 
@@ -149,3 +149,18 @@
 | 旧 API/HTML | `/api/search`、`/api/ask`、`/w/...` 仍在 | 保留兼容期，不再扩展 |
 
 > 本表只记录冲突，不在本规范中改代码；实现变更需单独任务与验收。
+
+## 12. 许可证与商业许可冻结（v0.2.2 起）
+
+分层授权是产品边界的一部分，随版本冻结；变更需新 ADR 并同步 `LICENSING.md`。
+
+| 层 | 许可证 | 路径 | 规则 |
+| --- | --- | --- | --- |
+| 核心 | `AGPL-3.0-only` | `src/search.rs`、`src/answer.rs`、`src/governance.rs`、`src/access.rs`、`src/contract.rs`、`src/store/**`、`src/ingest/**`、`src/providers/**`、`src/gateway.rs`、`src/token_quota.rs`、`src/quota.rs`、`src/lib.rs`、`migrations/**` | 不得改为宽松许可；不得把核心文件移入宽松层 |
+| 产品面 | `MIT OR Apache-2.0` | `src/cli.rs`、`src/paths.rs`、`src/config.rs`、`src/util.rs`、`src/error.rs`、`src/i18n.rs`、`src/logging.rs`、`src/metrics.rs`、`src/limits.rs`、`src/connectors.rs`、`src/payment.rs`、`src/billing.rs`、`src/summary.rs`、`src/conversation.rs`、`src/seed.rs`、`src/frontmatter.rs`、`src/mcp.rs`、`src/eval.rs`、`src/event.rs`、`src/audit.rs`、`src/openapi.rs`、`src/web.rs`、`src/main.rs`、`web/**`、`desktop/**`、`deploy/**`、`scripts/**`、`docs/**`、`document/**`、`tests/**` | 可独立提取商用；新增 UI/工具默认落此层 |
+
+- **整包分发**：根 `Cargo.toml` 的 `license = "AGPL-3.0-only"`；对外分发的二进制与容器因链接核心，整体按 AGPL-3.0-only 分发，Docker label 固定 `org.opencontainers.image.licenses="AGPL-3.0-only"`。
+- **SPDX 头**：源文件首行必须带所属层的 SPDX 标识；文件头与 `LICENSING.md` 冲突时以 AGPL 为准。
+- **商业许可**：仅针对 AGPL 核心；闭源嵌入、OEM、白标、闭源 SaaS、规避源码义务需联系作者；唯一入口为 GitHub Issues 加 `commercial-license` 标签，不设销售邮箱。
+- **版本历史**：`v0.2.1` 及更早为 MIT，已发布资产不追溯；`v0.2.2` 起分层。
+- **贡献**：PR 即按文件层授权，核心贡献额外授予作者商业再许可权（轻量入站 CLA）；DCO 仍强制。

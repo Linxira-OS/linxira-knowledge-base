@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! Linxira Knowledge Base desktop shell (Windows / Linux).
 //!
 //! The shell writes a first-run configuration, spawns the bundled

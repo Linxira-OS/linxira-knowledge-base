@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! Event-entity derived records for the optional SQL-RAG channel.
 //!
 //! Extraction is always optional. These helpers only derive stable IDs and

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! Minimal frontmatter parser for seed and Markdown imports.
 //!
 //! Only a flat `key: value` block is supported. Values may be single- or

@@ -1,3 +1,4 @@
+-- SPDX-License-Identifier: AGPL-3.0-only
 CREATE TABLE IF NOT EXISTS schema_migrations (
     version TEXT PRIMARY KEY,
     applied_at TEXT NOT NULL

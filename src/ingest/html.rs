@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 /// Conservative HTML-to-text extraction. It is deliberately not a full HTML
 /// parser: it removes script/style/comment content, converts block boundaries
 /// to newlines, decodes common entities, and keeps text order. Chunks and

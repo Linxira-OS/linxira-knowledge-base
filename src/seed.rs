@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! Built-in product documentation seed (`docs/`).
 //!
 //! The 24 Markdown files are embedded at compile time. Seeding writes normal

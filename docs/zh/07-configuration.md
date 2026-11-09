@@ -18,7 +18,7 @@ summary: lkb.toml 全字段默认值、环境变量覆盖、模型 provider 与�
 4. 归一化：按后端推断 `profile`；solo 强制固定治理 ID；非 solo 收紧限额；解析 `deployment.mode` 与功能默认值。
 5. 校验；失败则退出。
 
-`profile` 未设置时，SQLite 推断为 `solo`，PostgreSQL 推断为 `team`。solo 归一化会强制 `tenant_id = t_local`、`default_space = s_default`，并关闭自助建组/建空间。`deployment.mode` 未设置时：`solo → solo`、`team → team`、`enterprise → enterprise_internal`；`enterprise_external` 只能显式配置。
+`profile` 未设置时，SQLite 推断为 `solo`，PostgreSQL 推断为 `team`；solo + PostgreSQL 需显式设置 `profile = "solo"`。solo 归一化会强制 `tenant_id = t_local`、`default_space = s_default`，并关闭自助建组/建空间。`deployment.mode` 未设置时：`solo → solo`、`team → team`、`enterprise → enterprise_internal`；`enterprise_external` 只能显式配置。
 
 ## 2. profile、server 与 auth
 
@@ -162,6 +162,7 @@ summary: lkb.toml 全字段默认值、环境变量覆盖、模型 provider 与�
 | `retrieval.rrf_bm25_weight` | `1.0` | 有限非负数 |
 | `retrieval.rrf_dense_weight` | `1.0` | 有限非负数 |
 | `retrieval.rrf_event_weight` | `1.0` | 有限非负数 |
+| `retrieval.judge_after_hybrid` | `true` | 已配置 judge 时对融合后的 `hybrid` 列表重排（Top 30）；未配置 judge 不报降级 |
 
 ## 9. payment 与 billing
 
@@ -221,7 +222,7 @@ summary: lkb.toml 全字段默认值、环境变量覆盖、模型 provider 与�
 
 以下任一条件失败即拒绝启动：
 
-- `solo` + `postgres`，或 `team`/`enterprise` + `sqlite`。
+- `team`/`enterprise` + `sqlite`（solo 允许 `sqlite` 或 `postgres`）。
 - `deployment.mode` 与 `profile` 不兼容。
 - `commercial = true` 但未开 `features.billing`；solo 打开 billing；`enterprise_external` 缺 `signup`/`billing`/`multi_tenant`/`public_api`；enterprise 关闭 audit。
 - i18n：`default_locale` 为空、`supported_locales` 为空、超过 28 个、默认值不在支持列表、缺少 `en` 回退。
@@ -266,6 +267,7 @@ space = "product"
 [retrieval]
 mode = "auto"
 judge_alias = "default"
+judge_after_hybrid = true
 ```
 
 team / enterprise_external：

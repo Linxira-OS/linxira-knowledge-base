@@ -18,7 +18,7 @@ There is one configuration entry point: `lkb.toml`. If the file is absent, defau
 4. Normalize: infer `profile` from the backend, force solo governance IDs, tighten limits for non-solo, resolve `deployment.mode` and feature defaults.
 5. Validate; exit on failure.
 
-When `profile` is unset, SQLite infers `solo` and PostgreSQL infers `team`. solo normalization forces `tenant_id = t_local`, `default_space = s_default`, and disables self-service groups/spaces. When `deployment.mode` is unset: `solo → solo`, `team → team`, `enterprise → enterprise_internal`; `enterprise_external` only via explicit configuration.
+When `profile` is unset, SQLite infers `solo` and PostgreSQL infers `team`; run solo on PostgreSQL by setting `profile = "solo"` explicitly. solo normalization forces `tenant_id = t_local`, `default_space = s_default`, and disables self-service groups/spaces. When `deployment.mode` is unset: `solo → solo`, `team → team`, `enterprise → enterprise_internal`; `enterprise_external` only via explicit configuration.
 
 ## 2. profile, server, auth
 
@@ -162,6 +162,7 @@ Team/enterprise tightening only overwrites values still equal to the defaults. L
 | `retrieval.rrf_bm25_weight` | `1.0` | Finite, non-negative |
 | `retrieval.rrf_dense_weight` | `1.0` | Finite, non-negative |
 | `retrieval.rrf_event_weight` | `1.0` | Finite, non-negative |
+| `retrieval.judge_after_hybrid` | `true` | Let a configured judge rerank the fused `hybrid` list (Top 30); absent judge is silent |
 
 ## 9. payment and billing
 
@@ -221,7 +222,7 @@ No environment overrides exist for `models.*`, `limits.*`, `summary.*`, `query.*
 
 Startup is rejected when any of these fail:
 
-- `solo` with `postgres`, or `team`/`enterprise` with `sqlite`.
+- `team`/`enterprise` with `sqlite` (solo accepts `sqlite` or `postgres`).
 - `deployment.mode` incompatible with `profile`.
 - `commercial = true` without `features.billing`; billing enabled under solo; `enterprise_external` missing `signup`/`billing`/`multi_tenant`/`public_api`; enterprise with audit disabled.
 - i18n: empty `default_locale`, empty `supported_locales`, more than 28 locales, default missing from supported, or no `en` fallback.
@@ -266,6 +267,7 @@ space = "product"
 [retrieval]
 mode = "auto"
 judge_alias = "default"
+judge_after_hybrid = true
 ```
 
 team / enterprise_external:

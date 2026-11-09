@@ -34,12 +34,11 @@ cp "$app_bin" "$staging/$name/lkb-desktop"
 cp "$release_dir/lkb" "$staging/$name/lkb"
 cp -R "$release_dir/resources/web" "$staging/$name/resources/web"
 chmod +x "$staging/$name/lkb-desktop" "$staging/$name/lkb"
-if [[ -f "$repo_root/LICENSE" ]]; then
-  cp "$repo_root/LICENSE" "$staging/$name/"
-fi
-if [[ -f "$repo_root/README.md" ]]; then
-  cp "$repo_root/README.md" "$staging/$name/"
-fi
+for f in LICENSE LICENSE-MIT LICENSE-APACHE LICENSING.md README.md; do
+  if [[ -f "$repo_root/$f" ]]; then
+    cp "$repo_root/$f" "$staging/$name/"
+  fi
+done
 
 tar --owner=0 --group=0 -czf "$out_dir/$tar_name.tar.gz" -C "$staging" "$name"
 echo "portable -> $out_dir/$tar_name.tar.gz"

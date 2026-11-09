@@ -38,12 +38,11 @@ cp -R "$release_dir/resources/web" "$staging/$name/resources/web"
 if [[ -f "$release_dir/WebView2Loader.dll" ]]; then
   cp "$release_dir/WebView2Loader.dll" "$staging/$name/"
 fi
-if [[ -f "$repo_root/LICENSE" ]]; then
-  cp "$repo_root/LICENSE" "$staging/$name/"
-fi
-if [[ -f "$repo_root/README.md" ]]; then
-  cp "$repo_root/README.md" "$staging/$name/"
-fi
+for f in LICENSE LICENSE-MIT LICENSE-APACHE LICENSING.md README.md; do
+  if [[ -f "$repo_root/$f" ]]; then
+    cp "$repo_root/$f" "$staging/$name/"
+  fi
+done
 
 (cd "$staging" && zip -qr "$out_dir/$zip_name.zip" "$name")
 echo "portable -> $out_dir/$zip_name.zip"

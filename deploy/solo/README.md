@@ -6,7 +6,10 @@
 
 ```
 lkb                # Linux x86_64 可执行文件（Windows 归档内为 lkb.exe）
-LICENSE
+LICENSE            # AGPL-3.0-only（核心）
+LICENSE-MIT
+LICENSE-APACHE
+LICENSING.md       # 分层授权与商业许可说明
 README.md
 CHANGELOG.md
 deploy/solo/lkb.toml.example

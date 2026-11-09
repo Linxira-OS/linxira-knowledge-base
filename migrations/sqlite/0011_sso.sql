@@ -1,3 +1,4 @@
+-- SPDX-License-Identifier: AGPL-3.0-only
 ALTER TABLE users ADD COLUMN email TEXT;
 ALTER TABLE users ADD COLUMN external_id TEXT;
 ALTER TABLE users ADD COLUMN source TEXT NOT NULL DEFAULT 'local';

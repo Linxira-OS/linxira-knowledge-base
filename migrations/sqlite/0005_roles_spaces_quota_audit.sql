@@ -1,3 +1,4 @@
+-- SPDX-License-Identifier: AGPL-3.0-only
 -- P0a/P0b: tenant roles, groups, space members, quotas and audit.
 ALTER TABLE api_tokens ADD COLUMN kind TEXT NOT NULL DEFAULT 'user';
 ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user';

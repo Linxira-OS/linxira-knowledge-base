@@ -86,7 +86,10 @@ docker run -d --name lkb -p 127.0.0.1:7331:7331 \
 linxira-knowledge-base-enterprise-v0.2.1/
   deploy/{compose.yaml,nginx.conf,lkb.enterprise.toml.example,.env.example,README.md}
   web/dist/          # SPA（compose 里为 ../web/dist）
-  LICENSE
+  LICENSE            # AGPL-3.0-only
+  LICENSE-MIT
+  LICENSE-APACHE
+  LICENSING.md
   CHANGELOG.md
 ```
 
@@ -104,7 +107,7 @@ linxira-knowledge-base-enterprise-v0.2.1/
 | `lkb-solo-v<version>-linux-amd64.AppImage` | 单文件 AppImage：`chmod +x` 后直接运行 |
 | `lkb-solo-v<version>-linux-amd64.tar.gz` | 便携包（与便携 zip 同布局） |
 
-- 便携包内容：`lkb/lkb-desktop[.exe]`、`lkb/lkb[.exe]`（sidecar）、`lkb/resources/web/**`（内嵌 SPA）、`LICENSE`、`README.md`；Windows 上可能另有 `WebView2Loader.dll`。
+- 便携包内容：`lkb/lkb-desktop[.exe]`、`lkb/lkb[.exe]`（sidecar）、`lkb/resources/web/**`（内嵌 SPA）、`LICENSE`、`LICENSE-MIT`、`LICENSE-APACHE`、`LICENSING.md`、`README.md`；Windows 上可能另有 `WebView2Loader.dll`。
 - 桌面壳按统一 `lkb` 路径存放配置与数据（Windows `%APPDATA%\lkb` / `%LOCALAPPDATA%\lkb`，Linux XDG），详见 [`desktop/README.md`](../desktop/README.md)。
 - 本地构建等价物：`scripts/build-sidecar.{sh,ps1}` 生成 sidecar 与 `resources/web`；`deploy/desktop/portable-zip.sh` / `deploy/desktop/portable-tar.sh` 组装便携包。所有安装包未签名，Windows 可能出现 SmartScreen 提示。
 

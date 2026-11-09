@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 use axum::body::Body;
 use axum::http::{header, Request, StatusCode};
 use lkb::config::Config;

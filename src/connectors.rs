@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! External knowledge connectors. The source system remains the authority:
 //! we keep text snapshots, locators and ACL mirrors, never binaries or source
 //! credentials. Connectors only speak HTTP/files.

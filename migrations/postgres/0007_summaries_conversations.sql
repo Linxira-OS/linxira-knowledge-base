@@ -1,3 +1,4 @@
+-- SPDX-License-Identifier: AGPL-3.0-only
 -- P0d: static summaries, summary jobs, conversations and messages.
 CREATE TABLE IF NOT EXISTS document_summaries (
     tenant_id TEXT NOT NULL,

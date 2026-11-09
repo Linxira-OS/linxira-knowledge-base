@@ -1,10 +1,12 @@
 [package]
 name = "lkb"
-version = "0.2.1"
+version = "0.2.2"
 edition = "2021"
 rust-version = "1.82"
 description = "Layered knowledge base: one kernel, three profiles, files as source of truth"
-license = "MIT"
+# The published package bundles the AGPL-3.0-only core; permissive files are
+# individually MIT OR Apache-2.0. See LICENSING.md.
+license = "AGPL-3.0-only"
 repository = "https://github.com/Linxira-OS/linxira-knowledge-base"
 homepage = "https://github.com/Linxira-OS/linxira-knowledge-base"
 readme = "README.md"

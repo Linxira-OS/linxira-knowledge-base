@@ -15,9 +15,9 @@ summary: 解释 bm25、bm25_judge、event_entity、hybrid、auto 五种模式、
 | 模式 | 依赖 | 行为 | 不可用时 |
 | --- | --- | --- | --- |
 | `bm25` | 关键词索引 | 始终可用的基础召回；SQLite 用 FTS5 + `bm25()`，PostgreSQL 用 `tsvector` + `ts_rank_cd` | 关键词索引不可用则写 `keyword_unavailable`，返回空证据 |
-| `bm25_judge` | 关键词 + judge alias | 先召回，再让 judge 只对前 30 条重排；候选集成员不变 | 写 `decision_unavailable`，保留原顺序 |
+| `bm25_judge` | 关键词 + judge alias | 先召回，再让 judge 对前 30 条重排（重排窗口，不是召回上限）；候选集成员不变 | 写 `decision_unavailable`，保留原顺序 |
 | `event_entity`（别名 `event`） | 抽取器 + 已建事件 | 先选种子实体，沿共享实体扩展 1–2 跳，聚合事件后映射回切片 | 未启用写 `event_not_enabled`；抽取不可用写 `event_extraction_unavailable`；无种子写 `event_no_seed`；超时写 `event_channel_timeout`；均回退关键词 |
-| `hybrid` | 关键词 + 可选 dense + 可选 event | 多路候选做 RRF 融合（`k = 60`，权重可配） | 缺失通道按能力裁剪并写降级；两路都缺时只剩关键词 |
+| `hybrid` | 关键词 + 可选 dense + 可选 event + 可选 judge | 多路候选做 RRF 融合（`k = 60`，权重可配）；已配置 judge 时默认在融合后重排 Top 30 | 缺失通道按能力裁剪并写降级；两路都缺时只剩关键词；未配置 judge 不算降级 |
 | `auto` | 后端与已配置能力 | 按规则解析成上面某一种 | 解析结果见下一节 |
 
 CLI 与 HTTP 都接受这些值；`--mode event` 和 `--mode event_entity` 等价，`--mode keyword` 等价于 `bm25`。语言过滤用 `--lang` / `lang`，在召回 SQL 的 WHERE 中生效。
@@ -27,10 +27,13 @@ CLI 与 HTTP 都接受这些值；`--mode event` 和 `--mode event_entity` 等�
 `auto` 的解析规则是确定的：
 
 1. PostgreSQL 后端 → `hybrid`。
-2. SQLite 且已配置抽取器、数据库中已有事件 → `hybrid`。
-3. 其他情况 → `bm25`。
+2. SQLite 且已配置 embedding provider，且当前可见范围内已有切片向量 → `hybrid`。
+3. 否则，SQLite 且已配置抽取器、数据库中已有事件 → `hybrid`。
+4. 其他情况 → `bm25`。
 
-solo 默认配置是 `retrieval.mode = "auto"`，因此未配置抽取时实际走 `bm25`。显式请求某个模式时以请求为准。
+solo 默认配置是 `retrieval.mode = "auto"`，因此不配模型时走 `bm25`；配置 embedding provider 且已有索引向量即可进入 `hybrid`。显式请求某个模式时以请求为准。
+
+注意：SQLite 的 `auto` 只探测调用方可见的租户/空间。若配置了 embedding provider 但没有可见的切片向量，则继续检查抽取器/events（或落到 `bm25`），并写入 `index_missing`，空的 dense 通道不会被静默忽略。PostgreSQL 的 `auto` 固定解析为 `hybrid`，缺 embedding 时 dense 通道降级、关键词检索仍可用。
 
 ## 3. 关键词通道
 
@@ -41,7 +44,7 @@ solo 默认配置是 `retrieval.mode = "auto"`，因此未配置抽取时实际�
 
 ## 4. judge 重排（经模型网关）
 
-`bm25_judge` 只改变顺序，不改变候选集成员。judge 通过 `retrieval.judge_alias`（默认 `default`）调用模型网关，输入查询与前 30 条候选的截断片段，返回同数量的分数；调用失败或数量不匹配写 `decision_unavailable`，保留原顺序。judge 的用量同样写入 `usage_events`，`source=judge`。
+`bm25_judge` 只改变顺序，不改变候选集成员。judge 通过 `retrieval.judge_alias`（默认 `default`）调用模型网关，输入查询与前 30 条候选的截断片段，返回同数量的分数；前 30 条是 judge 的重排窗口，不是召回上限。调用失败或数量不匹配写 `decision_unavailable`，保留原顺序。judge 的用量同样写入 `usage_events`，`source=judge`。
 
 判别模型不能找回召回阶段漏掉的文档。如果候选集本身没有正确答案，重排不会创造答案。
 
@@ -64,6 +67,8 @@ event-entity 是可选通道，需要两件事同时成立：
 - dense 一路只在显式配置 embedding provider 时参与：查询嵌入 + 已存切片向量的进程内余弦，候选上限 `max(limit × 20, 100)`。
 - event 一路只在抽取器已配置且存在事件时参与。
 - 每路贡献 `weight / (60 + rank)`；同一 `chunk_id` 多路命中会累加分数。
+
+融合后，若 `retrieval.judge_after_hybrid = true`（默认）且已配置 judge，则对 Top 30 重排；候选集成员与尾部顺序不变。hybrid 不要求 judge，未配置时**不写降级**；已配置但调用失败写 `decision_unavailable`。设为 `false` 可保持纯 RRF 顺序。
 
 dense 没有独立向量索引。未配置 embedding 写 `dense_not_enabled`；查询嵌入失败写 `embedding_unavailable`；没有切片向量写 `index_missing`。这些都不阻塞关键词结果。
 

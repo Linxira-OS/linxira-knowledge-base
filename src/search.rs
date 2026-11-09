@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 use crate::config::RetrievalConfig;
 use crate::contract::{sort_degraded, Degraded};
 use crate::error::StoreError;

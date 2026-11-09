@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: MIT OR Apache-2.0
 # Verify the file manifest of a release archive before it is published.
 #
 # Usage: scripts/check-archive.sh <archive> <solo|web|enterprise|desktop-portable>
@@ -77,6 +78,9 @@ case "$kind" in
             exit 1
         fi
         require LICENSE
+        require LICENSE-MIT
+        require LICENSE-APACHE
+        require LICENSING.md
         require README.md
         require CHANGELOG.md
         require deploy/solo/lkb.toml.example
@@ -93,6 +97,9 @@ case "$kind" in
         require deploy/README.md
         require web/dist/index.html
         require LICENSE
+        require LICENSE-MIT
+        require LICENSE-APACHE
+        require LICENSING.md
         ;;
     desktop-portable)
         # Tauri portable layout (Windows zip / Linux tar.gz): the app, the
@@ -107,6 +114,9 @@ case "$kind" in
         fi
         require resources/web/index.html
         require LICENSE
+        require LICENSE-MIT
+        require LICENSE-APACHE
+        require LICENSING.md
         require README.md
         ;;
 esac

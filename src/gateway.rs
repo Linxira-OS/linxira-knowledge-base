@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Rust thin model gateway: public aliases, provider routes, failover,
 //! usage events and pre-call token quota reservations.
 

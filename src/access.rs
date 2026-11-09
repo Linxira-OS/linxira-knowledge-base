@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Tenant/group/space effective role resolution.
 //!
 //! The three role layers are deliberately separate: tenant roles decide

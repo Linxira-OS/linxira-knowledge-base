@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! Multi-turn query rewriting. Retrieval ACL remains governed by the caller's
 //! Policy; conversation context only changes the query text.
 

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! Audit event writer/query helper.
 //!
 //! Audit writes are best effort for domain handlers: a storage failure is

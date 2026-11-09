@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 use crate::config::{ModelConfig, ModelsConfig};
 use async_trait::async_trait;
 use serde_json::{json, Value};

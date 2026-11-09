@@ -1,4 +1,5 @@
 #requires -Version 5.1
+# SPDX-License-Identifier: MIT OR Apache-2.0
 <#
 .SYNOPSIS
   Build the desktop inputs: the `lkb` sidecar and the web SPA.

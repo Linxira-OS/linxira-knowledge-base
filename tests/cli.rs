@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 use assert_cmd::Command;
 use serde_json::Value;
 use std::path::{Path, PathBuf};

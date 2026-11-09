@@ -30,7 +30,7 @@
 | `lkb-solo-v<version>-x86_64-unknown-linux-gnu.tar.gz` | solo CLI | ubuntu-22.04 构建（glibc 2.35），兼容较旧发行版 |
 | `lkb-solo-v<version>-x86_64-pc-windows-msvc.zip` | solo CLI | windows-latest，MSVC |
 | `lkb-solo-v<version>-windows-x64-setup.exe` | desktop | NSIS 安装包（用户级安装），windows-latest + Tauri 2 |
-| `lkb-solo-v<version>-windows-x64-portable.zip` | desktop | 便携包：`lkb/lkb-desktop.exe` + sidecar + `resources/web` + LICENSE/README |
+| `lkb-solo-v<version>-windows-x64-portable.zip` | desktop | 便携包：`lkb/lkb-desktop.exe` + sidecar + `resources/web` + LICENSE/LICENSE-MIT/LICENSE-APACHE/LICENSING.md/README |
 | `lkb-solo-v<version>-linux-amd64.deb` | desktop | Debian/Ubuntu 包，ubuntu-22.04 + Tauri 2 |
 | `lkb-solo-v<version>-linux-amd64.AppImage` | desktop | 单文件 AppImage |
 | `lkb-solo-v<version>-linux-amd64.tar.gz` | desktop | 便携包（与便携 zip 同布局） |
@@ -102,7 +102,7 @@ gh attestation verify lkb-solo-v0.2.1-windows-x64-setup.exe \
 
 - 归档与 `SHA256SUMS` 由 GitHub Artifact Attestations 证明来源（Sigstore，绑定 workflow/commit）；当前**没有** GPG/cosign 自签密钥。
 - 镜像：`docker buildx imagetools inspect <image>` 查看 digest 与 attestation；`docker scout attest get --predicate-type=https://spdx.dev/Document <image>` 读取镜像 SBOM。
-- `linxira-knowledge-base-v<version>.spdx.json` 是来源级 SBOM（锁定依赖清单），不是二进制扫描结果；许可证字段为 `NOASSERTION`。
+- `linxira-knowledge-base-v<version>.spdx.json` 是来源级 SBOM（锁定依赖清单），不是二进制扫描结果；三个仓库包显式声明 `AGPL-3.0-only`（`lkb`）与 `MIT OR Apache-2.0`（`lkb-web`、`lkb-desktop`），第三方依赖仍为 `NOASSERTION`。
 
 ## 7. 回滚
 

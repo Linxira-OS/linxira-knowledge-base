@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! Static guard for hand-written PostgreSQL SQL: every direct `sqlx::query`
 //! literal with immediately chained `.bind(...)` calls must have placeholder
 //! numbers 1..=N where N equals the bind count. Dynamic `format!` queries are

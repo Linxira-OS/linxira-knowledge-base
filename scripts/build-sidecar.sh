@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: MIT OR Apache-2.0
 # Build the desktop inputs: the `lkb` sidecar and the web SPA.
 #
 #   scripts/build-sidecar.sh [--target <triple>] [--skip-web] [--skip-rust]

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 use super::*;
 use crate::util::{fts5_query, now_rfc3339, query_terms};
 use async_trait::async_trait;

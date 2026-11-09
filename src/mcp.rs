@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! Minimal MCP (Model Context Protocol) stdio server. It shares the REST
 //! kernel: the same store, policy, search/answer/summary paths.
 

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! Static OpenAPI 3.1 document. It is intentionally data-only so tests can
 //! assert that documented paths exist in the router. Only implemented
 //! endpoints are listed, so the document never claims a path the router does

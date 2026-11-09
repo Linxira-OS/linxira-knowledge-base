@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! Locale resolution, stable message keys and small ICU-style formatters.
 //!
 //! Message catalogs are intentionally code-resident for the initial zh-CN/en

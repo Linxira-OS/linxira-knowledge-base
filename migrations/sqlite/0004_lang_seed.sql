@@ -1,3 +1,4 @@
+-- SPDX-License-Identifier: AGPL-3.0-only
 ALTER TABLE documents ADD COLUMN lang TEXT NOT NULL DEFAULT 'zh';
 ALTER TABLE chunks ADD COLUMN lang TEXT NOT NULL DEFAULT 'zh';
 ALTER TABLE events ADD COLUMN lang TEXT NOT NULL DEFAULT 'zh';

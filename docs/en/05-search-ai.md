@@ -15,9 +15,9 @@ Retrieval is the center of the product. Four facts explain a response: the reque
 | Mode | Requires | Behavior | When unavailable |
 | --- | --- | --- | --- |
 | `bm25` | Keyword index | The always-available base recall; SQLite uses FTS5 with `bm25()`, PostgreSQL uses `tsvector` with `ts_rank_cd` | If the keyword index is unavailable, `keyword_unavailable` is recorded and evidence is empty |
-| `bm25_judge` | Keyword plus judge alias | Recalls first, then lets the judge rerank only the top 30; candidate membership is unchanged | Records `decision_unavailable` and keeps the original order |
+| `bm25_judge` | Keyword plus judge alias | Recalls first, then lets the judge rerank the top 30 (a rerank window, not a recall cap); candidate membership is unchanged | Records `decision_unavailable` and keeps the original order |
 | `event_entity` (alias `event`) | Extractor plus indexed events | Picks seed entities, expands 1–2 hops over shared entities, aggregates events, and maps back to chunks | Disabled writes `event_not_enabled`; unavailable extraction writes `event_extraction_unavailable`; no seeds writes `event_no_seed`; timeout writes `event_channel_timeout`; all fall back |
-| `hybrid` | Keyword plus optional dense and optional event | Fuses candidate lists with RRF (`k = 60`, configurable weights) | Missing channels are pruned and reported; with none left only keyword remains |
+| `hybrid` | Keyword plus optional dense, optional event, optional judge | Fuses candidate lists with RRF (`k = 60`, configurable weights); a configured judge reranks Top 30 after fusion by default | Missing channels are pruned and reported; with none left only keyword remains; absent judge is not degraded |
 | `auto` | Backend and configured capabilities | Resolves to one of the modes above | See the next section |
 
 The CLI and HTTP accept these values. `--mode event` equals `event_entity`; `--mode keyword` equals `bm25`. Language filtering uses `--lang` / `lang` and applies inside the recall SQL.
@@ -27,10 +27,13 @@ The CLI and HTTP accept these values. `--mode event` equals `event_entity`; `--m
 `auto` resolution is deterministic:
 
 1. PostgreSQL backend → `hybrid`.
-2. SQLite with a configured extractor and events in the database → `hybrid`.
-3. Anything else → `bm25`.
+2. SQLite with a configured embedding provider and at least one visible stored vector → `hybrid`.
+3. Otherwise, SQLite with a configured extractor and events in the database → `hybrid`.
+4. Anything else → `bm25`.
 
-solo defaults to `retrieval.mode = "auto"`, so without extraction it runs `bm25`. An explicitly requested mode is honored.
+solo defaults to `retrieval.mode = "auto"`, so without models it runs `bm25`; a configured embedding provider with indexed vectors is enough to enable `hybrid`. An explicitly requested mode is honored.
+
+Note: on SQLite, `auto` probes only the caller's visible tenant/spaces. If an embedding provider is configured but no stored vector is visible, the mode falls through to the extractor/events check (or `bm25`) and writes `index_missing`, so the empty dense channel is never silent. On PostgreSQL, `auto` always resolves to `hybrid`; without an embedding provider the dense channel degrades and keyword retrieval still works.
 
 ## 3. The Keyword Channel
 
@@ -41,7 +44,7 @@ solo defaults to `retrieval.mode = "auto"`, so without extraction it runs `bm25`
 
 ## 4. Judge Reranking (through the gateway)
 
-`bm25_judge` changes only order, never candidate membership. The judge is called through `retrieval.judge_alias` (default `default`) with the query and truncated snippets of up to 30 candidates; it must return the same number of scores. Failure or a count mismatch writes `decision_unavailable` and keeps the original order. Judge usage is written to `usage_events` with `source=judge`.
+`bm25_judge` changes only order, never candidate membership. The judge is called through `retrieval.judge_alias` (default `default`) with the query and truncated snippets of up to 30 candidates; it must return the same number of scores. The top 30 is the judge rerank window, not a recall cap. Failure or a count mismatch writes `decision_unavailable` and keeps the original order. Judge usage is written to `usage_events` with `source=judge`.
 
 A judge cannot recover documents missed during recall. If the correct answer is absent from the candidate set, reranking cannot invent it.
 
@@ -64,6 +67,8 @@ Events only provide candidates; the Answer contract and citation anchors are unc
 - The dense channel participates only with a configured embedding provider: query embedding plus in-process cosine over stored chunk vectors, with a cap of `max(limit × 20, 100)`.
 - The event channel participates only when an extractor is configured and events exist.
 - Each channel contributes `weight / (60 + rank)`; the same `chunk_id` accumulates score across channels.
+
+After fusion, a configured judge reranks the Top 30 when `retrieval.judge_after_hybrid = true` (default); membership and the tail are unchanged. Hybrid does not require a judge, so an absent judge writes no degradation; a configured judge that fails writes `decision_unavailable`. Set `judge_after_hybrid = false` to keep pure RRF order.
 
 There is no separate vector index. No embedding provider writes `dense_not_enabled`; a failed query embedding writes `embedding_unavailable`; no stored vectors write `index_missing`. None of these block keyword results.
 

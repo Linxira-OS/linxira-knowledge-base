@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 use crate::util::{is_loopback_host, mask_database_url, parse_bool, split_bind_host};
 use anyhow::{bail, Context};
 use serde::{Deserialize, Serialize};

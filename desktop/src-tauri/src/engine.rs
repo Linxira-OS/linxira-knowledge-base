@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! Sidecar lifecycle: spawn the bundled `lkb serve` on a free loopback port,
 //! wait for `/health`, and keep the child handle for shutdown.
 

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: MIT OR Apache-2.0
 """Generate a source-level SPDX 2.3 JSON SBOM for a release.
 
 The SBOM covers the locked dependency set of the tagged commit:
@@ -7,11 +8,13 @@ The SBOM covers the locked dependency set of the tagged commit:
 * `desktop/src-tauri/Cargo.lock`  -> desktop shell packages (`pkg:cargo/<name>@<version>`)
 * `web/package-lock.json`         -> npm packages (`pkg:npm/<name>@<version>`)
 
-It does not scan the compiled binary; licenses are reported as NOASSERTION
-because the lockfiles do not carry license metadata.
+It does not scan the compiled binary. The three repository packages declare
+their license explicitly (AGPL-3.0-only for the `lkb` binary, MIT OR
+Apache-2.0 for the web and desktop layers); third-party entries stay
+NOASSERTION because the lockfiles do not carry license metadata.
 
 Usage:
-    scripts/gen-sbom.py --version 0.2.1 --tag v0.2.1 [--commit SHA] --out out.spdx.json
+    scripts/gen-sbom.py --version 0.2.2 --tag v0.2.2 [--commit SHA] --out out.spdx.json
 """
 
 from __future__ import annotations
@@ -47,6 +50,7 @@ def package(
     purl: str | None,
     checksum: str | None = None,
     download_location: str = "NOASSERTION",
+    license_declared: str = "NOASSERTION",
 ) -> dict:
     entry: dict = {
         "name": name,
@@ -54,8 +58,8 @@ def package(
         "versionInfo": version,
         "downloadLocation": download_location,
         "filesAnalyzed": False,
-        "licenseConcluded": "NOASSERTION",
-        "licenseDeclared": "NOASSERTION",
+        "licenseConcluded": license_declared,
+        "licenseDeclared": license_declared,
         "copyrightText": "NOASSERTION",
     }
     if checksum:
@@ -161,6 +165,7 @@ def main() -> int:
         version=version,
         purl=f"pkg:cargo/lkb@{version}",
         download_location=f"https://github.com/{REPO}",
+        license_declared="AGPL-3.0-only",
     )
     web_app = package(
         spdx_id="SPDXRef-Package-lkb-web",
@@ -168,6 +173,7 @@ def main() -> int:
         version=version,
         purl=f"pkg:npm/lkb-web@{version}",
         download_location=f"https://github.com/{REPO}",
+        license_declared="MIT OR Apache-2.0",
     )
     desktop_app = package(
         spdx_id="SPDXRef-Package-lkb-desktop",
@@ -175,6 +181,7 @@ def main() -> int:
         version=version,
         purl=f"pkg:cargo/lkb-desktop@{version}",
         download_location=f"https://github.com/{REPO}",
+        license_declared="MIT OR Apache-2.0",
     )
 
     candidates = [

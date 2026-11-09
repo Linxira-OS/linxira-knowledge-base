@@ -2,6 +2,35 @@
 
 本文件记录 `lkb`（Layered Knowledge Base）的版本变更。版本号与 `Cargo.toml` / `web/package.json` / `desktop/src-tauri` 保持一致；格式参考 [Keep a Changelog](https://keepachangelog.com/)，日期为 ISO 8601。
 
+## [0.2.2] - 2026-11-09
+
+许可证/文档 + 检索与 solo 后端修正。
+
+### Changed — 分层许可证
+
+- 自本版起采用**分层授权**：核心（检索、回答、治理、ACL、存储、摄入、模型网关、配额、迁移）为 `AGPL-3.0-only`；产品面（CLI、配置、i18n、日志、指标、限流、连接器、计费、摘要、Web UI、桌面壳、部署、脚本、文档、测试）为 `MIT OR Apache-2.0`。详见新增的 `LICENSING.md`。
+- `LICENSE` 替换为 GNU AGPL v3.0 全文（`AGPL-3.0-only`）；新增 `LICENSE-MIT` 与 `LICENSE-APACHE`。核心源文件与迁移加 `SPDX-License-Identifier: AGPL-3.0-only` 头，宽松层源文件加 `MIT OR Apache-2.0` 头。
+- 根 `Cargo.toml` 保持/改为 `license = "AGPL-3.0-only"`（整包与二进制分发）；`desktop/src-tauri/Cargo.toml` 与 `web/package.json` 为 `MIT OR Apache-2.0`；Docker OCI label 为 `AGPL-3.0-only`；SBOM 中 `lkb` 为 AGPL、`lkb-web`/`lkb-desktop` 为 MIT OR Apache-2.0。
+- 商业许可仅覆盖 AGPL 核心（闭源嵌入、OEM、白标、闭源 SaaS、规避源码义务），需通过 GitHub Issues（`commercial-license` 标签）与作者协商，不设销售邮箱。
+- **`v0.2.1` 及更早版本仍为 MIT**；已发布归档、安装包与容器 tag 不追溯变更。
+
+### Changed — 文档
+
+- `README.md` 重构为中英双语（English + 简体中文，顶部语言切换），覆盖定位、三档 profile、关键能力、快速开始（Windows/Linux、桌面安装包）、文档入口、版本与许可证/商业许可。
+- 原 README 的实现细节移入 `document/implementation-status.md`，README 保留摘要与链接。
+- 新增 `document/retrieval-and-models.md`（中英双语）：说明检索不必须依赖模型，列出 `bm25` / `bm25_judge` / `event` / `hybrid` / `auto` 的模型依赖、降级行为与推荐配置；README 两节均加入「检索是否需要模型」。
+- `document/product-spec.md` 增加许可证与商业许可冻结项（§12）；`CONTRIBUTING.md` 更新为分层授权 + 轻量入站 CLA；`AGENTS.md`、`document/release-process.md` 同步许可证表述。
+
+### Fixed — 检索与 solo 后端
+
+- `auto` 在 SQLite 上会探测已配置 embedding provider 的可见向量：有向量即解析为 `hybrid`，不再因“只配了向量模型”停留在 `bm25`；无向量时写 `index_missing` 并继续回退到 events 或 `bm25`。探测走 `Policy::visibility`，不会跨租户/空间。
+- `hybrid` 融合后可选用 judge 重排（`retrieval.judge_after_hybrid`，默认 `true`）：只重排 Top 30，不改变候选集；未配置 judge 不写降级，已配置但失败写 `decision_unavailable`。`bm25_judge` 行为不变。
+- solo profile 允许 `sqlite` 或 `postgres`（同一二进制）；team/enterprise 仍只允许 PostgreSQL。
+
+### Version
+
+- `Cargo.toml` / `Cargo.lock`、`web/package.json` / `web/package-lock.json`、`desktop/src-tauri/Cargo.toml` / `Cargo.lock`、`desktop/src-tauri/tauri.conf.json` 统一为 `0.2.2`（0.2.z 只递增 patch）。
+
 ## [0.2.1] - 2026-11-09
 
 0.2.z 线发布：只递增 patch。本版把桌面壳、管理面与静态 SPA 托管补齐到可发布状态；**macOS 不在发布范围**。
