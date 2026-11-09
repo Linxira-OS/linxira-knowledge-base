@@ -475,6 +475,7 @@ jobs:
         run: |
           set -euo pipefail
           version="${{ needs.prepare.outputs.version }}"
+          mkdir -p dist-assets
           setup="$(find desktop/src-tauri/target/release/bundle/nsis -maxdepth 1 -type f -name '*setup.exe' -print -quit)"
           [ -n "$setup" ] || { echo "::error::NSIS setup.exe not found"; exit 1; }
           cp "$setup" "dist-assets/lkb-solo-v${version}-windows-x64-setup.exe"
@@ -558,6 +559,7 @@ jobs:
         run: |
           set -euo pipefail
           version="${{ needs.prepare.outputs.version }}"
+          mkdir -p dist-assets
           bundle="desktop/src-tauri/target/release/bundle"
           deb="$(find "$bundle/deb" -maxdepth 1 -type f -name '*.deb' -print -quit)"
           appimage="$(find "$bundle/appimage" -maxdepth 1 -type f -name '*.AppImage' -print -quit 2>/dev/null || true)"
