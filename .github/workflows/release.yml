@@ -442,7 +442,18 @@ jobs:
           test -f desktop/src-tauri/resources/web/index.html
       - name: Build NSIS installer
         working-directory: desktop
-        run: npx --yes @tauri-apps/cli@2.12.4 build --bundles nsis
+        run: |
+          # Tauri downloads the NSIS toolchain from GitHub release assets;
+          # retry a few times to ride out transient CDN errors (502/504).
+          for attempt in 1 2 3; do
+            if npx --yes @tauri-apps/cli@2.12.4 build --bundles nsis; then
+              exit 0
+            fi
+            echo "::warning::tauri build failed (attempt ${attempt}/3); retrying"
+            sleep 15
+          done
+          echo "::error::tauri build failed after 3 attempts"
+          exit 1
       - name: Assemble portable zip (PowerShell; Git Bash has no `zip`)
         shell: pwsh
         run: |
@@ -526,7 +537,18 @@ jobs:
           # linuxdeploy/appimagetool ship as AppImages; extract instead of
           # mounting so the build works on runners without FUSE.
           APPIMAGE_EXTRACT_AND_RUN: "1"
-        run: npx --yes @tauri-apps/cli@2.12.4 build --bundles deb,appimage
+        run: |
+          # Tauri downloads AppRun/linuxdeploy from GitHub release assets;
+          # retry a few times to ride out transient CDN errors (502/504).
+          for attempt in 1 2 3; do
+            if npx --yes @tauri-apps/cli@2.12.4 build --bundles deb,appimage; then
+              exit 0
+            fi
+            echo "::warning::tauri build failed (attempt ${attempt}/3); retrying"
+            sleep 15
+          done
+          echo "::error::tauri build failed after 3 attempts"
+          exit 1
       - name: Collect desktop assets
         run: |
           set -euo pipefail
