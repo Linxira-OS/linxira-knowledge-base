@@ -47,7 +47,7 @@
 
 **明确不发布**：macOS（不构建、不上传）、debug 构建、`target-*`、测试报告、`node_modules`、源码包（GitHub Release 页面自动附带 source zip/tar）。**暂不发布**：Linux arm64、Docker arm64、PDF feature（`--features pdf`）专用构建——列为实验，先在文档说明。
 
-已知限制：所有安装包均未签名（无 Authenticode / Developer ID 证书），Windows 可能出现 SmartScreen 提示；Linux 的 deb/AppImage 未做发行版矩阵实测。
+已知限制：所有安装包均未签名（无 Authenticode / Developer ID 证书），Windows 可能出现 SmartScreen 提示；Linux 的 deb/AppImage 未做发行版矩阵实测。AppImage 构建需要 Tauri 从 GitHub Release 下载 AppRun/linuxdeploy；上游下载不可用时该资产会被跳过（job 只剩告警，deb 与便携 tar.gz 照常发布），恢复后重跑即可补上。
 
 ## 4. 触发方式与门禁
 

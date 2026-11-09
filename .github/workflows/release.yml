@@ -531,23 +531,28 @@ jobs:
           mkdir -p desktop/src-tauri/resources/web
           cp -R "$src/." desktop/src-tauri/resources/web/
           test -f desktop/src-tauri/resources/web/index.html
-      - name: Build deb + AppImage
+      - name: Build deb
         working-directory: desktop
+        run: npx --yes @tauri-apps/cli@2.12.4 build --bundles deb
+      - name: Build AppImage (best effort)
+        working-directory: desktop
+        # The AppImage bundler downloads AppRun/linuxdeploy from GitHub release
+        # assets. If that upstream download stays broken (502/504), ship the deb
+        # and portable tar.gz and surface a warning instead of failing the job.
+        continue-on-error: true
         env:
           # linuxdeploy/appimagetool ship as AppImages; extract instead of
           # mounting so the build works on runners without FUSE.
           APPIMAGE_EXTRACT_AND_RUN: "1"
         run: |
-          # Tauri downloads AppRun/linuxdeploy from GitHub release assets;
-          # retry a few times to ride out transient CDN errors (502/504).
           for attempt in 1 2 3; do
-            if npx --yes @tauri-apps/cli@2.12.4 build --bundles deb,appimage; then
+            if npx --yes @tauri-apps/cli@2.12.4 build --bundles appimage; then
               exit 0
             fi
-            echo "::warning::tauri build failed (attempt ${attempt}/3); retrying"
-            sleep 15
+            echo "::warning::AppImage attempt ${attempt}/3 failed"
+            sleep 20
           done
-          echo "::error::tauri build failed after 3 attempts"
+          echo "::warning::AppImage not produced: Tauri AppRun/linuxdeploy download failed upstream"
           exit 1
       - name: Collect desktop assets
         run: |
@@ -555,13 +560,17 @@ jobs:
           version="${{ needs.prepare.outputs.version }}"
           bundle="desktop/src-tauri/target/release/bundle"
           deb="$(find "$bundle/deb" -maxdepth 1 -type f -name '*.deb' -print -quit)"
-          appimage="$(find "$bundle/appimage" -maxdepth 1 -type f -name '*.AppImage' -print -quit)"
+          appimage="$(find "$bundle/appimage" -maxdepth 1 -type f -name '*.AppImage' -print -quit 2>/dev/null || true)"
           [ -n "$deb" ] || { echo "::error::deb not found"; exit 1; }
-          [ -n "$appimage" ] || { echo "::error::AppImage not found"; exit 1; }
           [ "$(dpkg-deb -f "$deb" Architecture)" = "amd64" ] || { echo "::error::unexpected deb architecture"; exit 1; }
           [ "$(dpkg-deb -f "$deb" Version)" = "$version" ] || { echo "::error::deb version != ${version}"; exit 1; }
           cp "$deb" "dist-assets/lkb-solo-v${version}-linux-amd64.deb"
-          cp "$appimage" "dist-assets/lkb-solo-v${version}-linux-amd64.AppImage"
+          if [ -n "$appimage" ]; then
+            cp "$appimage" "dist-assets/lkb-solo-v${version}-linux-amd64.AppImage"
+          else
+            echo "::warning::AppImage missing from this build (Tauri AppRun/linuxdeploy download failed upstream)"
+            echo "- desktop (linux): AppImage not produced — Tauri AppRun/linuxdeploy download failed upstream; re-run when GitHub release assets recover." >> "$GITHUB_STEP_SUMMARY"
+          fi
           # portable-tar.sh expects the sidecar (suffix stripped) and the web
           # resources next to the executable; stage them from the prepared
           # inputs so the assembly never depends on `tauri build`'s copy step.
