@@ -42,11 +42,12 @@
 | `eval` | Recall@k / MRR 评测 |
 | `web` | axum 路由、会话/CSRF/Origin/限流、Wiki CRUD、`/api/search`、`/api/ask` |
 | `cli` | clap 子命令与 principal 解析 |
+| `paths` | OS 目录规范（config/data/log/portable）与配置文件/凭据文件解析 |
 | `util` / `error` | 哈希、时间、转义等工具；`StoreError` 与 HTTP `AppError` |
 
 **主数据流**
 
-1. `main` → `cli::run_blocking()`（自建 tokio 多线程 runtime）→ `Config::load`：`lkb.toml` 存在则解析，否则默认值 → `apply_env` → `normalize` → `validate`（`src/config.rs`）。
+1. `main` → `cli::run_blocking()`（自建 tokio 多线程 runtime）→ `paths::resolve_config_file`：显式 `--config` > `LKB_CONFIG_FILE` > 当前目录 `lkb.toml`（存在时）> OS 默认 `<config_dir>/lkb.toml`（`src/paths.rs`）→ `Config::load`：文件存在则解析，否则默认值（SQLite 默认 `<data_dir>/lkb.sqlite`）→ `apply_env` → `normalize` → `validate`（`src/config.rs`）。
 2. `store::open(config)`：SQLite 先建父目录；PostgreSQL 从 `storage.url_env` 指向的环境变量取 URL。`open` 内部立即 `migrate()`。随后 `bootstrap_space` 仅在 solo 创建 allow-all 默认空间（`src/store/mod.rs`）。
 3. `import`：`import_path` → `FilesystemSource` / `JsonlSource` → 规范化路径 `p1` → `content_hash` → `doc_id` → 分块 → 可选 embedding → `upsert_document`。同路径同内容跳过；内容变化时旧记录置 `superseded`/`superseded_by`/`valid_to`（`src/ingest/mod.rs`）。
 4. `wiki` 保存：HTTP `page_save` → 认证/CSRF/可见性检查 → 新 `revision` + `save_page` → `index_wiki_document` 写入 `wiki/{space}/{lang}/{slug}.md` 文档并同步索引（`src/web.rs`）。
@@ -69,6 +70,7 @@
 
 ```text
 src/                         内核；入口 main.rs/lib.rs
+src/paths.rs                 OS 目录解析（config/data/log；env 覆盖与 portable）
 src/store/                   Store trait（mod.rs）+ sqlite.rs + postgres.rs
 src/ingest/                  mod.rs + chunker.rs + doc_id.rs + html.rs
 migrations/sqlite/           0001_init.sql、0002_fts.sql、0003_events.sql、0004_lang_seed.sql、0005_roles_spaces_quota_audit.sql、0006_model_gateway.sql、0007_summaries_conversations.sql、0008_message_context.sql、0009_billing.sql、0010_connectors.sql、0011_sso.sql、0012_user_last_login.sql
@@ -83,7 +85,7 @@ docs/                        产品使用文档（zh/en 各 12 篇）；编译�
 ```
 
 - 迁移 SQL 用 `include_str!` 内嵌并由手写 runner 执行（**不是** `sqlx::migrate!`）；新增迁移 = 新编号文件 + 在 `MIGRATIONS` 数组登记，已应用的迁移不得改写。
-- 数据目录：默认 `data/lkb.sqlite`（`LKB_SQLITE_PATH` 可覆盖）；`data/`、`blobs/`、`.lkb/`、`target/` 与 `*.sqlite*` 已在 `.gitignore`。测试一律用 `tempfile::tempdir()`，不要写仓库内数据库。
+- 数据目录：默认 `<data_dir>/lkb.sqlite`，按 OS 规范解析（`src/paths.rs`：Windows `%LOCALAPPDATA%\lkb\data`、Linux `$XDG_DATA_HOME/lkb`、macOS `~/Library/Application Support/lkb`；`LKB_DATA_DIR` > portable（exe 旁 `portable.flag` 时 `.\lkb-data\data`）> OS 默认，`LKB_SQLITE_PATH` 仍可覆盖文件）；`data/`、`blobs/`、`.lkb/`、`target/` 与 `*.sqlite*` 已在 `.gitignore`。测试一律用 `tempfile::tempdir()`/显式路径，不得写用户目录。
 
 ## 4. Development Commands
 
@@ -130,7 +132,8 @@ cargo fmt --check
 **运行与冒烟（未验证；需用户确认后执行）**
 
 ```text
-target/release/lkb config check
+target/release/lkb config check   # 打印生效配置与解析后的 config/data/log 路径
+target/release/lkb config init    # 在 OS 默认位置写入最小 solo lkb.toml（不覆盖已有文件）
 target/release/lkb import examples
 target/release/lkb search "doc_id 如何派生"
 target/release/lkb ask "没有 LLM 时回答如何生成，引用是什么"
@@ -162,6 +165,7 @@ Windows 二进制为 `target\release\lkb.exe`；PowerShell 设环境变量用 `$
 | `src/lib.rs` | 模块声明与 `VERSION`；新增模块必须在此暴露 |
 | `src/main.rs` | 二进制入口，仅调用 `cli::run_blocking()` |
 | `src/config.rs` | 默认值、环境变量、normalize/validate、`describe()` 脱敏 |
+| `src/paths.rs` | OS 目录规范（config/data/log、portable）与配置文件/凭据文件解析 |
 | `src/contract.rs` | 输出契约与降级构造器；改动视为接口变更 |
 | `src/governance.rs` | 可见性谓词、ACL、时间窗、二次校验 |
 | `src/store/mod.rs` | `Store` trait 与记录类型；改接口要同时改两个后端 |
@@ -175,6 +179,7 @@ Windows 二进制为 `target\release\lkb.exe`；PowerShell 设环境变量用 `$
 | `tests/*.rs` | CLI、axum oneshot、SQLite、PostgreSQL 集成测试 |
 | `document/build-policy.md` | 构建门禁与已知实现边界（改构建行为前必读） |
 | `document/roadmap.md` | P1 出口标准（验收依据） |
+| `document/product-spec.md` | 统一规范 v1：命名/路径/版本 0.2.z/UI/打包/配置；冲突时最高优先级 |
 | `document/desktop-app-and-notes.md` | 桌面 APP、首启、solo+PG、笔记 vault 与发布包 |
 | `document/architecture.md` / `adr/` | 设计决策；`document/tier-matrix.md` 为能力矩阵 |
 
@@ -183,7 +188,7 @@ Windows 二进制为 `target\release\lkb.exe`；PowerShell 设环境变量用 `$
 - **Rust stable ≥ 1.82**，edition 2021，Cargo。仓库无 `rust-toolchain.toml`、无 `.cargo/`；根 `Cargo.lock` 已生成（构建产物）。
 - 日志：`LKB_LOG_FORMAT=json|text`，`LKB_LOG_LEVEL`；JSON 写 stderr；`LKB_SERVICE` 可覆盖 service。
 - 部署模式/门禁只在 config、路由与装配层判断；领域逻辑只调用 `Config::feature_enabled`。`deployment.mode` 与 profile 必须匹配；solo 禁止 billing；enterprise_external 必须 signup+billing+multi_tenant+public_api。
-- Agent CLI 本地凭据：`LKB_CONFIG_FILE` 或平台默认 config；`LKB_TOKEN`/`LKB_API_TOKEN`。
+- Agent CLI 本地凭据：`<config_dir>/config.toml`（`LKB_CONFIG_DIR` 可覆盖）；`LKB_TOKEN`/`LKB_API_TOKEN`；`LKB_CONFIG_FILE` 选择主配置 `lkb.toml`。
 - **SQLite bundled**：`sqlx` 0.8 的 `sqlite` feature 链接 bundled libsqlite3；不得启用 `sqlite-unbundled`。bundled 仍需要本机 C 编译器/链接器。
 - **PostgreSQL 可选**：`sqlx` 的 `postgres` feature；运行时通过 `LKB_DATABASE_URL`（或 `storage.url_env` 指定的变量）连接；关系库只有 SQLite / PostgreSQL，不提供 SQL Server。
 - **无 Python/Node 运行时**，无 `build.rs`；`pdf = ["dep:pdf-extract"]` 默认关闭。

@@ -25,6 +25,7 @@ pub mod logging;
 pub mod mcp;
 pub mod metrics;
 pub mod openapi;
+pub mod paths;
 pub mod payment;
 pub mod providers;
 pub mod quota;

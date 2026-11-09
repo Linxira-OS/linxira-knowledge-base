@@ -627,7 +627,7 @@ impl Default for StorageConfig {
         Self {
             backend: Backend::Sqlite,
             url_env: "LKB_DATABASE_URL".to_string(),
-            sqlite_path: PathBuf::from("data/lkb.sqlite"),
+            sqlite_path: crate::paths::default_sqlite_path(),
             tenant_id: "t1".to_string(),
             default_space: "s_default".to_string(),
         }
@@ -1307,6 +1307,21 @@ mod tests {
         assert_eq!(config.profile_name(), ProfileName::Solo);
         assert_eq!(config.storage.backend, Backend::Sqlite);
         assert!(is_loopback_host(split_bind_host(&config.server.bind)));
+    }
+
+    #[test]
+    fn sqlite_default_lives_in_the_os_data_dir() {
+        let config = Config::default();
+        assert_eq!(
+            config.storage.sqlite_path,
+            crate::paths::data_dir().join("lkb.sqlite")
+        );
+        assert!(!config
+            .storage
+            .sqlite_path
+            .to_string_lossy()
+            .to_ascii_lowercase()
+            .contains("linxira"));
     }
 
     #[test]

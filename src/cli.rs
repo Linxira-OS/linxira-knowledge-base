@@ -3,6 +3,7 @@ use crate::error::StoreError;
 use crate::governance::{
     Acl, GroupRole, Policy, Principal, PrincipalKind, PrincipalType, SpaceRole, TokenScope,
 };
+use crate::paths;
 use crate::providers::ProviderSet;
 use crate::search::{SearchMode, SearchTuning};
 use crate::store::{
@@ -18,7 +19,7 @@ use argon2::Argon2;
 use clap::{Parser, Subcommand};
 use serde::{Deserialize, Serialize};
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 /// Long form of `lkb --version`: the bare `lkb -V` stays terse. clap takes a
@@ -31,9 +32,19 @@ const LONG_VERSION: &str = concat!(
     ")"
 );
 
-/// `lkb --help` footer: where the project lives and where to file issues.
+/// `lkb --help` footer: project links plus the filesystem locations the CLI
+/// resolves by default (the same values `lkb config check` prints).
 fn after_help() -> String {
-    format!("Repository:  {REPOSITORY_URL}\nReport bugs: {ISSUES_URL}\nSecurity:    {SECURITY_URL}")
+    format!(
+        "Repository:  {REPOSITORY_URL}\nReport bugs: {ISSUES_URL}\nSecurity:    {SECURITY_URL}\n\n\
+         Default paths (override with LKB_CONFIG_DIR / LKB_DATA_DIR / LKB_LOG_DIR):\n\
+         config  {config}\n\
+         data    {data}\n\
+         logs    {logs}",
+        config = paths::resolve_config_file(None).display(),
+        data = paths::data_dir().display(),
+        logs = paths::log_dir().display(),
+    )
 }
 
 #[derive(Debug, Parser)]
@@ -45,8 +56,10 @@ fn after_help() -> String {
     after_help = after_help()
 )]
 struct Cli {
-    #[arg(long, global = true, default_value = "lkb.toml")]
-    config: PathBuf,
+    /// Configuration file: this flag when given, else `LKB_CONFIG_FILE`, else
+    /// `./lkb.toml` when it exists, else `<config_dir>/lkb.toml`.
+    #[arg(long, global = true)]
+    config: Option<PathBuf>,
     #[arg(long, global = true)]
     token: Option<String>,
     #[command(subcommand)]
@@ -227,7 +240,10 @@ enum ModelsCommand {
 
 #[derive(Debug, Subcommand)]
 enum ConfigCommand {
+    /// Print the effective configuration and the resolved default paths.
     Check,
+    /// Write a minimal solo `lkb.toml` to the resolved config path.
+    Init,
 }
 
 #[derive(Debug, Subcommand)]
@@ -430,13 +446,22 @@ pub async fn run() -> anyhow::Result<()> {
     };
     crate::logging::init(service);
 
+    let config_path = paths::resolve_config_file(cli.config.as_deref());
     // Configuration problems are the operator's to fix, not bugs; mark them
     // so the top-level exit skips the bug-report tail.
-    let config = Config::load(&cli.config).map_err(UserInput)?;
+    let config = Config::load(&config_path).map_err(UserInput)?;
     crate::i18n::set_cli_locale(&config.i18n.default_locale);
     crate::logging::cli_event(command_name, 0, None, &[]);
     match cli.command {
         Commands::Serve => {
+            tracing::info!(
+                config_file = %config_path.display(),
+                config_dir = %paths::config_dir().display(),
+                data_dir = %paths::data_dir().display(),
+                log_dir = %paths::log_dir().display(),
+                storage_backend = config.storage.backend.as_str(),
+                "resolved filesystem paths"
+            );
             let store = open_store(&config).await?;
             let _ = crate::seed::auto_seed_if_empty(&store, &config).await;
             let providers = Arc::new(ProviderSet::from_config(&config.models));
@@ -703,12 +728,14 @@ pub async fn run() -> anyhow::Result<()> {
             }
             Ok(())
         }
-        Commands::Config {
-            command: ConfigCommand::Check,
-        } => {
-            print!("{}", config.describe());
-            Ok(())
-        }
+        Commands::Config { command } => match command {
+            ConfigCommand::Check => {
+                print!("{}", paths::describe(&config_path));
+                print!("{}", config.describe());
+                Ok(())
+            }
+            ConfigCommand::Init => init_config(&config_path),
+        },
         Commands::User {
             command: UserCommand::Add { username, role },
         } => {
@@ -1692,24 +1719,67 @@ fn cli_command_name(command: &Commands) -> &'static str {
     }
 }
 
+/// Minimal solo config written by `lkb config init`; serialized through
+/// `toml` so Windows paths are escaped correctly.
+#[derive(Serialize)]
+struct InitConfig<'a> {
+    profile: &'a str,
+    storage: InitStorage<'a>,
+}
+
+#[derive(Serialize)]
+struct InitStorage<'a> {
+    backend: &'a str,
+    sqlite_path: String,
+    url_env: &'a str,
+    tenant_id: &'a str,
+    default_space: &'a str,
+}
+
+fn init_config_text() -> anyhow::Result<String> {
+    let init = InitConfig {
+        profile: "solo",
+        storage: InitStorage {
+            backend: "sqlite",
+            sqlite_path: paths::default_sqlite_path().display().to_string(),
+            url_env: "LKB_DATABASE_URL",
+            tenant_id: crate::governance::SOLO_TENANT,
+            default_space: crate::governance::SOLO_SPACE,
+        },
+    };
+    let body = toml::to_string(&init)?;
+    Ok(format!(
+        "# lkb configuration - generated by `lkb config init`.\n\
+         # Delete a line to fall back to the platform default.\n\
+         \n{body}"
+    ))
+}
+
+/// `lkb config init`: create the config at its resolved path unless it
+/// already exists (never overwrites user edits), then print the resolved paths.
+fn init_config(path: &Path) -> anyhow::Result<()> {
+    if path.is_file() {
+        println!("config already exists: {} (left unchanged)", path.display());
+    } else {
+        if let Some(parent) = path.parent() {
+            if !parent.as_os_str().is_empty() {
+                std::fs::create_dir_all(parent).with_context(|| {
+                    format!("cannot create config directory {}", parent.display())
+                })?;
+            }
+        }
+        std::fs::write(path, init_config_text()?)
+            .with_context(|| format!("cannot write config {}", path.display()))?;
+        println!("config initialized: {}", path.display());
+    }
+    print!("{}", paths::describe(path));
+    Ok(())
+}
+
+/// CLI auth credentials (`lkb auth login`) live at `<config_dir>/config.toml`;
+/// `LKB_CONFIG_FILE` selects the main config file, not this file.
 fn api_config_path() -> PathBuf {
-    if let Ok(path) = std::env::var("LKB_CONFIG_FILE") {
-        if !path.trim().is_empty() {
-            return PathBuf::from(path);
-        }
-    }
-    if cfg!(windows) {
-        if let Ok(appdata) = std::env::var("APPDATA") {
-            return PathBuf::from(appdata).join("lkb").join("config.toml");
-        }
-    }
-    let home = std::env::var("HOME")
-        .or_else(|_| std::env::var("USERPROFILE"))
-        .unwrap_or_default();
-    PathBuf::from(home)
-        .join(".config")
-        .join("lkb")
-        .join("config.toml")
+    paths::auth_config_file()
 }
 
 fn load_api_config() -> anyhow::Result<ApiConfigFile> {

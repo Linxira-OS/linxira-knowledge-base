@@ -53,6 +53,7 @@
 - [document/agent-access-and-observability.md](document/agent-access-and-observability.md) — Agent 鉴权、结构化日志、并发限流与 CLI
 - [document/deployment-modes-i18n-payments.md](document/deployment-modes-i18n-payments.md) — 运营模式、功能门禁、限速、i18n 与支付边界
 - [document/desktop-app-and-notes.md](document/desktop-app-and-notes.md) — 桌面 APP、首启、solo+PG、Markdown 笔记与发布包
+- [document/product-spec.md](document/product-spec.md) — 统一规范 v1：命名、路径、版本 0.2.z、UI、打包与配置
 - [document/roadmap.md](document/roadmap.md) — 阶段划分、出口标准与明确不做的事
 - [document/build-policy.md](document/build-policy.md) — 构建门禁与当前实现边界
 - 架构决策记录（ADR）：
@@ -69,6 +70,7 @@
   - [ADR 0011 Agent 访问、结构化日志与并发背压](document/adr/0011-agent-access-and-observability.md)
   - [ADR 0012 部署/运营模式、限速、i18n 与支付边界](document/adr/0012-deployment-modes-i18n-payments.md)
   - [ADR 0013 桌面 APP 与 Markdown 笔记模式](document/adr/0013-desktop-app-notes.md)
+  - [ADR 0014 产品统一规范与 0.2.z 版本冻结](document/adr/0014-product-conventions.md)
 
 其余已定取舍（solo 零外部依赖、doc_id 由内容指纹与逻辑路径派生并遵循 [ADR 0006](document/adr/0006-doc-id-identity.md)、保留 v1 的有效取舍如召回期 ACL 与多通道 RRF 融合）记录在架构正文与上述 ADR 中。
 
@@ -106,7 +108,7 @@
 - **模型网关/usage/quota**：Answer 生成式 LLM 调用统一走网关 alias `default`（不再直接调用 `ProviderSet.llm`），Answer 返回 model/usage；调用前 token 配额预留、成功后按 provider usage 提交实际 used、失败释放；`providers` / `provider_models` / `model_aliases` / `routes` 控制面；对外只暴露 alias，provider/base_url/upstream 仅 admin 可见；按 alias→访问策略→priority/weight/health/circuit 路由，429/5xx/超时切下一路由，400/401/403 不盲目重试；`usage_events` 记录 provider/estimated token、成本、延迟、状态；`token_quotas`/`quota_counters`/`quota_reservations` 调用前估算预留、hard 超限 429 `quota_exceeded`+Retry-After、失败释放。`[models.llm]` 自动物化为 `default` alias/provider/route，保留旧回答路径。
 - **静态摘要/会话/统一入口**：`document_summaries` + `summary_jobs` 异步摘要（导入/Wiki/seed revision 入队，网关 alias，provider usage 写 `source=summary`；失败按 `summary.max_attempts`/`retry_backoff_ms` 有限重试，全部失败写 `status=failed` 同时保留抽取式 fallback，不静默 ready；同 doc/revision/model/prompt 幂等）；`lkb summary run/list` 可视化处理与查看队列；`GET /api/v1/pages/{space}/{slug}/summary`；`conversations`/`messages` 与 `POST /api/v1/query`（search/answer/both，共享 conversation、写 user+assistant 消息，`conversation_id` 时用最近 N 条消息经网关 alias 改写 query，失败回退原 query 并写 `degraded[]`，消息记录 `rewritten_query`/`conversation_context_hash`）；`POST /api/v1/query/stream` 输出 SSE（meta/results/token/citation/usage/done）；会话 cursor 分页与 `POST /api/v1/conversations/{id}/external-session` 绑定/查询；judge 经网关 alias（`retrieval.judge_alias`）并写 `source=judge` usage；会话 owner/space 隔离、软删除；Answer 增加 conversation_id/message_id/summary_kind/summary_source。
 - **支付边界**：`PaymentProvider` trait（create_checkout/verify_webhook/refund/subscription_sync）+ `PaymentConfig(provider/currency/test|live/secret_env)`；本期无任何网关实现，未配置统一 `payment_not_configured`，配置了但无适配器为 `payment_provider_unavailable`；不存卡号、不写支付状态机。
-- **Agent CLI**：`lkb auth login --token` / `auth status` / `auth logout`（`--device` 返回 not_implemented）；配置在 `%APPDATA%\lkb\config.toml` 或 `~/.config/lkb/config.toml`（Unix 0600，Windows icacls 尽力收紧）；支持 `LKB_CONFIG_FILE`、`LKB_TOKEN`、`LKB_API_TOKEN`；`--json`。
+- **Agent CLI**：`lkb auth login --token` / `auth status` / `auth logout`（`--device` 返回 not_implemented）；本地凭据在 `<config_dir>/config.toml`（即 `%APPDATA%\lkb\config.toml` / `$XDG_CONFIG_HOME/lkb/config.toml`，Unix 0600，Windows icacls 尽力收紧），`LKB_CONFIG_DIR` 可覆盖；`LKB_TOKEN`、`LKB_API_TOKEN`；`LKB_CONFIG_FILE` 选择主配置 `lkb.toml`；`--json`。
 - **降级**：可选能力缺失或失败写入 `degraded[]`；身份/ACL 失败 fail-closed，不进入降级放行。
 - **Answer 契约**：`answer`、`citations[{doc_id,chunk_id,path,line_start,line_end,quote,source_url?}]`、`confidence`、`conflicts[]`、`degraded[]`、`knowledge_as_of`、`mode`；生成式答案额外带 `model`（公开 alias）、`usage`（input/output/cached tokens、cost、currency、token_source）和 `cache_hit`。
 - **认证**：浏览器使用 HttpOnly + SameSite=Lax（非 loopback 自动 Secure）会话 cookie，服务端只存 session id 的 sha256；Agent/CLI 使用 `Authorization: Bearer`，库中只存 token 的 sha256 + scope + 吊销状态。
@@ -139,7 +141,18 @@ target/release/lkb eval examples/questions.jsonl --k 5 --mode event_entity
 target/release/lkb serve          # http://127.0.0.1:7331/；空库首次启动自动 seed
 ```
 
-默认 `data/lkb.sqlite`。可用 `LKB_SQLITE_PATH` 覆盖；`lkb config check` 会打印生效配置并对 DSN/密钥打码。
+默认路径按 OS 目录规范解析（`src/paths.rs`；任何路径不含品牌名）：
+
+| 平台 | 配置 | 数据 | 日志 |
+| --- | --- | --- | --- |
+| Windows | `%APPDATA%\lkb\lkb.toml` | `%LOCALAPPDATA%\lkb\data`（SQLite `…\data\lkb.sqlite`） | `%LOCALAPPDATA%\lkb\logs` |
+| Windows portable | `.\lkb-data\lkb.toml` | `.\lkb-data\data`（SQLite `.\lkb-data\data\lkb.sqlite`） | `.\lkb-data\logs` |
+| Linux | `$XDG_CONFIG_HOME/lkb/lkb.toml`（fallback `~/.config/lkb/lkb.toml`） | `$XDG_DATA_HOME/lkb`（fallback `~/.local/share/lkb`） | `$XDG_STATE_HOME/lkb/logs`（fallback `~/.local/state/lkb/logs`） |
+| macOS | `~/Library/Application Support/lkb/lkb.toml` | `~/Library/Application Support/lkb` | `~/Library/Logs/lkb` |
+
+- 目录覆盖：`LKB_CONFIG_DIR` / `LKB_DATA_DIR` / `LKB_LOG_DIR` > portable（exe 旁存在 `portable.flag` 时整目录 `.\lkb-data`）> OS 默认。
+- 配置文件：显式 `--config` > `LKB_CONFIG_FILE` > 当前目录 `lkb.toml`（存在时，便于仓库内开发）> OS 默认 `<config_dir>/lkb.toml`；SQLite 路径：`[storage] sqlite_path` / `LKB_SQLITE_PATH` > `<data_dir>/lkb.sqlite`。
+- `lkb config check` 打印解析后的实际路径（`config.file`、`paths.*`）与生效配置并对 DSN/密钥打码；`lkb config init` 在解析到的位置写入最小 solo 配置（已存在时不覆盖）；`lkb --help` 尾部同样列出默认路径。
 
 最小 `lkb.toml`（solo 默认值，可以省略）：
 
@@ -158,7 +171,7 @@ csrf = true
 
 [storage]
 backend = "sqlite"
-sqlite_path = "data/lkb.sqlite"
+# sqlite_path = "<data_dir>/lkb.sqlite"   # 省略时使用 OS 默认数据目录；LKB_SQLITE_PATH 可覆盖
 url_env = "LKB_DATABASE_URL"
 tenant_id = "t_local"
 default_space = "s_default"

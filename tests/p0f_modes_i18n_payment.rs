@@ -205,17 +205,24 @@ async fn api_errors_are_localized_and_cli_locale_is_configurable() {
         "profile = \"solo\"\n[i18n]\ndefault_locale = \"zh-CN\"\nsupported_locales = [\"zh-CN\", \"en\"]\n",
     )
     .unwrap();
+    // Auth credentials must resolve under the temp config dir, never the real
+    // user config directory.
+    let api_dir = temp.path().join("cfg");
     let output = assert_cmd::Command::cargo_bin("lkb")
         .unwrap()
         .arg("--config")
         .arg(&config_path)
         .args(["auth", "logout"])
-        .env("LKB_CONFIG_FILE", temp.path().join("api.toml"))
+        .env("LKB_CONFIG_DIR", &api_dir)
         .output()
         .unwrap();
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("已退出登录"), "stdout: {stdout}");
+    assert!(
+        api_dir.join("config.toml").is_file(),
+        "auth file must be written under LKB_CONFIG_DIR"
+    );
 }
 
 #[tokio::test]

@@ -10,12 +10,33 @@ fn database_path(dir: &Path) -> PathBuf {
     dir.join("lkb.sqlite")
 }
 
+/// Filesystem path lines must never carry the brand name; project URLs may.
+fn assert_no_brand_in_path_lines(text: &str) {
+    for line in text.lines() {
+        let lower = line.to_ascii_lowercase();
+        let is_path_line = lower.starts_with("config.file = ")
+            || lower.starts_with("config initialized: ")
+            || lower.starts_with("config already exists: ")
+            || lower.starts_with("paths.");
+        if is_path_line {
+            assert!(!lower.contains("linxira"), "brand in path line: {line}");
+        }
+    }
+}
+
 #[test]
 fn config_check_prints_masked_effective_config() {
     let temp = tempfile::tempdir().unwrap();
+    let config_dir = temp.path().join("cfg");
+    let data_dir = temp.path().join("data");
+    let log_dir = temp.path().join("logs");
     let output = lkb()
-        .arg("config")
-        .arg("check")
+        .args(["config", "check"])
+        .current_dir(temp.path())
+        .env_remove("LKB_CONFIG_FILE")
+        .env("LKB_CONFIG_DIR", &config_dir)
+        .env("LKB_DATA_DIR", &data_dir)
+        .env("LKB_LOG_DIR", &log_dir)
         .env("LKB_SQLITE_PATH", database_path(temp.path()))
         .env("LKB_PROFILE", "solo")
         .output()
@@ -29,6 +50,142 @@ fn config_check_prints_masked_effective_config() {
     assert!(stdout.contains("profile = solo"));
     assert!(stdout.contains("storage.backend = sqlite"));
     assert!(stdout.contains("auth.mode = none"));
+    // Resolved paths: the OS-default config file and the env-overridden dirs.
+    assert!(stdout.contains(&format!(
+        "config.file = {}",
+        config_dir.join("lkb.toml").display()
+    )));
+    assert!(stdout.contains("config.file_exists = false"));
+    assert!(stdout.contains(&format!("paths.config_dir = {}", config_dir.display())));
+    assert!(stdout.contains(&format!("paths.data_dir = {}", data_dir.display())));
+    assert!(stdout.contains(&format!("paths.log_dir = {}", log_dir.display())));
+    assert!(stdout.contains(&format!(
+        "paths.sqlite_path = {}",
+        data_dir.join("lkb.sqlite").display()
+    )));
+    // No filesystem path value may carry the brand name (project URLs are not paths).
+    assert_no_brand_in_path_lines(&stdout);
+}
+
+#[test]
+fn config_file_resolution_priority_is_flag_env_cwd_default() {
+    let temp = tempfile::tempdir().unwrap();
+    let config_dir = temp.path().join("cfg");
+    let cwd = temp.path().join("cwd");
+    std::fs::create_dir_all(&cwd).unwrap();
+    let local = cwd.join("lkb.toml");
+    std::fs::write(&local, "profile = \"solo\"\n").unwrap();
+
+    let config_file_line = |output: &std::process::Output| -> String {
+        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+        stdout
+            .lines()
+            .find_map(|line| line.strip_prefix("config.file = ").map(str::to_string))
+            .unwrap_or_else(|| panic!("no config.file line in {stdout}"))
+    };
+
+    // A current-directory `lkb.toml` wins over the OS default.
+    let output = lkb()
+        .args(["config", "check"])
+        .current_dir(&cwd)
+        .env_remove("LKB_CONFIG_FILE")
+        .env("LKB_CONFIG_DIR", &config_dir)
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    assert_eq!(config_file_line(&output), local.display().to_string());
+    assert!(String::from_utf8_lossy(&output.stdout).contains("config.file_exists = true"));
+
+    // `LKB_CONFIG_FILE` wins over the current-directory file.
+    let env_file = temp.path().join("from-env.toml");
+    std::fs::write(&env_file, "profile = \"solo\"\n").unwrap();
+    let output = lkb()
+        .args(["config", "check"])
+        .current_dir(&cwd)
+        .env("LKB_CONFIG_FILE", &env_file)
+        .env("LKB_CONFIG_DIR", &config_dir)
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    assert_eq!(config_file_line(&output), env_file.display().to_string());
+
+    // Explicit `--config` wins over `LKB_CONFIG_FILE`.
+    let explicit = temp.path().join("explicit.toml");
+    let output = lkb()
+        .arg("--config")
+        .arg(&explicit)
+        .args(["config", "check"])
+        .current_dir(&cwd)
+        .env("LKB_CONFIG_FILE", &env_file)
+        .env("LKB_CONFIG_DIR", &config_dir)
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    assert_eq!(config_file_line(&output), explicit.display().to_string());
+    assert!(String::from_utf8_lossy(&output.stdout).contains("config.file_exists = false"));
+}
+
+#[test]
+fn config_init_writes_resolved_default_config_and_keeps_user_edits() {
+    let temp = tempfile::tempdir().unwrap();
+    let config_dir = temp.path().join("cfg");
+    let data_dir = temp.path().join("data");
+    let cwd = temp.path().join("cwd");
+    std::fs::create_dir_all(&cwd).unwrap();
+    let config_file = config_dir.join("lkb.toml");
+
+    let run = |args: &[&str]| {
+        lkb()
+            .args(args)
+            .current_dir(&cwd)
+            .env_remove("LKB_CONFIG_FILE")
+            .env_remove("LKB_SQLITE_PATH")
+            .env_remove("LKB_PROFILE")
+            .env("LKB_CONFIG_DIR", &config_dir)
+            .env("LKB_DATA_DIR", &data_dir)
+            .output()
+            .unwrap()
+    };
+
+    // Nothing is created by `check`; it only reports the missing file.
+    let check = run(&["config", "check"]);
+    assert!(check.status.success());
+    assert!(String::from_utf8_lossy(&check.stdout).contains("config.file_exists = false"));
+
+    let init = run(&["config", "init"]);
+    assert!(
+        init.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&init.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&init.stdout);
+    assert!(stdout.contains(&format!("config initialized: {}", config_file.display())));
+    assert!(stdout.contains(&format!("paths.data_dir = {}", data_dir.display())));
+    assert_no_brand_in_path_lines(&stdout);
+
+    let written = std::fs::read_to_string(&config_file).unwrap();
+    assert!(written.contains("profile = \"solo\""));
+    assert!(written.contains("backend = \"sqlite\""));
+    assert!(written.contains("sqlite_path"));
+
+    // `config check` now loads the generated file and its sqlite path.
+    let check = run(&["config", "check"]);
+    assert!(check.status.success());
+    let stdout = String::from_utf8_lossy(&check.stdout);
+    assert!(stdout.contains(&format!("config.file = {}", config_file.display())));
+    assert!(stdout.contains("config.file_exists = true"));
+    assert!(stdout.contains(&format!(
+        "storage.sqlite_path = {}",
+        data_dir.join("lkb.sqlite").display()
+    )));
+
+    // A second `init` never overwrites user edits.
+    let edited = format!("{written}\n# user edit\n");
+    std::fs::write(&config_file, &edited).unwrap();
+    let again = run(&["config", "init"]);
+    assert!(again.status.success());
+    assert!(String::from_utf8_lossy(&again.stdout).contains("left unchanged"));
+    assert_eq!(std::fs::read_to_string(&config_file).unwrap(), edited);
 }
 
 #[test]
